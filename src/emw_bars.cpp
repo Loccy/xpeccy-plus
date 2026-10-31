@@ -385,7 +385,6 @@ void MainWin::initBars() {
 	add("key.video.rec", "Capture", recAct, TB_PLAIN);
 	add("key.write.wav", "Capture", wavAct, TB_PLAIN);
 	add("key.rzx.rec", "Capture", rzxRecAct, TB_PLAIN);
-	add("key.options", "File", cut("Options...", XCUT_OPTIONS, "other"), TB_PLAIN);
 	add("menu.machine", "Machine", profileMenu->menuAction(), TB_LIST);
 	add("menu.reset", "Machine", resMenu->menuAction(), TB_SPLIT);
 	add("key.nmi", "Machine", cut("NMI", XCUT_NMI, "target"), TB_PLAIN);
@@ -452,6 +451,7 @@ void MainWin::initBars() {
 	add("menu.debug", "Tools", dbgMenu->menuAction(), TB_SPLIT);
 	add("key.scrwin", "Tools", cut("Screen", XCUT_SCRWIN, "rulers"), TB_PLAIN);
 	add("key.sndwin", "Tools", cut("Sound Chips", XCUT_SNDWIN, "note"), TB_PLAIN);
+	add("key.options", "Tools", cut("Options...", XCUT_OPTIONS, "other"), TB_PLAIN);
 	muteAct = cut("Mute", XCUT_MUTE, "speaker");
 	muteAct->setCheckable(true);
 	{

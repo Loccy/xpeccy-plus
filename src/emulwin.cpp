@@ -2676,8 +2676,6 @@ void MainWin::initMenuBar() {
 	wavAct = cutAct("Record Sound to WAV...", XCUT_WAV_OUT, "wav");
 	wavAct->setCheckable(true);
 	fileMenu->addSeparator();
-	cutAction(fileMenu, "Options...", XCUT_OPTIONS, "other");
-	fileMenu->addSeparator();
 #ifdef __WIN32
 	act = fileMenu->addAction("Exit\tAlt+F4");
 #else
@@ -3219,6 +3217,12 @@ void MainWin::initMachineMenus() {
 		m->addAction(cutById.value(XCUT_SCRWIN));
 		m->addAction(cutById.value(XCUT_SNDWIN));
 	}
+	// Options at the menu bar's Tools foot, where people look for it; the right-click
+	// menu has its own item. On macOS it goes to the app menu as Settings, with Cmd+,
+	tools->addSeparator();
+	QAction* optAct = cutAct("Options...", XCUT_OPTIONS, "other");
+	optAct->setMenuRole(QAction::PreferencesRole);
+	tools->addAction(optAct);
 
 	// their submenus are filled where the right-click menu fills them, before the
 	// switches are read: what a drive offers is known only once its list is made
