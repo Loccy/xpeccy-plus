@@ -38,6 +38,14 @@ before that point is upstream's history and is not repeated here.
   CPU's 64K as before, or a RAM, ROM, divMMC or Multiface page, paged in or not, and the
   pages after it. *(requested by AlexZor)*
 
+- **Heat map** in the Debugger:
+  - a Heat Map window (Tools > Heat Map) that follows the machine while it runs;
+  - All, mixed and All, by count show the three counters at once in mixed colors;
+  - Pages lists the pages the program touched; the CPU view names the page in each window,
+    and on the ZX Spectrum Next has eight 8K slots;
+  - divMMC's memory and the Next's layer 2 over banks 5 and 7 are counted, and the CSV
+    names each memory area.
+
 - **Faster and Slower**: Shift+Num++ and Shift+Num+- step the whole machine through 1/8, 1/4,
   1/2, normal speed, x2, x4, x8 and x16, with its sign in the corner. Fast Forward goes up to
   x16. The Overclock slider and its keys, Overclock Up and Overclock Down (Alt+Num++ and
