@@ -108,12 +108,14 @@ you press **Play**, rewind it, or put another tape in.
 
 - on the next **Play**, to the beginning;
 - when a program loads through the ROM's loading routine, to the first block that fits
-  what it loads - a multi-load game that asks for side B gets side B's block.
+  what it loads - a multi-load game that asks for side B gets side B's block;
+- with **Auto play / stop** on, when a program's own loader reads the tape again, to the
+  beginning, and it plays. A game that loads its level after every game over finds it each
+  time, however many times the tape goes round.
 
-A program's own loader does not wind the tape back: what it asks for may be on the other
-side.
-
-With this switch off, the tape stays at its end until you rewind it. It is on by default.
+With this switch off, the tape stays at its end until you rewind it: turn it off for a game
+that asks you to turn the tape over, or the game gets the same side again. It is on by
+default.
 
 The **Tape Rewind to Start** hotkey winds the tape back without opening the window:
 Shift+F4 (Modern).
