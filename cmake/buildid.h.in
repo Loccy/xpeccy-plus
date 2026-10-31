@@ -6,7 +6,7 @@
 #define X_BUILDID_H
 
 // the release asset this build is, its name less version and extension
-// ("win-x64-qt6", "linux-x86_64"...), set by the packaging scripts; empty for
+// ("win-x64", "linux-x86_64"...), set by the packaging scripts; empty for
 // any other build
 #define XPACKAGE	"@XPACKAGE@"
 

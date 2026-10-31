@@ -34,7 +34,7 @@ object name or a class name, as the control port's widget-rect takes it.
 
 The program runs with a fresh copy of the factory settings, on a desktop of its
 own on Windows (nothing shows on yours), and is stopped when the picture is
-taken. XP_EXE picks the program; by default the newest build\\dist\\*-qt6.
+taken. XP_EXE picks the program; by default the newest build\\dist\\*-win-x64 (Qt 6).
 Needs Pillow.
 """
 
@@ -66,7 +66,7 @@ def find_exe():
     env = os.environ.get("XP_EXE")
     if env:
         return Path(env)
-    dists = sorted((ROOT / "build" / "dist").glob("*-qt6"), key=lambda p: p.stat().st_mtime)
+    dists = sorted((ROOT / "build" / "dist").glob("*-win-x64"), key=lambda p: p.stat().st_mtime)
     if not dists:
         sys.exit("no build in build/dist: build one, or set XP_EXE")
     return dists[-1] / ("xpeccy-plus.exe" if os.name == "nt" else "xpeccy-plus")

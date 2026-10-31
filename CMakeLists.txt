@@ -25,7 +25,7 @@ project(${PROJECT_NAME} VERSION ${XVER})
 option(XRELEASE "build as a release version" OFF)
 
 # the release asset this build is, its file name less version and extension
-# (win-x64-qt6, linux-x86_64...): set by the packaging scripts, empty for any
+# (win-x64, linux-x86_64...): set by the packaging scripts, empty for any
 # other build, which then offers no update of its own (src/xcore/update.cpp)
 set(XPACKAGE "" CACHE STRING "release asset suffix of this build, set by packaging/")
 
@@ -688,15 +688,19 @@ endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	# Named the way packaging/make-dist.ps1 and make-appimage.sh name theirs:
-	# arch, Qt version, and a build that is not a release says so. Set here and
-	# not in the section above, which runs before the Qt version is known.
+	# the package's name, and a build that is not a release says so.
 	if(XRELEASE)
 		set(XPKGVER ${XVER})
 	else()
 		string(TIMESTAMP XBUILD_DATE "%Y%m%d")
 		set(XPKGVER "${XVER}-dev+${XBUILD_DATE}")
 	endif()
-	set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${XPKGVER}-macos-${XARCH}-qt${QTVERSION}")
+	# the dmg is the asset the update check looks for: named by XPACKAGE when set
+	if(XPACKAGE)
+		set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${XPKGVER}-${XPACKAGE}")
+	else()
+		set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${XPKGVER}-macos-${XARCH}")
+	endif()
 endif()
 
 include(CPack)

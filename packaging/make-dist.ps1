@@ -1,7 +1,7 @@
 # Builds Xpeccy+ and stages a ready-to-run folder (binary + Qt/SDL DLLs + config + docs).
 #
-#   .\make-dist.ps1                     # qt5-x64, incremental
-#   .\make-dist.ps1 -Preset qt6-x64     # Qt6 build in its own folder
+#   .\make-dist.ps1                     # qt6-x64 (win-x64), incremental
+#   .\make-dist.ps1 -Preset qt5-x86     # Qt5 32-bit (win-x86-legacy) in its own folder
 #   .\make-dist.ps1 -Clean -Zip         # from scratch + archive
 #   .\make-dist.ps1 -Manual             # with the user manual (docs/manual/README.md)
 #   .\make-dist.ps1 -SysNext            # with System/Next beside the program, for tests
@@ -15,7 +15,7 @@
 
 param(
 	[ValidateSet('qt5-x64', 'qt6-x64', 'qt5-x86')]
-	[string]$Preset = 'qt5-x64',
+	[string]$Preset = 'qt6-x64',
 	[switch]$Clean,
 	[switch]$Zip,
 	[switch]$Release,
@@ -39,31 +39,30 @@ $cmakeBin = 'C:\Qt\Tools\CMake_64\bin'	# the Qt installer's; ignored where there
 $sdlVer = (Get-Content (Join-Path $PSScriptRoot 'deps.json') -Raw | ConvertFrom-Json).sdl2.version
 $depsSDL = Join-Path $buildRoot "deps\SDL2-$sdlVer-mingw"
 
-# toolchain table: everything machine-specific lives here
+# toolchain table: everything machine-specific lives here. Package is the release asset's
+# name less its version, and the build's XPACKAGE: the update check looks for exactly that
+# file, so a rename strands every install of the old name (src/xcore/update.cpp)
 $toolchains = @{
 	'qt5-x64' = @{
 		QtVer = 5
 		QtDir = 'C:\Qt\5.15.2\mingw81_64'
 		MinGW = 'C:\Qt\Tools\mingw810_64'
 		Triple = 'x86_64-w64-mingw32'
-		Arch = 'x64'
-		Tag = ''
+		Package = 'win-x64-legacy'
 	}
 	'qt5-x86' = @{
 		QtVer = 5
 		QtDir = 'C:\Qt\5.15.2\mingw81_32'
 		MinGW = 'C:\Qt\Tools\mingw810_32'
 		Triple = 'i686-w64-mingw32'
-		Arch = 'x86'
-		Tag = ''
+		Package = 'win-x86-legacy'
 	}
 	'qt6-x64' = @{
 		QtVer = 6
 		QtDir = 'C:\Qt\6.6.2\mingw_64'
 		MinGW = 'C:\Qt\Tools\mingw1120_64'
 		Triple = 'x86_64-w64-mingw32'
-		Arch = 'x64'
-		Tag = '-qt6'
+		Package = 'win-x64'
 	}
 }
 
@@ -84,7 +83,7 @@ $baseVer = (Get-Content (Join-Path $srcRoot 'VERSION') -TotalCount 1).Trim()
 $version = if ($Release) { $baseVer } else { "$baseVer-dev+$(Get-Date -Format 'yyyyMMdd')" }
 
 $buildDir = Join-Path $buildRoot "out\$Preset"
-$distName = "xpeccy-plus-$version-win-$($tc.Arch)$($tc.Tag)"
+$distName = "xpeccy-plus-$version-$($tc.Package)"
 $distDir = Join-Path $buildRoot "dist\$distName"
 
 $env:PATH = "$($tc.MinGW)\bin;$($tc.QtDir)\bin;$env:PATH"
@@ -157,7 +156,7 @@ $cmakeArgs = @(
 	"-DZLIB_INCLUDE_DIR=$mingwFwd/$($tc.Triple)/include"
 	"-DCURL_DIR=$($curlDir -replace '\\', '/')/lib/cmake/CURL"
 	# the asset this is, for the update check: the zip's name less its version
-	"-DXPACKAGE=win-$($tc.Arch)$($tc.Tag)"
+	"-DXPACKAGE=$($tc.Package)"
 	'-S', $srcRoot
 	'-B', $buildDir
 )
