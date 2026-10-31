@@ -71,6 +71,7 @@ class SetupWin : public QDialog {
 		// video recording
 		void buildRecording();
 		void buildFolders();
+		void buildPause();
 		void fillRecording();
 		void applyRecording();
 		void showFfmpeg();
@@ -112,6 +113,10 @@ class SetupWin : public QDialog {
 		QComboBox* cbFolderWrite;	// Folder as a disk: read only or read and write
 		QComboBox* cbFolderTrash;	// ...and where a file deleted there goes
 		QGridLayout* gridFolders;
+		QGridLayout* gridPause;
+		QCheckBox* cbPauseInactive;	// the Pause group
+		QCheckBox* cbPauseMenu;
+		QCheckBox* cbPauseResume;
 
 		// the devices' own controls, see makeDevWidgets()
 		QCheckBox *cbTapeAuto, *cbTapeRewind, *cbTapeFast, *cbTapeFlash, *cbTapeEdge, *bdtbox, *cbAddBoot, *a80box, *b80box, *c80box, *d80box, *adsbox, *bdsbox, *cdsbox, *ddsbox, *gsrbox, *ratWheel, *cbSwapButtons;

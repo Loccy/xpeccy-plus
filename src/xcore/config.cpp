@@ -167,6 +167,7 @@ void conf_init(char* confdir) {
 	conf.tape.edge = 1;
 	conf.tape.exp = wav_export_default();
 	conf.emu.pause = 0;
+	conf.pauseMenu = 1;
 	conf.emu.fast = 0;
 	conf.fold.rw = 1;
 	conf.fold.trash = 1;
@@ -229,6 +230,8 @@ void saveConfig() {
 	fprintf(cfile, "autorun = %s\n", autorun_name[conf.autorun]);
 	fprintf(cfile, "exit.confirm = %s\n",YESNO(conf.confexit));
 	fprintf(cfile, "pause.inactive = %s\n", YESNO(conf.pauseInactive));
+	fprintf(cfile, "pause.menu = %s\n", YESNO(conf.pauseMenu));
+	fprintf(cfile, "pause.resume = %s\n", YESNO(conf.pauseResume));
 	fprintf(cfile, "port = %i\n", conf.port);
 	// unset: the build's default, which a later build may change
 	if (conf.upd.check != UPC_UNSET) fprintf(cfile, "update.check = %s\n", upd_check_name[conf.upd.check]);
@@ -1384,6 +1387,8 @@ void loadConfig() {
 					if (pnam == "autorun") conf.autorun = autorun_of(pval);
 					if (pnam == "exit.confirm") conf.confexit = arg.b;
 					if (pnam == "pause.inactive") conf.pauseInactive = arg.b;
+					if (pnam == "pause.menu") conf.pauseMenu = arg.b;
+					if (pnam == "pause.resume") conf.pauseResume = arg.b;
 					if (pnam == "flpinterleave") flp_set_interleave(arg.i);
 					if (pnam == "style") conf.style = std::string(arg.s);
 					break;

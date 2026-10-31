@@ -995,9 +995,11 @@ void keyWindow::mousePressEvent(QMouseEvent* ev) {
 			heldZx = zx;
 			pressKeys(zx, true);
 			update();
+			emit s_key_click();		// in the machine already, and it resumes; a shift alone does not
 			break;
 		case Qt::RightButton:
 			latchKey(n, zx);
+			if (!shift) emit s_key_click();
 			break;
 		case Qt::MiddleButton:
 			x_kbd_release_all(kb);

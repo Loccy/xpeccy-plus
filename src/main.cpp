@@ -729,6 +729,7 @@ int main(int ac,char** av) {
 	app.connect(&mwin, SIGNAL(s_keywin_menu(QMenu*)), &keyw, SLOT(fillMenu(QMenu*)));
 	app.connect(&keyw, SIGNAL(s_key_press(QKeyEvent*)), &mwin, SLOT(kPress(QKeyEvent*)));
 	app.connect(&keyw, SIGNAL(s_key_release(QKeyEvent*)), &mwin, SLOT(kRelease(QKeyEvent*)));
+	app.connect(&keyw, SIGNAL(s_key_click()), &mwin, SLOT(inputResume()));
 
 	int i = 1;
 	char* parg;

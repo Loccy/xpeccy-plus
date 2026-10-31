@@ -11,7 +11,7 @@ too, are at the right end of the toolbar. Their settings are on the
 
 ## Pause
 
-```{index} Pause, Pause when inactive
+```{index} Pause, Pause when inactive, Pause in menus, Resume by input
 ```
 
 **Machine > Pause** stops the machine, and the same command again lets it continue. The
@@ -19,11 +19,28 @@ status bar says **paused**, and a pause sign shows in the top right corner of th
 picture. The key is Pause in both presets.
 
 The machine also waits while **Options**, a file dialog or the **Debugger** is open, and
-continues when that window closes. A menu does not stop it.
+continues when that window closes.
 
-To stop the machine whenever you switch to another program, tick
-**Pause when inactive** on the **Application** page of **Options**. The machine continues
-when you come back to the window.
+The **Pause** group on the [Emulation page](options-emulation.md) of **Options** has three
+more ways:
+
+- **Pause when inactive** - the machine stops whenever you switch to another program, and
+  continues when you come back to the window. Off by default.
+- **Pause in menus** - the machine waits while a menu of the window is open: the menu
+  bar, the right-click menu, the menus over the picture in fullscreen, a list from the
+  toolbar. It continues when the menu closes; a command that opens a window keeps it
+  stopped until that window closes. The volume slider does not stop it - you set the
+  volume by ear. On by default.
+- **Resume by input** - after **Machine > Pause**, the first key you press, a click in
+  the picture, a click on the [Virtual Keyboard](view.md#virtual-keyboard) or a pad button lets the
+  machine go on. The key and the pad button reach the game, so the character moves at
+  once; the click only ends the pause, it is not a fire for a mouse. Hotkeys work while
+  paused and do not end it, nor do Shift, Ctrl, Alt or the lock keys alone. It ends only
+  your own pause: not the one of **Options**, a dialog, the **Debugger**, an RZX
+  recording's player or **Pause when inactive**. Off by default.
+
+A menu never takes your own pause off: if you paused the machine, it stays paused after
+the menu closes.
 
 ## Fast Mode
 

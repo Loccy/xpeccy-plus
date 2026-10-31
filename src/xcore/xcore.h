@@ -219,6 +219,7 @@ enum {
 #define PR_RZX		(1<<7)
 #define	PR_EXIT		(1<<8)
 #define	PR_FOCUS	(1<<9)		// another application has the focus
+#define	PR_MENU		(1<<10)		// a menu of the main window is open
 
 // labels
 
@@ -858,6 +859,8 @@ struct xConfig {
 	unsigned autorun:2;		// AR_*: what opening a tape or a disk from the gui does
 	unsigned confexit:1;		// confirm on exit
 	unsigned pauseInactive:1;	// pause while another application has the focus
+	unsigned pauseMenu:1;		// pause while a menu of the main window is open
+	unsigned pauseResume:1;		// input takes off the user's pause
 	int xpos;			// window position
 	int ypos;
 	int wsizeX;			// window size, when resized by hand (the frame's inside); 0: the zoom's

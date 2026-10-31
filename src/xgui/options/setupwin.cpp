@@ -695,6 +695,7 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	buildDevices();
 	buildRecording();
 	buildFolders();
+	buildPause();
 	ui.vidViewGBox->setIcon(":/images/grp-picture.png");
 	ui.antiflickerGBox->setIcon(":/images/grp-antiflicker.png");
 	ui.groupBox->setIcon(":/images/grp-screenshot.png");
@@ -1042,7 +1043,7 @@ void SetupWin::start() {
 	for (QComboBox* box : {ui.cbFastPic, cbFolderTrash})
 		box->setFixedWidth(comboFitWidth(box));
 	ui.cbStyleSheet->setFixedWidth(comboFitWidth(ui.cbStyleSheet));
-	QGridLayout* emugrid[5] = {ui.gridLayout_lat, ui.gridLayout_rew, gridFolders, ui.gridLayout_look, ui.gridLayout_23};
+	QGridLayout* emugrid[6] = {ui.gridLayout_lat, ui.gridLayout_rew, gridPause, gridFolders, ui.gridLayout_look, ui.gridLayout_23};
 	for (int col = 0; col < 2; col++) {
 		int wid = 0;
 		for (QGridLayout* g : emugrid)
@@ -1209,7 +1210,9 @@ void SetupWin::start() {
 	ui.cbUpdCheck->setCurrentIndex(upd_period());
 	ui.cbUpdChannel->setCurrentIndex(upd_channel());
 	ui.cbConfexit->setChecked(conf.confexit);
-	ui.cbPauseInactive->setChecked(conf.pauseInactive);
+	cbPauseInactive->setChecked(conf.pauseInactive);
+	cbPauseMenu->setChecked(conf.pauseMenu);
+	cbPauseResume->setChecked(conf.pauseResume);
 // leds
 	ui.cbMouseLed->setChecked(conf.led.mouse);
 	ui.cbJoyLed->setChecked(conf.led.joy);
@@ -1554,7 +1557,9 @@ void SetupWin::applyGlobal() {
 	if (ui.cbUpdCheck->currentIndex() != upd_period()) conf.upd.check = ui.cbUpdCheck->currentIndex();
 	if (ui.cbUpdChannel->currentIndex() != upd_channel()) conf.upd.channel = ui.cbUpdChannel->currentIndex();
 	conf.confexit = ui.cbConfexit->isChecked() ? 1 : 0;
-	conf.pauseInactive = ui.cbPauseInactive->isChecked() ? 1 : 0;
+	conf.pauseInactive = cbPauseInactive->isChecked() ? 1 : 0;
+	conf.pauseMenu = cbPauseMenu->isChecked() ? 1 : 0;
+	conf.pauseResume = cbPauseResume->isChecked() ? 1 : 0;
 // leds
 	conf.led.mouse = ui.cbMouseLed->isChecked() ? 1 : 0;
 	conf.led.joy = ui.cbJoyLed->isChecked() ? 1 : 0;
@@ -3028,6 +3033,39 @@ void SetupWin::buildFolders() {
 	gridFolders->addWidget(label(cbFolderTrash, tr("Deleted files"),
 		tr("Where a file the machine deletes in such\na folder goes. A file the trash will not\ntake stays in the folder")), 1, 1);
 	gridFolders->addWidget(cbFolderTrash, 1, 2, Qt::AlignLeft);
+	ui.verticalLayout_16->insertWidget(ui.verticalLayout_16->indexOf(ui.gbRewind) + 1, box);
+}
+
+// when the machine stops and goes on by itself: after Speed and rewind
+void SetupWin::buildPause() {
+	// the rows of the page: the switch, its name, what it does in italics
+	QGroupBox* box = new QGroupBox(tr("Pause"));
+	gridPause = new QGridLayout(box);
+	gridPause->setHorizontalSpacing(12);
+	gridPause->setVerticalSpacing(8);
+	gridPause->setColumnStretch(2, 1);
+	int r = 0;
+	auto row = [this, &r](const QString& name, const QString& note, const QString& tip) {
+		QCheckBox* cb = new QCheckBox;
+		QLabel* lab = new QLabel(name);
+		lab->setBuddy(cb);
+		QLabel* what = new QLabel(note);
+		QFont font = what->font();
+		font.setItalic(true);
+		what->setFont(font);
+		for (QWidget* w : {(QWidget*)cb, (QWidget*)lab, (QWidget*)what})
+			w->setToolTip(tip);
+		gridPause->addWidget(cb, r, 0);
+		gridPause->addWidget(lab, r, 1);
+		gridPause->addWidget(what, r++, 2);
+		return cb;
+	};
+	cbPauseInactive = row(tr("Pause when inactive"), tr("While another program has the focus"),
+		tr("Stop the machine while another\nprogram has the focus"));
+	cbPauseMenu = row(tr("Pause in menus"), tr("While a menu of this window is open"),
+		tr("Stop the machine while a menu\nof this window is open"));
+	cbPauseResume = row(tr("Resume by input"), tr("A key, a click or a pad ends your pause"),
+		tr("Pause ends on a key, a click in the picture,\nthe on-screen keyboard or a pad"));
 	ui.verticalLayout_16->insertWidget(ui.verticalLayout_16->indexOf(ui.gbRewind) + 1, box);
 }
 

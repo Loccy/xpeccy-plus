@@ -19,6 +19,10 @@ void MainWin::mousePressEvent(QMouseEvent *ev){
 			calcCoords(ev);
 		}
 		ev->ignore();
+	} else if ((grabMice ? ((ev->button() == Qt::LeftButton) || (ev->button() == Qt::RightButton))
+			: ((ev->button() == Qt::LeftButton) && !(ev->modifiers() & Qt::AltModifier)))
+			&& inputResume()) {
+		clickResumed = true;	// only the resume: no fire, and its release takes no mouse
 	} else {
 		switch (ev->button()) {
 			case Qt::LeftButton:
@@ -43,6 +47,10 @@ void MainWin::mousePressEvent(QMouseEvent *ev){
 }
 
 void MainWin::mouseReleaseEvent(QMouseEvent *ev) {
+	if (clickResumed) {
+		clickResumed = false;
+		return;
+	}
 	if (conf.emu.pause) return;
 	Computer* comp = conf.zx;
 	if (comp->flgDBG) {
