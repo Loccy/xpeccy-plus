@@ -32,6 +32,7 @@ class keyWindow : public QDialog {
 	signals:
 		void s_key_press(QKeyEvent*);
 		void s_key_release(QKeyEvent*);
+		void s_key_click();		// a key clicked down: input, for Resume by input
 	public slots:
 		void switcher();
 		void upd(Keyboard*);

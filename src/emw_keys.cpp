@@ -83,6 +83,19 @@ int ev_to_keyid(QKeyEvent* ev, bool kgrab, bool* fallback = nullptr) {
 	return keyid;
 }
 
+// a key held only with others, or one that only switches a light: not a key to resume by
+static bool key_lone(QKeyEvent* ev) {
+	switch (ev->key()) {
+		case Qt::Key_Shift: case Qt::Key_Control: case Qt::Key_Meta: case Qt::Key_Alt:
+		case Qt::Key_AltGr: case Qt::Key_Super_L: case Qt::Key_Super_R:
+		case Qt::Key_Hyper_L: case Qt::Key_Hyper_R: case Qt::Key_Mode_switch:
+		case Qt::Key_CapsLock: case Qt::Key_NumLock: case Qt::Key_ScrollLock:
+			return true;
+		default:
+			return false;
+	}
+}
+
 #if USE_HOST_KEYBOARD
 
 void MainWin::keyPressEvent(QKeyEvent* ev) {
@@ -99,6 +112,8 @@ void MainWin::keyPressEvent(QKeyEvent* ev) {
 		kent = getKeyEntry(keyid);
 		if (!ev->isAutoRepeat()) {
 			xkey_press(keyid);
+			// the key is in the machine's matrix already: it sees it once it runs
+			if ((keyid > 0) && (keyid != XCUT_GRABKBD) && !key_lone(ev)) inputResume();
 		}
 	} else {
 //		qDebug() << ev->key();
@@ -118,6 +133,7 @@ void MainWin::keyPressEvent(QKeyEvent* ev) {
 				for (int m : mods) xkey_release(m);
 			}
 			xkey_press(keyid);
+			if ((keyid > 0) && (keyid < 0x10000) && !key_lone(ev)) inputResume();	// hotkeys act paused
 		}
 	}
 }

@@ -241,6 +241,7 @@ class MainWin : public QWidget {
 		void doDebug();
 		void updateWindow();
 		void pause(bool, int);
+		bool inputResume();
 		void tapStateChanged(int,int);
 		void onPrfChange();
 		void kPress(QKeyEvent*);

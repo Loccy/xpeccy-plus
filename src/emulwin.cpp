@@ -365,6 +365,15 @@ void MainWin::pause(bool p, int msk) {
 	}
 }
 
+// Resume by input: a key, a click, a pad takes off the user's own pause, no other.
+// Not while a recording plays: its player has that pause, and input is not the machine's.
+bool MainWin::inputResume() {
+	if (!conf.pauseResume || conf.zx->rzx.play) return false;
+	if (!((conf.emu.pause | conf.emu.pauseReq) & PR_PAUSE)) return false;
+	pause(false, PR_PAUSE);
+	return true;
+}
+
 // Main window
 
 MainWin::MainWin(QMainWindow* frm) {
@@ -685,6 +694,12 @@ void MainWin::mapJoystick(xGamepad* gp, Computer* comp, int type, int num, int s
 	}
 	foreach(const xJoyMapEntry& xjm, presslist)
 		mapOut(comp, xjm);
+	// a press that is not a hotkey resumes; the unpause replays it to the game
+	if (!padLive()) return;
+	bool press = presslist.isEmpty() && st && ((type == JOY_BUTTON) || (type == JOY_CBUTTON));
+	foreach(const xJoyMapEntry& xjm, presslist)
+		if (xjm.rps && !mapIsHotkey(xjm)) press = true;
+	if (press) inputResume();
 }
 
 // What a binding does to the machine. A release always goes through, so the
