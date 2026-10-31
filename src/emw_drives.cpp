@@ -31,30 +31,55 @@ QString drive_media(const char* path, bool in) {
 	return nam.replace("&", "&&");
 }
 
-// The other images of the archive the one in a drive or the deck came from, the one
-// in now marked: a click puts that one in, as the drive's own Open does. Many of them
-// go into a submenu named after the archive.
-void MainWin::archiveImages(QMenu* m, const char* path, int id, int drv) {
-	QString archive, entry, err;
-	if (!path || !arc_split(QString::fromLocal8Bit(path), &archive, &entry)) return;
-	const QStringList names = media_candidates(conf.zx, archive, id, drv, &err);
+// The other images of the set the one in a drive or the deck belongs to, the one in now
+// marked: a click puts that one in, as the drive's own Open does. The set is the
+// archive's images when it came from one holding several, else its siblings in the
+// folder (the other sides by name). Many of them go into a submenu named after the
+// archive or the folder. Put in before the action before, or at the end.
+void MainWin::otherImages(QMenu* m, const char* path, int id, int drv, QAction* before) {
+	if (!path || !*path) return;
+	const QString image = QString::fromLocal8Bit(path);
+	QStringList names, paths;
+	QString title, archive, entry, err;
+	int cur = -1;
+	if (arc_split(image, &archive, &entry)) {
+		names = media_candidates(conf.zx, archive, id, drv, &err);
+		cur = int(names.indexOf(entry));
+		for (const QString& name : names) paths.append(arc_join(archive, name));
+		title = QFileInfo(archive).fileName();
+	}
+	if (names.size() < 2) {
+		names.clear();
+		paths.clear();
+		cur = -1;
+		for (const xSibling& sib : media_siblings(conf.zx, image, id, drv, &cur)) {
+			names.append(sib.name);
+			paths.append(sib.path);
+		}
+		title = QFileInfo(QFileInfo(archive.isEmpty() ? image : archive).absolutePath()).fileName();
+	}
 	if (names.size() < 2) return;
-	m->addSeparator();
-	QMenu* to = (names.size() > 8) ? m->addMenu(QFileInfo(archive).fileName().replace("&", "&&")) : m;
+	m->insertSeparator(before);
+	QMenu* to = m;
+	if (names.size() > 8) {
+		to = new QMenu(title.replace("&", "&&"), m);
+		m->insertMenu(before, to);
+	}
 	QActionGroup* grp = new QActionGroup(to);
-	for (const QString& name : names) {
-		QAction* act = to->addAction(QString(name).replace("&", "&&"));
+	for (int i = 0; i < names.size(); i++) {
+		QAction* act = new QAction(QString(names[i]).replace("&", "&&"), to);
+		to->insertAction((to == m) ? before : nullptr, act);
 		act->setCheckable(true);
-		act->setChecked(name == entry);
+		act->setChecked(i == cur);
 		grp->addAction(act);
-		if (name == entry) continue;
-		const QString image = arc_join(archive, name);
-		connect(act, &QAction::triggered, this, [this, image, id, drv]() {
-			openMedia(image, id, drv, AR_MOUNT, true);
+		if (i == cur) continue;
+		const QString open = paths[i];
+		connect(act, &QAction::triggered, this, [this, open, id, drv]() {
+			openMedia(open, id, drv, AR_MOUNT, true);
 			if (diskWin->isVisible()) diskWin->refresh();
 		});
 	}
-	m->addSeparator();
+	m->insertSeparator(before);
 }
 
 int drive_count(Computer* comp) {
@@ -132,8 +157,16 @@ void MainWin::fillDrivesMenu() {
 		}
 		flpMenu[i] = m;
 		m->addAction(QIcon(":/images/fileopen.png"), "Open...", this, [this, i]() {diskOp(DW_OPEN, i);});
-		if (flp->insert) archiveImages(m, flp->path, FH_DRIVE_A + i, i);
-		m->addAction(QIcon(":/images/doc-new.png"), "New", this, [this, i]() {diskOp(DW_NEW, i);});
+		act = m->addAction(QIcon(":/images/doc-new.png"), "New", this, [this, i]() {diskOp(DW_NEW, i);});
+		// the other images of its set, when the menu opens: the list reads a folder, and
+		// this one is filled each time Media or Machine opens
+		if (flp->insert) {
+			connect(m, &QMenu::aboutToShow, this, [this, m, i, act]() {
+				if (m->property("others").toBool()) return;
+				m->setProperty("others", true);
+				otherImages(m, conf.zx->dif->flp[i]->path, FH_DRIVE_A + i, i, act);
+			});
+		}
 		act = m->addAction(QIcon(":/images/floppy.png"), "Save", this, [this, i]() {diskOp(DW_SAVE, i);});
 		act->setEnabled(flp->insert && flp->path && *flp->path);
 		act = m->addAction(QIcon(":/images/save-as.png"), "Save As...", this, [this, i]() {diskOp(DW_SAVE_AS, i);});
