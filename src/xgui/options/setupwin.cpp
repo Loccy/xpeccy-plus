@@ -973,16 +973,18 @@ void SetupWin::start() {
 	int idx;
 	fill_machine_list(ui.machbox);
 	fill_machine_list(cbStart);
-	// the first rows are MS_LAST and MS_ASK, by index; the machines are MS_THIS
-	cbStart->insertItem(MS_LAST, tr("The last one chosen"));
-	cbStart->insertItem(MS_ASK, tr("Ask"));
-	cbStart->setItemData(MS_LAST, tr("The last one you picked. One a file switched to is not kept"), Qt::ToolTipRole);
-	cbStart->insertSeparator(MS_THIS);
+	// the first rows: the last one, Ask, the last session; then the machines (MS_THIS)
+	cbStart->insertItem(0, tr("The last one chosen"), -MS_LAST - 1);
+	cbStart->insertItem(1, tr("Ask"), -MS_ASK - 1);
+	cbStart->insertItem(2, tr("Resume last session"), -MS_RESUME - 1);
+	cbStart->setItemData(0, tr("The last one you picked. One a file switched to is not kept"), Qt::ToolTipRole);
+	cbStart->setItemData(2, tr("Where you left off: the machine, the game\nand its media as they were on exit"), Qt::ToolTipRole);
+	cbStart->insertSeparator(3);
 	cbStart->setMaxVisibleItems(cbStart->count());
 	if (conf.macStart == MS_THIS) {
-		setRFIndex(cbStart, QString::fromLocal8Bit(conf.macStartId.c_str()), MS_ASK);	// gone: it asks
+		setRFIndex(cbStart, QString::fromLocal8Bit(conf.macStartId.c_str()), 1);	// gone: it asks
 	} else {
-		cbStart->setCurrentIndex((conf.macStart == MS_ASK) ? MS_ASK : MS_LAST);
+		cbStart->setCurrentIndex((conf.macStart == MS_ASK) ? 1 : (conf.macStart == MS_RESUME) ? 2 : 0);
 	}
 	updateMachineButtons();
 	roms = conf.roms;
@@ -1058,6 +1060,7 @@ void SetupWin::start() {
 	int savw = qMax(comboFitWidth(cbSaveMedia), sbQuickKeep->sizeHint().width());
 	cbSaveMedia->setFixedWidth(savw);
 	sbQuickKeep->setFixedWidth(savw);
+	sbExitKeep->setFixedWidth(savw);
 	for (QGridLayout* g : gridSaves) {
 		g->setColumnMinimumWidth(0, savw);
 		g->setColumnMinimumWidth(1, ui.gridLayout_lat->columnMinimumWidth(1));
@@ -1270,7 +1273,8 @@ void SetupWin::apply() {
 	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
 	applySaves();
-	int ms = qMin(cbStart->currentIndex(), (int)MS_THIS);
+	int row = cbStart->currentIndex();
+	int ms = (row == 0) ? MS_LAST : (row == 1) ? MS_ASK : (row == 2) ? MS_RESUME : MS_THIS;
 	if ((conf.macStart != MS_UNSET) || (ms != MS_LAST)) conf.macStart = ms;
 	if (ms == MS_THIS) conf.macStartId = getRFSData(cbStart).toLocal8Bit().data();
 	// another machine is not this page with different values in it: it has its
@@ -3131,7 +3135,16 @@ void SetupWin::buildSaves() {
 	savesRow(grid, cbSaveMedia, tr("Media in saves"), tr("A save brings its tape and TR-DOS disks back"),
 		tr("Tape and disks: carried in the save, as they were\nNames only: smaller, the files must stay put"));
 
-	grid = gridSaves[1] = savesGroup(lay, tr("Folder"));
+	grid = gridSaves[1] = savesGroup(lay, tr("Autosaves"));
+	cbExitSave = new QCheckBox;
+	savesRow(grid, cbExitSave, tr("Autosave on exit"), tr("File > Resume Last Session goes back to it"),
+		tr("The machine saved as the emulator closes"));
+	sbExitKeep = new QSpinBox;
+	sbExitKeep->setRange(1, 99);
+	savesRow(grid, sbExitKeep, tr("Exit autosaves kept"), tr("In a game's folder; else one, written over"),
+		tr("A game with quick saves keeps this many;\nany other has the one common file"));
+
+	grid = gridSaves[2] = savesGroup(lay, tr("Folder"));
 	leSaveDir = new QLineEdit;
 	leSaveDir->setPlaceholderText(QDir::toNativeSeparators(
 		QDir(QString::fromLocal8Bit(conf.path.confDir.c_str())).filePath("saves")));
@@ -3156,6 +3169,8 @@ void SetupWin::fillSaves() {
 	cbSavePerGame->setChecked(conf.saves.perGame);
 	sbQuickKeep->setValue(conf.saves.quickKeep);
 	setRFIndex(cbSaveMedia, conf.saves.carry ? 1 : 0);
+	cbExitSave->setChecked(conf.saves.exitOn);
+	sbExitKeep->setValue(conf.saves.exitKeep);
 	leSaveDir->setText(QDir::toNativeSeparators(conf.saves.dir));
 }
 
@@ -3163,6 +3178,8 @@ void SetupWin::applySaves() {
 	conf.saves.perGame = cbSavePerGame->isChecked() ? 1 : 0;
 	conf.saves.quickKeep = sbQuickKeep->value();
 	conf.saves.carry = getRFIData(cbSaveMedia) ? 1 : 0;
+	conf.saves.exitOn = cbExitSave->isChecked() ? 1 : 0;
+	conf.saves.exitKeep = sbExitKeep->value();
 	conf.saves.dir = QDir::fromNativeSeparators(leSaveDir->text().trimmed());
 }
 

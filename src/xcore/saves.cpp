@@ -81,8 +81,14 @@ void game_set(const QString& image) {
 	if (!dir.isEmpty()) saves_dir(true);
 }
 
-void game_set_folder(const QString& dir) {
-	QJsonObject obj = saves_json(dir);
+void game_set_save(const QString& save) {
+	QFileInfo fi(save);
+	QFile side(fi.path() + "/" + fi.completeBaseName() + ".json");
+	QJsonObject obj;
+	if (side.open(QIODevice::ReadOnly))
+		obj = QJsonDocument::fromJson(side.readAll()).object();
+	else
+		obj = saves_json(fi.path());
 	QJsonArray paths = obj.value("images").toArray();
 	if (obj.value("hash").toString().isEmpty() || paths.isEmpty()) {
 		game_forget();			// a machine's folder
@@ -200,6 +206,29 @@ QString saves_dir(bool make) {
 		saves_json_write(dir, obj);
 	}
 	return dir;
+}
+
+QString saves_auto_dir() {
+	if (!game.hash.isEmpty() && conf.saves.perGame) return saves_game_dir();
+	QString dir = saves_machine_dir();
+	return QFileInfo(dir).isDir() ? dir : QString();
+}
+
+QString saves_session_path() {
+	return QDir(saves_root()).filePath("last-session.szx");
+}
+
+void saves_note_game(const QString& save) {
+	QFileInfo fi(save);
+	QJsonObject obj;
+	if (!game.hash.isEmpty()) {
+		obj.insert("name", game.name);
+		obj.insert("hash", game.hash);
+		obj.insert("images", QJsonArray({QDir::fromNativeSeparators(game.image)}));
+	}
+	QFile file(fi.path() + "/" + fi.completeBaseName() + ".json");
+	if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		file.write(QJsonDocument(obj).toJson());
 }
 
 QString saves_folder_image(const QString& dir) {

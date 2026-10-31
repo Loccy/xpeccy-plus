@@ -124,8 +124,10 @@ class SetupWin : public QDialog {
 		QCheckBox* cbSavePerGame;
 		QSpinBox* sbQuickKeep;
 		QComboBox* cbSaveMedia;
+		QCheckBox* cbExitSave;
+		QSpinBox* sbExitKeep;
 		QLineEdit* leSaveDir;
-		QGridLayout* gridSaves[2];	// lined up with Emulation's
+		QGridLayout* gridSaves[3];	// their names lined up with Emulation's
 
 		// the devices' own controls, see makeDevWidgets()
 		QCheckBox *cbTapeAuto, *cbTapeRewind, *cbTapeFast, *cbTapeFlash, *cbTapeEdge, *bdtbox, *cbAddBoot, *a80box, *b80box, *c80box, *d80box, *adsbox, *bdsbox, *cdsbox, *ddsbox, *gsrbox, *ratWheel, *cbSwapButtons;

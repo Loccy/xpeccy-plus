@@ -2125,6 +2125,7 @@ void MainWin::closeEvent(QCloseEvent* ev) {
 	}
 //	std::string fname;
 	if (saveChanged(true)) {
+		exitSave();			// the disks as the question left them
 		emu_lock();
 		int rzxErr = rzxr_stop(comp);		// the autosave is up to 30 s behind
 		emu_unlock();
@@ -2707,6 +2708,7 @@ void MainWin::initMenuBar() {
 	fileMenu->addMenu(quickMenu);
 	connect(quickMenu, &QMenu::aboutToShow, this, &MainWin::fillQuickSaves);
 	cutAction(fileMenu, "Undo Quick Load", XCUT_QUICKUNDO);
+	resumeAct = cutAction(fileMenu, "Resume Last Session", XCUT_RESUME);
 	// the Capture menu's, which is made with the machine's menus
 	cutAct("Screenshot", XCUT_SCRSHOT, "grp-screenshot");
 	cutAct("Screenshot Series", XCUT_COMBOSHOT);
@@ -3072,6 +3074,7 @@ void MainWin::popupUserMenu(const QPoint& pos) {
 
 // the images opened last; one that is gone is said so and taken off the list
 void MainWin::fillRecent() {
+	resumeAct->setEnabled(!conf.saves.last.isEmpty() && QFileInfo::exists(conf.saves.last));
 	recentMenu->clear();
 	int n = 0;
 	foreach(QString path, conf.recentList) {

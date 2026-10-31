@@ -1517,7 +1517,7 @@ void quick_keep_undo(Computer* comp) {
 
 int quick_load(Computer* comp, const QString& path) {
 	emu_lock();
-	game_set_folder(QFileInfo(path).absolutePath());
+	game_set_save(path);
 	szx_exact = true;
 	int res = (load_file(comp, path.toLocal8Bit().data(), FG_ALL, 0) == ERR_OK);
 	szx_exact = false;

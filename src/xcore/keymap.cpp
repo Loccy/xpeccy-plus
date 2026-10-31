@@ -502,6 +502,7 @@ static xShortcut short_tab[] = {
 	{SCG_MAIN, XCUT_QUICKSAVE, "key.quick.save", "Quick Save", {}},
 	{SCG_MAIN, XCUT_QUICKLOAD, "key.quick.load", "Quick Load", {}},
 	{SCG_MAIN, XCUT_QUICKUNDO, "key.quick.undo", "Undo Quick Load", {}},
+	{SCG_MAIN, XCUT_RESUME, "key.resume", "Resume Last Session", {}},
 	{SCG_MAIN, XCUT_TAPE_START, "key.tape.start", "Tape Rewind to Start", {}},
 
 	{SCG_DEBUGA, XCUT_STEPIN, "key.dbg.stepin", "Debugger: Step in", {}},

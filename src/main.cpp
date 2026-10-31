@@ -1047,6 +1047,9 @@ int main(int ac,char** av) {
 			mframe.raise();
 			mframe.activateWindow();
 			if (dbg) mwin.doDebug();
+			// where the last session ended, unless the command line says what to run
+			if (!pinned && !given && (conf.macStart == MS_RESUME) && !conf.saves.last.isEmpty())
+				mwin.resumeLast();
 			mwin.hotkeysNote();
 			if (!glWhy.isEmpty())		// never a silent black window, or none at all
 				mwin.setMessage(" OpenGL unavailable: plain picture, no shaders ", 8.0, true);

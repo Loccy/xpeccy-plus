@@ -34,8 +34,9 @@ typedef struct {
 // The game: what the user opened into drive A, as a tape or as a snapshot.
 // The bytes as opened are hashed here (an entry's for an archive path).
 void game_set(const QString& image);
-// the game of a folder of saves, as its json has it: a save of it is going in
-void game_set_folder(const QString& dir);
+// the game of a save, as its folder's json has it (or the json beside it):
+// that save is going in
+void game_set_save(const QString& save);
 void game_forget();
 // as it is, to put back (undoing a quick load)
 typedef struct {
@@ -59,6 +60,12 @@ QString saves_root();
 QString saves_dir(bool make);
 // the game's own folder, empty when it has none yet (no save taken)
 QString saves_game_dir();
+// where an autosave goes: the folder the quick saves are in, when there is one
+// already; empty: the one common file, saves_session_path()
+QString saves_auto_dir();
+QString saves_session_path();
+// the game, beside a save outside the game's folder (the common one)
+void saves_note_game(const QString& save);
 // a folder's saves, newest first; kind -1 for all
 QList<xSave> saves_list(const QString& dir, int kind = -1);
 // the name of a new save of that kind in dir, by the time now

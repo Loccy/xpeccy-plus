@@ -254,6 +254,8 @@ class MainWin : public QWidget {
 		void quickSave();
 		void quickLoad();
 		void quickUndo();
+		void exitSave();
+		bool resumeLast();
 		void fillPreview();	// Options moved a side fill setting
 		void startSize();
 		void keepSize();
@@ -438,6 +440,7 @@ class MainWin : public QWidget {
 		QMenu* recentMenu;
 		void fillRecent();
 		QMenu* quickMenu;
+		QAction* resumeAct;
 		void fillQuickSaves();
 		// the toolbar and the status bar (emw_bars.cpp)
 		QToolBar* toolBar;

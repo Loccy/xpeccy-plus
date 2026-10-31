@@ -507,6 +507,7 @@ enum {
 	XCUT_QUICKLOAD,
 	XCUT_HOTKEYS,
 	XCUT_QUICKUNDO,
+	XCUT_RESUME,
 	XCUT_TAPE_START,
 	XCUT_REWIND,
 	XCUT_FFWD,
@@ -824,7 +825,7 @@ typedef struct {
 enum {AR_MOUNT = 0, AR_RUN, AR_ASK};
 
 // conf.macStart: the machine a start takes; unset is asked once
-enum {MS_LAST = 0, MS_ASK, MS_THIS, MS_UNSET};
+enum {MS_LAST = 0, MS_ASK, MS_THIS, MS_UNSET, MS_RESUME};	// RESUME: the last one, and the last session in it
 
 // conf.upd.check; unset takes the build's default (src/xgui/updatewin.cpp)
 enum {UPC_DAY = 0, UPC_WEEK, UPC_NEVER, UPC_UNSET};

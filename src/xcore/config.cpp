@@ -62,7 +62,7 @@ static int rec_id(const char** tab, const std::string& nam, int def) {
 }
 
 static const char* autorun_name[] = {"mount", "run", "ask", NULL};	// AR_* order
-static const char* start_name[] = {"last", "ask", "this", NULL};	// MS_* order
+static const char* start_name[] = {"last", "ask", "this", "unset", "resume", NULL};	// MS_* order
 static const char* upd_check_name[] = {"day", "week", "never", NULL};	// UPC_* order
 static const char* upd_channel_name[] = {"releases", "nightly", NULL};	// UP_RELEASES, UP_NIGHTLY
 
@@ -217,7 +217,7 @@ static bool start_this() {
 }
 
 bool start_asks() {
-	return (conf.macStart != MS_LAST) && !start_this();
+	return (conf.macStart != MS_LAST) && (conf.macStart != MS_RESUME) && !start_this();
 }
 
 void saveConfig() {
