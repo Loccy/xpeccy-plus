@@ -7,6 +7,7 @@
 #include "xcore/xcore.h"
 #include "xcore/saves.h"
 #include "libxpeccy/filetypes/filetypes.h"
+#include "xgui/savehistory.h"
 
 #include <QDesktopServices>
 #include <QDir>
@@ -113,22 +114,19 @@ bool MainWin::resumeLast() {
 	return done;
 }
 
-// File > Quick Saves: the game's saves, newest first, the picture shown as the
-// tip; empty when there is none
-void MainWin::fillQuickSaves() {
-	quickMenu->clear();
-	QString dir = saves_dir(false);
-	QList<xSave> list = saves_list(dir);
-	QString title = game_name();
-	if (title.isEmpty())
-		title = QString::fromLocal8Bit(xm_find(conf.macId) ? xm_find(conf.macId)->name.c_str() : conf.macId.c_str());
-	quickMenu->addAction(title.replace("&", "&&"))->setEnabled(false);
-	if (list.isEmpty())
-		quickMenu->addAction("No saves yet")->setEnabled(false);
-	for (const xSave& sv : list) {
+void MainWin::saveHistory() {
+	QString path = save_history(this);
+	if (!path.isEmpty())
+		setMessage(loadState(path) ? " quick load " : " can't load the save ");
+	setFocus();
+}
+
+// a folder's saves as menu items, newest first, the picture shown as the tip
+void MainWin::recentSaves(QMenu* menu, const QString& dir) {
+	for (const xSave& sv : saves_list(dir)) {
 		QString text = saves_time_text(sv.time);
 		if (sv.kind != SAVE_QUICK) text += "  " + saves_kind_name(sv.kind);
-		QAction* act = quickMenu->addAction(text);
+		QAction* act = menu->addAction(text);
 		QString path = sv.path;
 		connect(act, &QAction::triggered, this, [this, path]() {
 			setMessage(loadState(path) ? " quick load " : " can't load the save ");
@@ -139,6 +137,20 @@ void MainWin::fillQuickSaves() {
 			act->setToolTip(QString("<img src=\"%0\">").arg(QUrl::fromLocalFile(sv.pic).toString()));
 		}
 	}
+}
+
+// File > Quick Saves: the game's saves, newest first; empty when there is none
+void MainWin::fillQuickSaves() {
+	quickMenu->clear();
+	QString dir = saves_dir(false);
+	QList<xSave> list = saves_list(dir);
+	QString title = game_name();
+	if (title.isEmpty())
+		title = QString::fromLocal8Bit(xm_find(conf.macId) ? xm_find(conf.macId)->name.c_str() : conf.macId.c_str());
+	quickMenu->addAction(title.replace("&", "&&"))->setEnabled(false);
+	if (list.isEmpty())
+		quickMenu->addAction("No saves yet")->setEnabled(false);
+	recentSaves(quickMenu, dir);
 	quickMenu->addSeparator();
 	QAction* show = quickMenu->addAction("Show Saves Folder");
 	show->setEnabled(!dir.isEmpty());

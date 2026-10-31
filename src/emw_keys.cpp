@@ -338,6 +338,9 @@ void MainWin::xkey_press(int xkey, bool cmd) {
 			case XCUT_RESUME:
 				resumeLast();
 				break;
+			case XCUT_SAVEHIST:
+				saveHistory();
+				break;
 			case XCUT_TAPE_START:
 				tapStateChanged(TW_REWIND, 0);
 				setMessage(" tape to start ");

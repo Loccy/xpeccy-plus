@@ -256,6 +256,8 @@ class MainWin : public QWidget {
 		void quickUndo();
 		void exitSave();
 		bool resumeLast();
+		void saveHistory();
+		void recentSaves(QMenu* menu, const QString& dir);
 		void fillPreview();	// Options moved a side fill setting
 		void startSize();
 		void keepSize();

@@ -308,3 +308,82 @@ QString saves_kind_name(int kind) {
 	}
 	return QString();
 }
+
+QList<xSaveFolder> saves_folders() {
+	QList<xSaveFolder> res;
+	QDir root(saves_root());
+	const QStringList dirs = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+	for (const QString& name : dirs) {
+		xSaveFolder f;
+		f.dir = root.filePath(name);
+		f.saves = saves_list(f.dir);
+		if (f.saves.isEmpty()) continue;
+		QJsonObject obj = saves_json(f.dir);
+		f.machine = obj.value("hash").toString().isEmpty();
+		if (f.machine) {
+			std::string id = obj.value("machine").toString().toStdString();
+			const xMachine* m = xm_find(id);
+			f.name = QString::fromLocal8Bit(m ? m->name.c_str() : id.c_str());
+		} else {
+			f.name = obj.value("name").toString();
+			for (const QJsonValue& v : obj.value("images").toArray())
+				f.images.append(v.toString());
+		}
+		f.size = 0;
+		for (const xSave& sv : f.saves) f.size += sv.size;
+		res.append(f);
+	}
+	// the last session's common file
+	QFileInfo last(saves_session_path());
+	if (last.isFile()) {
+		xSaveFolder f;
+		f.machine = false;
+		f.name = "Last session";
+		xSave sv;
+		sv.path = last.filePath();
+		sv.kind = SAVE_EXIT;
+		sv.time = last.lastModified();
+		sv.size = last.size();
+		QString pic = last.path() + "/" + last.completeBaseName() + ".png";
+		if (QFileInfo::exists(pic)) {
+			sv.pic = pic;
+			sv.size += QFileInfo(pic).size();
+		}
+		f.saves.append(sv);
+		f.size = sv.size;
+		res.append(f);
+	}
+	std::stable_sort(res.begin(), res.end(), [](const xSaveFolder& a, const xSaveFolder& b) {
+		return a.saves.first().time > b.saves.first().time;
+	});
+	return res;
+}
+
+QString saves_folder_of(const QString& image) {
+	const QString img = QDir::fromNativeSeparators(image);
+	QDir root(saves_root());
+	const QStringList dirs = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+	for (const QString& name : dirs) {
+		QJsonArray paths = saves_json(root.filePath(name)).value("images").toArray();
+		for (const QJsonValue& v : paths) {
+			if (v.toString().compare(img, Qt::CaseInsensitive) == 0) return root.filePath(name);
+		}
+	}
+	return QString();
+}
+
+void saves_drop_empty(const QString& dir) {
+	if (dir.isEmpty() || !saves_list(dir).isEmpty()) return;
+	QFile::remove(dir + "/game.json");
+	QDir().rmdir(dir);		// only if nothing else is in it
+}
+
+QList<xSave> saves_old(const xSaveFolder& f, int days, bool keepOne) {
+	QList<xSave> res;
+	QDateTime edge = QDateTime::currentDateTime().addDays(-days);
+	// newest first: with keepOne the first stays, however old
+	for (int i = keepOne ? 1 : 0; i < f.saves.size(); i++) {
+		if (f.saves.at(i).time < edge) res.append(f.saves.at(i));
+	}
+	return res;
+}

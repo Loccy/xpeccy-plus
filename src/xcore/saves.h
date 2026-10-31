@@ -78,3 +78,22 @@ QString saves_time_text(const QDateTime& t);
 QString saves_kind_name(int kind);
 // the image a folder's game was opened from last, empty for a machine's folder
 QString saves_folder_image(const QString& dir);
+
+// Every folder with saves in it, newest save first, and the last session's
+// common file as a folder of one (dir empty). For the Save History window
+// and Recent.
+typedef struct {
+	QString dir;
+	QString name;		// the game's, or the machine's
+	bool machine;		// a machine's folder: no game
+	QStringList images;	// the paths the game was opened from
+	QList<xSave> saves;
+	qint64 size;
+} xSaveFolder;
+QList<xSaveFolder> saves_folders();
+// the folder of the game opened from this path, empty when it has none
+QString saves_folder_of(const QString& image);
+// a folder with no save left goes, its json with it
+void saves_drop_empty(const QString& dir);
+// the saves of a folder older than days, the newest kept when keepOne
+QList<xSave> saves_old(const xSaveFolder& f, int days, bool keepOne);
