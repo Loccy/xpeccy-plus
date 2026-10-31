@@ -162,6 +162,17 @@ const QVector<arcEntry>* arc_entries(const QString& archive, QString* err) {
 	return &kept->entries;
 }
 
+QString arc_temp_file(const QString& name, QString* err) {
+	if (!arc_own_root(err)) return QString();
+	static int count = 0;
+	const QString dir = QDir(arc_root()).filePath(QString("t%1").arg(++count));
+	if (!QDir().mkpath(dir)) {
+		arc_fail(err, "Cannot make a folder for a temporary file");
+		return QString();
+	}
+	return QDir(dir).filePath(arc_file_name(name));
+}
+
 QString arc_local(const QString& path, QString* err) {
 	QString archive, entry;
 	if (!arc_split(path, &archive, &entry)) return path;
