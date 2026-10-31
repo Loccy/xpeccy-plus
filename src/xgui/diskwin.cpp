@@ -34,8 +34,12 @@ xDiskWin::xDiskWin(QWidget* p):QDialog(p) {
 	// a selected row does not make the headings bold
 	list->horizontalHeader()->setHighlightSections(false);
 	// what is in the drive, above what is on it
-	path = new QLineEdit;
-	path->setReadOnly(true);
+	path = new xPathBox;
+	path->setToolTip("The disk in the drive, and the other disks beside it");
+	path->empty = "No other disks beside it";
+	path->fill = [this](QMenu* m) {
+		if (others && (drive() >= 0)) others(m, drive());
+	};
 	btnOpen = diskButton(":/images/fileopen.png", "Open a disk image");
 	btnNew = diskButton(":/images/doc-new.png", "Insert a new disk");
 	btnSave = diskButton(":/images/floppy.png", "Save the changes to the disk's own file");
@@ -276,8 +280,7 @@ void xDiskWin::fillDrive(Floppy* flp) {
 	bool fit = flp && flp->fitted;	// a drive left out takes nothing
 	bool in = flp && flp->insert;
 	bool file = in && flp->path && *flp->path;
-	path->setText(!in ? QString() : file ? QString::fromLocal8Bit(flp->path) : QString("(new disk)"));
-	path->setCursorPosition(0);
+	path->setPath(!in ? QString() : file ? QString::fromLocal8Bit(flp->path) : QString("(new disk)"));
 	btnOpen->setEnabled(fit);
 	btnNew->setEnabled(fit);
 	btnSave->setEnabled(file);

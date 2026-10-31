@@ -2477,6 +2477,7 @@ void MainWin::initUserMenu() {
 	addSatellite(diskWin);
 	diskWin->tapeChanged = [this]() {emit s_tape_upd(conf.zx->tape);};
 	diskWin->diskOp = [this](int op, int drv) {diskOp(op, drv);};
+	diskWin->others = [this](QMenu* m, int drv) {otherImages(m, FH_DRIVE_A + drv, drv, nullptr, 999);};
 	padWin = new xPadWin(this);
 	addSatellite(padWin);
 	padWin->gameEdited = [this]() {padGameEdited();};

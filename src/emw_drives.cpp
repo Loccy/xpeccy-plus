@@ -31,46 +31,92 @@ QString drive_media(const char* path, bool in) {
 	return nam.replace("&", "&&");
 }
 
-// The other images of the set the one in a drive or the deck belongs to, the one in now
-// marked: a click puts that one in, as the drive's own Open does. The set is the
-// archive's images when it came from one holding several, else its siblings in the
-// folder (the other sides by name). Many of them go into a submenu named after the
-// archive or the folder. Put in before the action before, or at the end.
-void MainWin::otherImages(QMenu* m, const char* path, int id, int drv, QAction* before) {
-	if (!path || !*path) return;
-	const QString image = QString::fromLocal8Bit(path);
-	QStringList names, paths;
-	QString title, archive, entry, err;
-	int cur = -1;
+// one file, however its path was written
+static bool same_path(const QString& a, const QString& b) {
+#ifdef _WIN32
+	const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+#else
+	const Qt::CaseSensitivity cs = Qt::CaseSensitive;
+#endif
+	return !QDir::fromNativeSeparators(a).compare(QDir::fromNativeSeparators(b), cs);
+}
+
+// The set an image belongs to, for a slot: the archive's images when it came from one
+// holding several, else its siblings in the folder (the other sides by name); cur the
+// image's place, title what a submenu of them is called. False when it has none.
+static bool image_set(const QString& image, int id, int drv, QStringList* names, QStringList* paths, int* cur, QString* title) {
+	QString archive, entry, err;
+	names->clear();
+	paths->clear();
+	*cur = -1;
 	if (arc_split(image, &archive, &entry)) {
-		names = media_candidates(conf.zx, archive, id, drv, &err);
-		cur = int(names.indexOf(entry));
-		for (const QString& name : names) paths.append(arc_join(archive, name));
-		title = QFileInfo(archive).fileName();
-	}
-	if (names.size() < 2) {
-		names.clear();
-		paths.clear();
-		cur = -1;
-		for (const xSibling& sib : media_siblings(conf.zx, image, id, drv, &cur)) {
-			names.append(sib.name);
-			paths.append(sib.path);
+		*names = media_candidates(conf.zx, archive, id, drv, &err);
+		if (names->size() > 1) {
+			*cur = int(names->indexOf(entry));
+			for (const QString& name : *names) paths->append(arc_join(archive, name));
+			*title = QFileInfo(archive).fileName();
+			return true;
 		}
-		title = QFileInfo(QFileInfo(archive.isEmpty() ? image : archive).absolutePath()).fileName();
+		names->clear();
+	}
+	for (const xSibling& sib : media_siblings(conf.zx, image, id, drv, cur)) {
+		names->append(sib.name);
+		paths->append(sib.path);
+	}
+	*title = QFileInfo(QFileInfo(archive.isEmpty() ? image : archive).absolutePath()).fileName();
+	return names->size() > 1;
+}
+
+// The other images of the set the one in the deck or a drive belongs to, the one in now
+// marked: a click puts that one in, as the drive's own Open does. The drives share a
+// set: an empty drive, or one whose disk has none, offers the set of a disk in another
+// drive, as a program's second disk goes into B; a disk in another drive is shown with
+// its letter and cannot be picked. Nor can a side while the tape plays, as Eject. More
+// than inlineMax go into a submenu named after the archive or the folder. Put in before
+// the action before, or at the end.
+void MainWin::otherImages(QMenu* m, int id, int drv, QAction* before, int inlineMax) {
+	Computer* comp = conf.zx;
+	QStringList names, paths;
+	QString title;
+	QString own[4];		// the drives' disks
+	int cur = -1;
+	bool locked = false;
+	if (id == FG_TAPE) {
+		Tape* tape = comp->tape;
+		if ((tape->blkCount < 1) || !tape->path || !*tape->path) return;
+		locked = tape->on;
+		image_set(QString::fromLocal8Bit(tape->path), id, drv, &names, &paths, &cur, &title);
+	} else {
+		for (int i = 0; i < 4; i++) {
+			Floppy* flp = comp->dif->flp[i];
+			if (flp->insert && flp->path && *flp->path) own[i] = QString::fromLocal8Bit(flp->path);
+		}
+		bool got = !own[drv].isEmpty() && image_set(own[drv], id, drv, &names, &paths, &cur, &title);
+		for (int i = 0; (i < 4) && !got; i++) {
+			if ((i == drv) || own[i].isEmpty()) continue;
+			got = image_set(own[i], id, drv, &names, &paths, &cur, &title);
+			cur = -1;
+		}
 	}
 	if (names.size() < 2) return;
 	m->insertSeparator(before);
 	QMenu* to = m;
-	if (names.size() > 8) {
+	if (names.size() > inlineMax) {
 		to = new QMenu(title.replace("&", "&&"), m);
 		m->insertMenu(before, to);
 	}
 	QActionGroup* grp = new QActionGroup(to);
 	for (int i = 0; i < names.size(); i++) {
-		QAction* act = new QAction(QString(names[i]).replace("&", "&&"), to);
+		QString text = QString(names[i]).replace("&", "&&");
+		int in = -1;
+		for (int j = 0; j < 4; j++)
+			if ((j != drv) && !own[j].isEmpty() && same_path(own[j], paths[i])) in = j;
+		if (in >= 0) text += QString("\t%1:").arg(QChar('A' + in));
+		QAction* act = new QAction(text, to);
 		to->insertAction((to == m) ? before : nullptr, act);
 		act->setCheckable(true);
 		act->setChecked(i == cur);
+		act->setEnabled((i == cur) || (!locked && (in < 0)));
 		grp->addAction(act);
 		if (i == cur) continue;
 		const QString open = paths[i];
@@ -160,13 +206,11 @@ void MainWin::fillDrivesMenu() {
 		act = m->addAction(QIcon(":/images/doc-new.png"), "New", this, [this, i]() {diskOp(DW_NEW, i);});
 		// the other images of its set, when the menu opens: the list reads a folder, and
 		// this one is filled each time Media or Machine opens
-		if (flp->insert) {
-			connect(m, &QMenu::aboutToShow, this, [this, m, i, act]() {
-				if (m->property("others").toBool()) return;
-				m->setProperty("others", true);
-				otherImages(m, conf.zx->dif->flp[i]->path, FH_DRIVE_A + i, i, act);
-			});
-		}
+		connect(m, &QMenu::aboutToShow, this, [this, m, i, act]() {
+			if (m->property("others").toBool()) return;
+			m->setProperty("others", true);
+			otherImages(m, FH_DRIVE_A + i, i, act);
+		});
 		act = m->addAction(QIcon(":/images/floppy.png"), "Save", this, [this, i]() {diskOp(DW_SAVE, i);});
 		act->setEnabled(flp->insert && flp->path && *flp->path);
 		act = m->addAction(QIcon(":/images/save-as.png"), "Save As...", this, [this, i]() {diskOp(DW_SAVE_AS, i);});
