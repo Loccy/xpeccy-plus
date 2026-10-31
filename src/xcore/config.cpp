@@ -40,6 +40,7 @@ enum {
 	SECT_MACOVER,
 	SECT_MEDIA,
 	SECT_FILETYPES,
+	SECT_SAVES,
 };
 
 std::map<std::string, int> shotFormat;
@@ -61,7 +62,7 @@ static int rec_id(const char** tab, const std::string& nam, int def) {
 }
 
 static const char* autorun_name[] = {"mount", "run", "ask", NULL};	// AR_* order
-static const char* start_name[] = {"last", "ask", "this", NULL};	// MS_* order
+static const char* start_name[] = {"last", "ask", "this", "unset", "resume", NULL};	// MS_* order
 static const char* upd_check_name[] = {"day", "week", "never", NULL};	// UPC_* order
 static const char* upd_channel_name[] = {"releases", "nightly", NULL};	// UP_RELEASES, UP_NIGHTLY
 
@@ -172,6 +173,17 @@ void conf_init(char* confdir) {
 	conf.fold.rw = 1;
 	conf.fold.trash = 1;
 	conf.fold.asked = 0;
+	conf.saves.perGame = 1;
+	conf.saves.carry = 1;
+	conf.saves.quickKeep = 20;		// Volutar's number
+	conf.saves.exitOn = 1;
+	conf.saves.exitKeep = 5;
+	conf.saves.timedOn = 0;
+	conf.saves.timedMin = 5;
+	conf.saves.timedKeep = 10;
+	conf.saves.cleanOn = 0;
+	conf.saves.cleanDays = 90;
+	conf.saves.keepOne = 1;
 	conf.emu.speed = 1.0;
 	conf.emu.tmode = XTM_NONE;
 	conf.emu.slowDiv = 4;
@@ -205,7 +217,7 @@ static bool start_this() {
 }
 
 bool start_asks() {
-	return (conf.macStart != MS_LAST) && !start_this();
+	return (conf.macStart != MS_LAST) && (conf.macStart != MS_RESUME) && !start_this();
 }
 
 void saveConfig() {
@@ -385,6 +397,21 @@ void saveConfig() {
 	fprintf(cfile, "export.level = %i\n", conf.tape.exp.level);
 	fprintf(cfile, "export.lead = %i\n", conf.tape.exp.lead);
 	fprintf(cfile, "export.tail = %i\n", conf.tape.exp.tail);
+
+	fprintf(cfile, "\n[SAVES]\n\n");
+	fprintf(cfile, "pergame = %s\n", YESNO(conf.saves.perGame));
+	fprintf(cfile, "quick.keep = %i\n", conf.saves.quickKeep);
+	fprintf(cfile, "media = %s\n", conf.saves.carry ? "carry" : "links");
+	fprintf(cfile, "exit = %s\n", YESNO(conf.saves.exitOn));
+	fprintf(cfile, "exit.keep = %i\n", conf.saves.exitKeep);
+	fprintf(cfile, "auto = %s\n", YESNO(conf.saves.timedOn));
+	fprintf(cfile, "auto.minutes = %i\n", conf.saves.timedMin);
+	fprintf(cfile, "auto.keep = %i\n", conf.saves.timedKeep);
+	fprintf(cfile, "folder = %s\n", conf.saves.dir.toUtf8().constData());
+	fprintf(cfile, "clean = %s\n", YESNO(conf.saves.cleanOn));
+	fprintf(cfile, "clean.days = %i\n", conf.saves.cleanDays);
+	fprintf(cfile, "keep.one = %s\n", YESNO(conf.saves.keepOne));
+	fprintf(cfile, "last = %s\n", conf.saves.last.toUtf8().constData());
 
 	fm_save(cfile);
 
@@ -973,6 +1000,7 @@ void loadConfig() {
 			if (pnam=="[TOOLS]") section = SECT_TOOLS;
 			if (pnam=="[GENERAL]") section = SECT_GENERAL;
 			if (pnam=="[TAPE]") section = SECT_TAPE;
+			if (pnam=="[SAVES]") section = SECT_SAVES;
 			if (pnam=="[LEDS]") section = SECT_LEDS;
 			if (pnam=="[INPUT]") section = SECT_INPUT;
 			if (pnam=="[DEBUGA]") section = SECT_DEBUGA;
@@ -1404,6 +1432,21 @@ void loadConfig() {
 					if (pnam=="export.lead") conf.tape.exp.lead = arg.i;
 					if (pnam=="export.tail") conf.tape.exp.tail = arg.i;
 					if (pnam=="speed") xm_defer("tape.speed", pval);
+					break;
+				case SECT_SAVES:
+					if (pnam == "pergame") conf.saves.perGame = arg.b;
+					if (pnam == "quick.keep") conf.saves.quickKeep = getRanged(arg.s, 1, 99);
+					if (pnam == "media") conf.saves.carry = (pval != "links");
+					if (pnam == "exit") conf.saves.exitOn = arg.b;
+					if (pnam == "exit.keep") conf.saves.exitKeep = getRanged(arg.s, 1, 99);
+					if (pnam == "auto") conf.saves.timedOn = arg.b;
+					if (pnam == "auto.minutes") conf.saves.timedMin = getRanged(arg.s, 1, 60);
+					if (pnam == "auto.keep") conf.saves.timedKeep = getRanged(arg.s, 1, 99);
+					if (pnam == "folder") conf.saves.dir = QString::fromUtf8(pval.c_str());
+					if (pnam == "clean") conf.saves.cleanOn = arg.b;
+					if (pnam == "clean.days") conf.saves.cleanDays = getRanged(arg.s, 1, 999);
+					if (pnam == "keep.one") conf.saves.keepOne = arg.b;
+					if (pnam == "last") conf.saves.last = QString::fromUtf8(pval.c_str());
 					break;
 				case SECT_LEDS:
 					if (pnam=="mouse") conf.led.mouse = arg.b;

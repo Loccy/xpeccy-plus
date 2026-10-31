@@ -34,6 +34,21 @@ typedef struct {
 
 int szx_media(const szxMedia** list);
 void szx_media_clear(void);
+// a carried image's name as it was on the host, from our own record
+void szx_media_link(int kind, int drive, const unsigned char* src, size_t n);
+
+// An image to carry in the file being saved instead of only naming it: the
+// tape's file as it is, a Beta disk as the drive holds it (ext: its type).
+// The link set with szx_set_links stays, in our own record. Kept until the
+// next call; the bytes are the caller's, read by szx_build.
+typedef struct {
+	const unsigned char* data;
+	size_t size;
+	char ext[8];
+} szxCarry;
+void szx_set_carry(const szxCarry* tape, const szxCarry* disks);	// disks: 4 or NULL
+// the link of a medium being carried, NULL when it is only linked or not there
+const char* szx_carried_link(int kind, int drive);
 
 // Our own data, in the creator block (szx_ext.c). find: where it starts in a
 // creator block's own data, NULL when the block is someone else's.

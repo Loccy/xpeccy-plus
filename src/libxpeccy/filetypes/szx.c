@@ -237,6 +237,16 @@ static void szx_media_name(szxMedia* m, const unsigned char* src, size_t n) {
 	m->path[n] = 0;
 }
 
+// the name a carried image had, from our own record (szx_ext.c)
+void szx_media_link(int kind, int drive, const unsigned char* src, size_t n) {
+	int i;
+	for (i = 0; i < szx_med_count; i++) {
+		szxMedia* m = &szx_med[i];
+		if (m->data && (m->kind == kind) && (m->drive == drive))
+			szx_media_name(m, src, n);
+	}
+}
+
 static const char* szx_disk_ext[4] = {"trd", "scl", "fdi", "udi"};
 
 // --- the blocks, read ---
@@ -804,12 +814,31 @@ void szx_set_creator(const char* name, int major, int minor) {
 
 static const char* szx_tape_path = NULL;
 static const char* szx_disk_path[4] = {NULL, NULL, NULL, NULL};
+static szxCarry szx_carry_tape;
+static szxCarry szx_carry_disk[4];
 
 void szx_set_links(const char* tape, const char* const* disks) {
 	int i;
 	szx_tape_path = tape;
 	for (i = 0; i < 4; i++)
 		szx_disk_path[i] = disks ? disks[i] : NULL;
+}
+
+void szx_set_carry(const szxCarry* tape, const szxCarry* disks) {
+	int i;
+	memset(&szx_carry_tape, 0, sizeof(szx_carry_tape));
+	memset(szx_carry_disk, 0, sizeof(szx_carry_disk));
+	if (tape) szx_carry_tape = *tape;
+	for (i = 0; disks && (i < 4); i++)
+		szx_carry_disk[i] = disks[i];
+}
+
+const char* szx_carried_link(int kind, int drive) {
+	if (kind == SZX_MED_TAPE)
+		return (szx_carry_tape.data && szx_tape_path) ? szx_tape_path : NULL;
+	if ((kind == SZX_MED_BETA) && (drive >= 0) && (drive < 4))
+		return (szx_carry_disk[drive].data && szx_disk_path[drive]) ? szx_disk_path[drive] : NULL;
+	return NULL;
 }
 
 static void szx_wr_z80r(szxBuf* b, szxBuf* d, Computer* comp, int tick) {
@@ -908,16 +937,23 @@ static void szx_wr_b128(szxBuf* b, szxBuf* d, Computer* comp) {
 	for (i = 0; i < 4; i++) {
 		Floppy* flp = comp->dif->flp[i];
 		const char* path = szx_disk_path[i];
+		const szxCarry* c = &szx_carry_disk[i];
 		if (!flp->insert || !path || !*path) continue;
-		const char* ext = strrchr(path, '.');
+		// carried: its own type; linked: the type the name says
+		const char* ext = c->data ? c->ext : strrchr(path, '.');
+		if (ext && (*ext == '.')) ext++;
 		int type = 0;
-		while (ext && (type < 4) && strcasecmp(ext + 1, szx_disk_ext[type])) type++;
+		while (ext && (type < 4) && strcasecmp(ext, szx_disk_ext[type])) type++;
 		if (!ext || (type > 3)) type = 0;
-		sb_dword(d, flp->protect ? SZD_PROTECT : 0);
+		// a carried one is packed by szx_write
+		sb_dword(d, (flp->protect ? SZD_PROTECT : 0) | (c->data ? SZD_EMBEDDED : 0));
 		sb_byte(d, i);
 		sb_byte(d, flp->trk);
 		sb_byte(d, type);
-		sb_put(d, path, strlen(path) + 1);
+		if (c->data)
+			sb_put(d, c->data, c->size);
+		else
+			sb_put(d, path, strlen(path) + 1);
 		sb_block(b, BID('B','D','S','K'), d);
 	}
 }
@@ -943,14 +979,24 @@ static void szx_wr_plus3(szxBuf* b, szxBuf* d, Computer* comp) {
 
 static void szx_wr_tape(szxBuf* b, szxBuf* d, Computer* comp) {
 	const char* path = szx_tape_path;
+	const szxCarry* c = &szx_carry_tape;
 	char ext[16];
 	memset(ext, 0, sizeof(ext));
 	sb_word(d, comp->tape->block);
-	sb_word(d, 0);				// a link, not the image
-	sb_dword(d, 0);
-	sb_dword(d, (unsigned)strlen(path) + 1);
-	sb_put(d, ext, 16);
-	sb_put(d, path, strlen(path) + 1);
+	if (c->data) {
+		strncpy(ext, (c->ext[0] == '.') ? c->ext + 1 : c->ext, 15);
+		sb_word(d, SZT_EMBEDDED);		// packed by szx_write
+		sb_dword(d, (unsigned)c->size);
+		sb_dword(d, (unsigned)c->size);
+		sb_put(d, ext, 16);
+		sb_put(d, c->data, c->size);
+	} else {
+		sb_word(d, 0);				// a link, not the image
+		sb_dword(d, 0);
+		sb_dword(d, (unsigned)strlen(path) + 1);
+		sb_put(d, ext, 16);
+		sb_put(d, path, strlen(path) + 1);
+	}
 	sb_block(b, BID('T','A','P','E'), d);
 }
 
@@ -1061,7 +1107,24 @@ int szx_write(szxBuf* b, const char* name) {
 		const unsigned char* p = b->data + pos + 8;
 		size_t head = ((id == BID('R','A','M','P')) || (id == BID('G','S','R','P')) || (id == BID('D','M','R','P'))) ? 3
 				: (id == BID('R','O','M',0)) ? 6 : (id == BID('D','M','M','C')) ? 4 : 0;
-		if (head && (n > head)) {
+		if ((id == BID('T','A','P','E')) && (n > 28) && (rd_word(p + 2) & SZT_EMBEDDED)) {
+			// a carried tape: the packed size goes into the header too
+			sb_put(&d, p, 28);
+			if (sb_deflate(&d, p + 28, n - 28)) {
+				unsigned csize = (unsigned)(d.len - 28);
+				d.data[2] |= SZT_COMPRESSED;
+				d.data[8] = csize & 0xff;
+				d.data[9] = (csize >> 8) & 0xff;
+				d.data[10] = (csize >> 16) & 0xff;
+				d.data[11] = (csize >> 24) & 0xff;
+			}
+			sb_block(&o, id, &d);
+		} else if ((id == BID('B','D','S','K')) && (n > 7) && (rd_dword(p) & SZD_EMBEDDED)) {
+			sb_put(&d, p, 7);
+			if (sb_deflate(&d, p + 7, n - 7))
+				d.data[0] |= SZD_COMPRESSED;
+			sb_block(&o, id, &d);
+		} else if (head && (n > head)) {
 			sb_put(&d, p, head);
 			if (sb_deflate(&d, p + head, n - head))
 				d.data[0] |= (id == BID('D','M','M','C')) ? SZDM_COMPRESSED : SZR_COMPRESSED;

@@ -248,6 +248,18 @@ class MainWin : public QWidget {
 		void kRelease(QKeyEvent*);
 		void loadShader();
 		bool reloadMedia();
+		// quick saves (emw_saves.cpp)
+		int saveState(int kind);
+		bool loadState(const QString& path);
+		void quickSave();
+		void quickLoad();
+		void quickUndo();
+		void exitSave();
+		void autoSave(int kind);
+		void timedSave(int ms);
+		bool resumeLast();
+		void saveHistory();
+		void recentSaves(QMenu* menu, const QString& dir);
 		void fillPreview();	// Options moved a side fill setting
 		void startSize();
 		void keepSize();
@@ -431,6 +443,10 @@ class MainWin : public QWidget {
 		QMenu* fillMenu;
 		QMenu* recentMenu;
 		void fillRecent();
+		QMenu* quickMenu;
+		QAction* resumeAct;
+		qint64 timedMs = 0;		// running time since the last periodic autosave
+		void fillQuickSaves();
 		// the toolbar and the status bar (emw_bars.cpp)
 		QToolBar* toolBar;
 		QToolBar* fsTool = nullptr;	// the same buttons over the picture in fullscreen, under fsBar

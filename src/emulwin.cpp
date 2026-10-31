@@ -54,6 +54,7 @@
 #include "xcore/cheats.h"
 #include "filer.h"
 #include "xcore/arcpath.h"
+#include "xcore/saves.h"
 #include "watcher.h"
 #include "xgui/favorites.h"
 #include "xgui/xgui.h"
@@ -754,6 +755,7 @@ static struct {
 void MainWin::timerEvent(QTimerEvent* ev) {
 	Computer* comp = conf.zx;
 	if (ev->timerId() == secid) {		// 0.2 sec timer, fps counter
+		timedSave(FPS_TICK_MS);
 		// printf("0.2 sec timer event\n");
 		// the rate jumps tenfold into and out of fast mode: start the window
 		// over rather than average across the jump
@@ -2124,6 +2126,7 @@ void MainWin::closeEvent(QCloseEvent* ev) {
 	}
 //	std::string fname;
 	if (saveChanged(true)) {
+		exitSave();			// the disks as the question left them
 		emu_lock();
 		int rzxErr = rzxr_stop(comp);		// the autosave is up to 30 s behind
 		emu_unlock();
@@ -2701,7 +2704,13 @@ void MainWin::initMenuBar() {
 	cutAction(fileMenu, "Save Changed Disks", XCUT_FASTSAVE, "save_all");
 	cutAction(fileMenu, "Quick Save", XCUT_QUICKSAVE);
 	cutAction(fileMenu, "Quick Load", XCUT_QUICKLOAD);
+	quickMenu = new xMenu("Quick Saves", this);
+	quickMenu->setToolTipsVisible(true);		// the tip is the save's picture
+	fileMenu->addMenu(quickMenu);
+	connect(quickMenu, &QMenu::aboutToShow, this, &MainWin::fillQuickSaves);
+	cutAction(fileMenu, "Save History...", XCUT_SAVEHIST);
 	cutAction(fileMenu, "Undo Quick Load", XCUT_QUICKUNDO);
+	resumeAct = cutAction(fileMenu, "Resume Last Session", XCUT_RESUME);
 	// the Capture menu's, which is made with the machine's menus
 	cutAct("Screenshot", XCUT_SCRSHOT, "grp-screenshot");
 	cutAct("Screenshot Series", XCUT_COMBOSHOT);
@@ -3067,12 +3076,14 @@ void MainWin::popupUserMenu(const QPoint& pos) {
 
 // the images opened last; one that is gone is said so and taken off the list
 void MainWin::fillRecent() {
+	resumeAct->setEnabled(!conf.saves.last.isEmpty() && QFileInfo::exists(conf.saves.last));
 	recentMenu->clear();
 	int n = 0;
 	foreach(QString path, conf.recentList) {
 		n++;
 		QString name = arc_name(path).replace("&", "&&");
-		QAction* act = recentMenu->addAction(QString("%0  %1").arg(n % 10).arg(name), this, [this, path]() {
+		QString text = QString("%0  %1").arg(n % 10).arg(name);
+		auto open = [this, path]() {
 			if (!arc_exists(path)) {
 				shitHappens(QString("File not found:<br>%0").arg(path).toLocal8Bit().data());
 				recent_remove(path);
@@ -3080,7 +3091,19 @@ void MainWin::fillRecent() {
 			}
 			openMedia(path, FG_ALL, 0, conf.autorun);
 			setFocus();
-		});
+		};
+		// an image with saves: a menu of them, under the item that opens it
+		QString dir = saves_folder_of(path);
+		if (!dir.isEmpty() && !saves_list(dir).isEmpty()) {
+			QMenu* sub = recentMenu->addMenu(text);
+			sub->setToolTipsVisible(true);
+			sub->menuAction()->setToolTip(QDir::toNativeSeparators(path));
+			sub->addAction(QIcon(":/images/fileopen.png"), "Open", this, open);
+			sub->addSeparator();
+			recentSaves(sub, dir);
+			continue;
+		}
+		QAction* act = recentMenu->addAction(text, this, open);
 		act->setToolTip(QDir::toNativeSeparators(path));
 	}
 	if (conf.recentList.isEmpty()) {
@@ -3772,6 +3795,7 @@ void MainWin::watchMedia() {
 	QString snap = file_take_snapshot();		// whoever loaded it
 	if (!snap.isEmpty())
 		showMedia(snap, MEDIA_SNAP);
+	game_check(comp);		// the game's tape or disk taken out: saves go elsewhere
 	// another image in a drive, or none: the name goes if it was this one,
 	// and a motor still running from the last one counts as a new start
 	for (int src = 0; src < MEDIA_SRCS; src++) {

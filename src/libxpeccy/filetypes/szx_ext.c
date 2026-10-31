@@ -434,6 +434,7 @@ static const szxField fld_tape[] = {
 #define XR_TAPE	BID('T','A','P','E')
 #define XR_GSCPU	BID('G','S','C','P')
 #define XR_GSRAM	BID('G','S','R','X')	// a 32K page past what the GS block holds
+#define XR_LINK	BID('L','I','N','K')	// a carried image's name: kind, drive, the name
 
 static void ext_gs_save(szxBuf*, Computer*);
 
@@ -630,6 +631,17 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		Tape tape = *comp->tape;
 		tape.blkChange = 0;		// the window's to clear, not the tape's
 		rec_fields(b, XR_TAPE, &tape, fld_tape);
+	}
+	// what the carried images were called, for putting them back under their names
+	for (i = 0; i < 5; i++) {
+		int kind = i ? SZX_MED_BETA : SZX_MED_TAPE;
+		const char* link = szx_carried_link(kind, i - 1);
+		if (!link) continue;
+		rec_begin(b, XR_LINK, &mark);
+		sb_byte(b, kind);
+		sb_byte(b, i ? i - 1 : 0);
+		sb_put(b, link, strlen(link));
+		rec_end(b, mark);
 	}
 }
 
@@ -981,6 +993,10 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 			core[0] ? core : "?", comp->hw->name);
 	while (ext_next(ext, len, &pos, &id, &p, &n)) {
 		int idx;
+		if ((id == XR_LINK) && (n > 2)) {
+			szx_media_link(p[0], p[1], p + 2, n - 2);	// any machine's: a name is a name
+			continue;
+		}
 		if (!same && (xr_slot(id, XR_CHIP, 4) < 0) && (xr_slot(id, XR_FM, 4) < 0) && (id != XR_TS))
 			continue;
 		switch (id) {

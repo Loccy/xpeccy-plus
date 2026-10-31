@@ -11,6 +11,11 @@ before that point is upstream's history and is not repeated here.
 
 ### Added
 
+- **Quick saves per game**: F5 keeps the last 20 saves of each game, with its tape and
+  TR-DOS disks as they were; F9 loads the newest, Shift+F9 opens Save History to pick another
+  or clear old ones, and Undo Quick Load moves to Ctrl+F9. The program saves the machine on
+  exit for File > Resume Last Session, and can every few minutes too. *(requested by Volutar)*
+
 - **Pause in menus**: the machine waits while a menu of the window is open - the menu
   bar, the right-click menu, a toolbar list - and goes on when it closes. On by default;
   the volume slider does not stop it.

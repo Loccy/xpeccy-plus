@@ -220,6 +220,7 @@ enum {
 #define	PR_EXIT		(1<<8)
 #define	PR_FOCUS	(1<<9)		// another application has the focus
 #define	PR_MENU		(1<<10)		// a menu of the main window is open
+#define	PR_SAVES	(1<<11)		// Save History is open: a menu of saves, held as menus are
 
 // labels
 
@@ -507,6 +508,8 @@ enum {
 	XCUT_QUICKLOAD,
 	XCUT_HOTKEYS,
 	XCUT_QUICKUNDO,
+	XCUT_RESUME,
+	XCUT_SAVEHIST,
 	XCUT_TAPE_START,
 	XCUT_REWIND,
 	XCUT_FFWD,
@@ -824,7 +827,7 @@ typedef struct {
 enum {AR_MOUNT = 0, AR_RUN, AR_ASK};
 
 // conf.macStart: the machine a start takes; unset is asked once
-enum {MS_LAST = 0, MS_ASK, MS_THIS, MS_UNSET};
+enum {MS_LAST = 0, MS_ASK, MS_THIS, MS_UNSET, MS_RESUME};	// RESUME: the last one, and the last session in it
 
 // conf.upd.check; unset takes the build's default (src/xgui/updatewin.cpp)
 enum {UPC_DAY = 0, UPC_WEEK, UPC_NEVER, UPC_UNSET};
@@ -912,6 +915,22 @@ struct xConfig {
 		unsigned trash:1;	// a file the guest deletes goes to the trash, not for good
 		unsigned asked:1;	// the user has answered the first write's question
 	} fold;
+	// quick saves and autosaves (xcore/saves.cpp), [SAVES]
+	struct {
+		unsigned perGame:1;	// a folder per game, else one per machine
+		unsigned carry:1;	// the tape and the Beta disks go into the save, not only their names
+		unsigned exitOn:1;	// an autosave on exit
+		unsigned timedOn:1;	// and every timedMin minutes of running
+		unsigned cleanOn:1;	// saves older than cleanDays go at start
+		unsigned keepOne:1;	// ...but a game's newest stays
+		int quickKeep;		// how many of each kind a folder keeps
+		int exitKeep;
+		int timedKeep;
+		int timedMin;
+		int cleanDays;
+		QString dir;		// empty: <config>/saves
+		QString last;		// the last session's autosave
+	} saves;
 	// the ZX Spectrum Next's own card (xcore/sysnext.cpp, xgui/nextcard.cpp), next.card in [MEDIA]
 	struct {
 		std::string card;	// a folder or an image; empty: none made or picked yet

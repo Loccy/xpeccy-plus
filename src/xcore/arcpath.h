@@ -22,6 +22,9 @@ bool arc_bare(const QString& path);
 // the file to read: the unpacked copy for an archive path, the path itself otherwise;
 // empty, with err set, when the entry cannot be unpacked
 QString arc_local(const QString& path, QString* err);
+// a file of that name to write, in a folder of its own in the same temporary
+// folder (gone at exit); empty, with err set, when there is no room
+QString arc_temp_file(const QString& name, QString* err);
 // the archive's entries, read once while it stays the same file; nullptr, with err set,
 // when it cannot be read
 const QVector<arcEntry>* arc_entries(const QString& archive, QString* err);

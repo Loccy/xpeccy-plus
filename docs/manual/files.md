@@ -4,7 +4,7 @@
 ```
 
 Xpeccy+ opens snapshots, tapes, disks, cartridges and RZX recordings, and saves snapshots,
-tapes and disks. The **File** menu opens and saves them and keeps the quick save. Tapes
+tapes and disks. The **File** menu opens and saves them and keeps the quick saves. Tapes
 and disks have pages of their own under the **Media** menu:
 [Tapes](tapes.md) and [Floppy disks](disks.md). Which machine a file runs on is set on the
 [File types page](options-file-types.md).
@@ -61,7 +61,9 @@ To choose Run or Mount for one file only, hold Shift as you drop it, or as you c
 to see where the file is. A file that no longer exists is reported and taken off the list.
 A file of a type Xpeccy+ does not know is reported as **Unknown file type** and does not
 go on the list.
-**Clear** empties the list.
+**Clear** empties the list. A file whose game has saves opens a menu: **Open** opens it as
+the item would, and under it are the game's saves, newest first, to load (see
+[Quick saves](#quick-saves)).
 
 **File > Reload** opens the last file again, the way it was opened: into the same drive,
 run or mounted. If you loaded a labels file in the Debugger, it is read again too.
@@ -196,20 +198,68 @@ that machine.
 and `.sna` snapshots too, through NextZXOS, from its SD card: see
 [Starting programs](zx-next.md#starting-programs). A snapshot of the Next cannot be saved yet.
 
-## Quick save and load
+## Quick saves
 
-```{index} Quick Save, Quick Load, Undo Quick Load, snapshot; quick save
+```{index} Quick Save, Quick Load, Undo Quick Load, Quick Saves, snapshot; quick save
 ```
 
-**File > Quick Save** saves the machine's current state, both in memory and as an `.szx`
-file in the `quick` folder of the [settings folder](getting-started.md#where-the-settings-are).
-There is one quick save per machine: a new one replaces the last.
+**File > Quick Save** (F5) saves the machine as it is now into the folder of the game: the
+image you opened last into drive A, as a tape or as a snapshot. A disk in drive B does not
+count. Each game keeps the last 20 quick saves; a new one past that number deletes the
+oldest. The game is known by its contents, so the same game opened from an archive, as a
+plain file or from another folder shares its saves. When no game is open, or the game's tape
+or disk has been taken out, the saves go to the folder of the machine instead.
 
-**File > Quick Load** puts back the quick save of the machine that is running. It works
-after a restart too, from the file. The message "nothing quick saved" means this machine has none.
+**File > Quick Load** (F9) puts back the game's newest quick save, on the machine it was
+taken on. **File > Quick Saves** lists the game's saves, newest first, with the time each
+was taken; hold the mouse over one to see its picture, click it to load it.
+**Show Saves Folder** opens the game's folder.
 
-**File > Undo Quick Load** takes back the last quick load and returns to where you were.
-Use it again to redo the quick load.
+![The Quick Saves menu](images/menu-quick-saves.png)
+
+A save takes the tape and the TR-DOS disks with it. Loading it puts them back as they were
+when it was taken: the tape at its place, and a disk with whatever the game had written to
+it by then. So a save still loads after the image or its archive was moved or deleted. A
++3 disk is not carried: the save names it, and it has to stay where it was.
+
+**File > Undo Quick Load** (Ctrl+F9) takes back the last quick load and returns to where you
+were, the tape and the disks too. Use it again to redo the quick load.
+
+A ZX Spectrum Next cannot be saved to a file yet: its quick save is kept in memory until
+the program closes.
+
+### Autosaves
+
+```{index} autosave, Resume Last Session
+```
+
+When the program closes, it saves the machine. **File > Resume Last Session** puts that
+back: the machine, the game and its media. To start where you left off every time, choose
+**Resume last session** in **Machine at start** on the [Application page](options-application.md).
+
+The autosave on exit goes into the game's folder when the game has one - that is, after its
+first quick save - and the folder keeps the last few of them. Otherwise there is one autosave,
+written over each time. The [Saves page](options-saves.md) of **Options** can also save
+every few minutes of play, and sets how many saves of each kind a game keeps.
+
+### Save History
+
+```{index} Save History
+```
+
+**File > Save History...** (Shift+F9) lists every game with saves: the time of its last save,
+how many quick saves and autosaves it has, and their size in MB. It opens on the game in use,
+its newest save picked: Enter loads it.
+
+![The Save History window](images/save-history.png)
+
+**Clear Old** deletes the saves older than the number of days next to it, in every game. The
+**Old** and **Old MB** columns show what it would delete. With **Keep at least one save** on,
+each game keeps its newest save however old it is.
+
+Click a game to see its saves below, with a picture of the selected one. **Load** loads it
+(a double click does too), **Delete** deletes the selected saves, and **Show in Folder**
+opens the game's folder. A game whose last save goes disappears from the list.
 
 ## RZX recordings
 

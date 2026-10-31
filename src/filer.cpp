@@ -7,6 +7,7 @@
 #include "xcore/cheats.h"
 #include "xcore/sound.h"
 #include "xcore/arcpath.h"
+#include "xcore/saves.h"
 #include "libxpeccy/cpu/Z80/z80.h"
 #include "libxpeccy/filetypes/szx.h"
 #include "libxpeccy/xstate.h"
@@ -90,8 +91,32 @@ static int save_wav(Computer* comp, const char* name, int drv) {
 
 // An .szx links to the tape and the disks it was taken with, by their names on
 // this host, the way Spectaculator writes them.
-// the file in memory, with the images the machine has in linked by name
-static int build_szx(Computer* comp, szxBuf* b) {
+// a tape put in from a save: its bytes, as its file may not be there any more
+static QString carriedTapeName;
+static QString carriedTapeExt;
+static QByteArray carriedTape;
+
+// the tape's file as it is, to carry in a save: one recorded onto since is not
+// that file any more, and a wav of minutes is no thing to copy into every save
+static QByteArray carry_tape(Computer* comp, QString* ext) {
+	Tape* tape = comp->tape;
+	if (!tape->path || !tape->blkCount || tape->changed) return QByteArray();
+	QString path = QString::fromLocal8Bit(tape->path);
+	if (!carriedTape.isEmpty() && (path == carriedTapeName)) {
+		*ext = carriedTapeExt;
+		return carriedTape;
+	}
+	QString err;
+	QFile file(arc_local(path, &err));
+	if ((file.size() > (4 << 20)) || !file.open(QIODevice::ReadOnly)) return QByteArray();
+	QString entry;
+	*ext = QFileInfo(arc_split(path, nullptr, &entry) ? entry : path).suffix().toLower();
+	return file.readAll();
+}
+
+// the file in memory, with the images the machine has in linked by name; carry:
+// the tape and the Beta disks inside it too, the disks as the drives hold them
+static int build_szx(Computer* comp, szxBuf* b, bool carry = false) {
 	QByteArray tape;
 	QByteArray disk[4];
 	const char* dptr[4];
@@ -103,10 +128,33 @@ static int build_szx(Computer* comp, szxBuf* b) {
 			disk[i] = QDir::toNativeSeparators(QString::fromLocal8Bit(flp->path)).toLocal8Bit();
 		dptr[i] = disk[i].isEmpty() ? NULL : disk[i].constData();
 	}
+	QByteArray tbytes;
+	szxCarry tc;
+	szxCarry dc[4];
+	memset(&tc, 0, sizeof(tc));
+	memset(dc, 0, sizeof(dc));
+	if (carry) {
+		QString ext;
+		if (!tape.isEmpty()) tbytes = carry_tape(comp, &ext);
+		if (!tbytes.isEmpty()) {
+			tc.data = (const unsigned char*)tbytes.constData();
+			tc.size = tbytes.size();
+			strncpy(tc.ext, ext.toLatin1().constData(), sizeof(tc.ext) - 1);
+		}
+		for (int i = 0; (i < 4) && comp->dif && (comp->dif->type == DIF_BDI); i++) {
+			if (!dptr[i]) continue;
+			dc[i].data = udi_build(comp->dif->flp[i], &dc[i].size);
+			strcpy(dc[i].ext, "udi");
+		}
+	}
+	szx_set_carry(&tc, dc);
 	szx_set_links(tape.isEmpty() ? NULL : tape.constData(), dptr);
 	szx_set_machine(conf.macId.c_str());
 	int res = szx_build(comp, b);
 	szx_set_links(NULL, NULL);
+	szx_set_carry(NULL, NULL);
+	for (int i = 0; i < 4; i++)
+		free((void*)dc[i].data);
 	return res;
 }
 
@@ -779,47 +827,104 @@ QString file_ask_open(Computer* comp, int* id, int* drv) {
 	return path;
 }
 
+// A save of ours being put back: what it carries goes in as it was - a disk
+// the game wrote to since too, without asking - and an image already in with
+// the same bytes stays. Off, an image in its place is left in, so a disk
+// written to since is not thrown away.
+static bool szx_exact = false;
+
+static void media_rename(Computer* comp, const QString& local, const QString& path);
+
+// the drive already holds the carried image: the same name, the same bytes
+static bool szx_holds(Computer* comp, const szxMedia* m, const QString& link) {
+	QByteArray raw = link.toLocal8Bit();
+	if (m->kind == SZX_MED_TAPE)
+		return comp->tape->path && (raw == comp->tape->path) && !comp->tape->changed;
+	Floppy* flp = comp->dif->flp[m->drive & 3];
+	if (!flp->insert || !flp->path || (raw != flp->path)) return false;
+	if (strcmp(m->ext, "udi")) return true;		// someone else's: by name only
+	size_t len = 0;
+	unsigned char* now = udi_build(flp, &len);
+	bool same = now && (len == m->size) && !memcmp(now, m->data, len);
+	free(now);
+	return same;
+}
+
 // The tape and the disks an .szx links to or carries. A link that does not
 // resolve is looked for beside the snapshot, as Spectaculator writes plain names
-// too; a carried image is written out to the temp folder first. One already in
-// its place is left in, so a disk written to since is not thrown away.
+// too; a carried image is written out to a temporary file first, and goes in
+// under the name it had when the file says it. See szx_exact for what is left in.
 static void szx_mount(Computer* comp, const QString& snap) {
 	const szxMedia* med;
 	int count = szx_media(&med);
 	for (int i = 0; i < count; i++) {
 		const szxMedia* m = &med[i];
-		QString path;
-		if (m->data) {
-			QString name = QFileInfo(snap).completeBaseName();
-			if (m->kind != SZX_MED_TAPE) name += QString("-%1").arg(QChar('a' + m->drive));
-			path = QDir::temp().filePath(name + "." + QString::fromLocal8Bit(m->ext).toLower());
+		QString path;		// the file read
+		QString name;		// the name it goes in under, when not that one
+		QString link = QDir::fromNativeSeparators(QString::fromLocal8Bit(m->path));
+		if (m->data && !link.isEmpty()) {
+			const char* in = (m->kind == SZX_MED_TAPE) ? comp->tape->path : comp->dif->flp[m->drive & 3]->path;
+			bool there = in && *in && (arc_canonical(QString::fromLocal8Bit(in)) == arc_canonical(link));
+			if (szx_exact ? szx_holds(comp, m, link) : there) {
+				path = name = link;		// in its place already
+			} else {
+				QString err;
+				QString entry;
+				QString base = QFileInfo(arc_split(link, nullptr, &entry) ? entry : link).completeBaseName();
+				path = arc_temp_file(base + "." + QString::fromLocal8Bit(m->ext).toLower(), &err);
+				name = link;
+			}
+		} else if (m->data) {
+			QString base = QFileInfo(snap).completeBaseName();
+			if (m->kind != SZX_MED_TAPE) base += QString("-%1").arg(QChar('a' + m->drive));
+			path = QDir::temp().filePath(base + "." + QString::fromLocal8Bit(m->ext).toLower());
+		} else {
+			path = link;
+			if (!arc_exists(path))
+				path = QFileInfo(snap).dir().filePath(QFileInfo(link).fileName());
+			if (!arc_exists(path)) {
+				xlog(XLG_FILE, XLL_WARN, "szx: %s not found", m->path);
+				continue;
+			}
+		}
+		if (path.isEmpty()) {
+			xlog(XLG_FILE, XLL_WARN, "szx: no place for the carried image of %s", m->path);
+			continue;
+		}
+		bool fresh = m->data && (path != name);
+		if (fresh) {
 			QFile file(path);
 			if (!file.open(QIODevice::WriteOnly) || (file.write((const char*)m->data, m->size) != (qint64)m->size)) {
 				xlog(XLG_FILE, XLL_WARN, "szx: cannot write the carried image to %s", path.toLocal8Bit().constData());
 				continue;
 			}
-		} else {
-			QString link = QDir::fromNativeSeparators(QString::fromLocal8Bit(m->path));
-			path = link;
-			if (!QFileInfo(path).isFile())
-				path = QFileInfo(snap).dir().filePath(QFileInfo(link).fileName());
-			if (!QFileInfo(path).isFile()) {
-				xlog(XLG_FILE, XLL_WARN, "szx: %s not found", m->path);
-				continue;
-			}
 		}
-		path = QFileInfo(path).canonicalFilePath();
-		xFileTypeInfo* inf = file_find_hw_ext(comp->hw->id, path);
+		if (!arc_split(path)) path = QFileInfo(path).canonicalFilePath();
+		QString err;
+		QString local = arc_local(path, &err);	// the bytes, unpacked when in an archive
+		if (local.isEmpty()) {
+			xlog(XLG_FILE, XLL_WARN, "szx: %s: %s", path.toLocal8Bit().constData(), err.toLocal8Bit().constData());
+			continue;
+		}
+		QString as = name.isEmpty() ? path : name;	// what the drive is to say
+		xFileTypeInfo* inf = file_find_hw_ext(comp->hw->id, local);
 		int kind = inf ? as_kind_of(inf->id) : AS_NONE;
 		if ((m->kind == SZX_MED_TAPE) ? (kind != AS_TAPE) : ((kind != AS_DISK) && (kind != AS_DISK3))) {
 			xlog(XLG_FILE, XLL_WARN, "szx: %s is no image of the kind it is linked as", path.toLocal8Bit().constData());
 			continue;
 		}
+		QByteArray asRaw = as.toLocal8Bit();
 		if (m->kind == SZX_MED_TAPE) {
 			const char* now = comp->tape->path;
-			if (!now || (QFileInfo(QString::fromLocal8Bit(now)).canonicalFilePath() != path)) {
-				if (replace_ok(comp, inf, 0) != ERR_OK) continue;
-				if (inf->load(comp, path.toLocal8Bit().data(), 0) != ERR_OK) continue;
+			if (fresh || !now || (arc_canonical(QString::fromLocal8Bit(now)) != arc_canonical(as))) {
+				if (!szx_exact && (replace_ok(comp, inf, 0) != ERR_OK)) continue;
+				if (inf->load(comp, local.toLocal8Bit().data(), 0) != ERR_OK) continue;
+				if (local != as) media_rename(comp, local, as);
+				if (fresh && !name.isEmpty()) {
+					carriedTapeName = as;
+					carriedTapeExt = QString::fromLocal8Bit(m->ext).toLower();
+					carriedTape = QByteArray((const char*)m->data, (int)m->size);
+				}
 			}
 			if (m->block < comp->tape->blkCount) {
 				tapRewind(comp->tape, m->block);
@@ -833,15 +938,18 @@ static void szx_mount(Computer* comp, const QString& snap) {
 			int drv = m->drive & 3;
 			Floppy* flp = comp->dif->flp[drv];
 			if (!flp->fitted) continue;
-			if (!flp->insert || !flp->path || (QFileInfo(QString::fromLocal8Bit(flp->path)).canonicalFilePath() != path)) {
-				if (replace_ok(comp, inf, drv) != ERR_OK) continue;
-				if (inf->load(comp, path.toLocal8Bit().data(), drv) != ERR_OK) continue;
+			if (fresh || !flp->insert || !flp->path || (arc_canonical(QString::fromLocal8Bit(flp->path)) != arc_canonical(as))) {
+				if (!szx_exact && (replace_ok(comp, inf, drv) != ERR_OK)) continue;
+				if (inf->load(comp, local.toLocal8Bit().data(), drv) != ERR_OK) continue;
+				if (local != as) media_rename(comp, local, as);
 				disk_boot(comp, drv, inf->id);		// as opening it does
 			}
 			flp->protect = m->protect ? 1 : 0;
 			flp->trk = m->cylinder;
 		}
-		xlog(XLG_FILE, XLL_INFO, "szx: %s %s", (m->kind == SZX_MED_TAPE) ? "tape" : "disk", path.toLocal8Bit().constData());
+		if (fresh && !name.isEmpty()) QFile::remove(path);	// read whole, and the drive has the name
+		xlog(XLG_FILE, XLL_INFO, "szx: %s %s%s", (m->kind == SZX_MED_TAPE) ? "tape" : "disk",
+			asRaw.constData(), fresh ? " (carried)" : "");
 	}
 	szx_ext_media(comp);
 }
@@ -1075,6 +1183,9 @@ static void media_rename(Computer* comp, const QString& local, const QString& pa
 	}
 }
 
+// what the last load opened, an archive's entry named: the path the drive has
+static QString last_loaded;
+
 int load_file(Computer* comp, const char* name, int id, int drv) {
 	last_as_kind = AS_NONE;
 	xspeed_modes_off();
@@ -1131,6 +1242,7 @@ int load_file(Computer* comp, const char* name, int id, int drv) {
 		}
 	}
 	if (err == ERR_OK) {
+		last_loaded = path;
 		// the drive only means anything for a disk (inf->ch marks one)
 		if (inf && inf->ch) {
 			xlog(XLG_FILE, XLL_INFO, "open %s into drive %c: %s", inf->name,
@@ -1155,7 +1267,10 @@ static xMediaOpen media_last = {QString(), FG_ALL, 0, 0, false};
 
 void media_opened(const QString& path, int id, int drv, int run, bool pinned) {
 	media_last = {path, id, drv, run, pinned};
-	if (drv < 1) labels_image(path);	// a disk in drive B is not the program
+	if (drv < 1) {				// a disk in drive B is not the program
+		labels_image(path);
+		game_set(last_loaded.isEmpty() ? path : last_loaded);
+	}
 }
 
 xMediaOpen media_last_open() {
@@ -1303,40 +1418,40 @@ int save_back(Computer* comp, const char* path, int id, int drv) {
 }
 
 
-// quick save: the machine as it is, in memory - an xstate is not a file, it
-// holds the live machine's own pointers - and as an .szx
+// Quick saves. A save is an .szx in the game's folder (xcore/saves.h); a
+// machine that cannot be one is held in memory instead, until exit.
 static xState* quickState = NULL;
 static std::string quickMac;		// the machine the one in memory is of
 
-static QString quick_path(const char* ext = ".szx") {
-	QString dir = QString::fromLocal8Bit(conf.path.confDir.c_str()) + "/quick";
-	QDir().mkpath(dir);
-	return dir + "/" + QString::fromLocal8Bit(conf.macId.c_str()) + ext;
-}
-
-// The file is only built while the machine is held: packing several megabytes
-// of an Evo's memory would hold it for frames.
-int quick_save(Computer* comp) {
+// The file is only built while the machine is held, and packed after: packing
+// several megabytes of an Evo's memory would hold it for frames.
+int quick_save(Computer* comp, const QString& path) {
 	szxBuf b;
+	int res = 0;
 	emu_lock();
-	if (!quickState) quickState = xstate_create();
-	int res = (quickState && xstate_save(quickState, comp)) ? 1 : 0;
-	quickMac = res ? conf.macId : std::string();
-	int built = res && szxCanSave(comp) && (build_szx(comp, &b) == ERR_OK);
-	emu_unlock();
-	if (built) {
-		QString path = quick_path();
-		if (szx_write(&b, path.toLocal8Bit().data()) == ERR_OK) {
-			res = 2;
-			QFile::remove(quick_path(".z80"));	// what builds before .szx left there
-		}
+	int can = szxCanSave(comp);
+	if (!can) {
+		if (!quickState) quickState = xstate_create();
+		res = (quickState && xstate_save(quickState, comp)) ? 1 : 0;
+		quickMac = res ? conf.macId : std::string();
 	}
+	int built = can && !path.isEmpty() && (build_szx(comp, &b, conf.saves.carry) == ERR_OK);
+	emu_unlock();
+	if (built && (szx_write(&b, path.toLocal8Bit().data()) == ERR_OK))
+		res = 2;
 	return res;
 }
 
-// what a quick load replaced, to take it back with
-static xState* undoState = NULL;
-static std::string undoMac;
+// what a quick load replaced, to take it back with: an .szx in memory carrying
+// its media, or the machine's state when it cannot be one
+typedef struct {
+	QByteArray szx;
+	xState* st;
+	std::string mac;
+	xGame game;
+} quickKept;
+
+static quickKept undoKept = {QByteArray(), NULL, std::string(), xGame()};
 
 // A quick save may be from before what a recording has logged since, so the
 // recording joins there instead of going back with the machine.
@@ -1350,38 +1465,98 @@ static int quick_xstate_load(xState* st, Computer* comp) {
 	return res;
 }
 
-int quick_load(Computer* comp) {
-	int res = 0;
-	emu_lock();
-	if (!undoState) undoState = xstate_create();
-	undoMac = (undoState && xstate_save(undoState, comp)) ? conf.macId : std::string();
-	if (quickState && (quickMac == conf.macId))
-		res = quick_xstate_load(quickState, comp);
-	if (!res) {
-		QString path = quick_path();
-		if (!QFileInfo::exists(path))
-			path = quick_path(".z80");
-		if (QFileInfo::exists(path))
-			res = (load_file(comp, path.toLocal8Bit().data(), FG_ALL, 0) == ERR_OK);
+// the machine as it is now, into k (held)
+static bool quick_keep(Computer* comp, quickKept* k) {
+	k->szx.clear();
+	k->mac.clear();
+	k->game = game_now();
+	if (szxCanSave(comp)) {
+		szxBuf b;
+		if (build_szx(comp, &b, true) != ERR_OK) return false;
+		k->szx = QByteArray((const char*)b.data, (int)b.len);
+		sb_free(&b);
+	} else {
+		if (!k->st) k->st = xstate_create();
+		if (!k->st || !xstate_save(k->st, comp)) return false;
 	}
+	k->mac = conf.macId;
+	return true;
+}
+
+// ...and back (held)
+static int quick_put(Computer* comp, quickKept* k) {
+	int res = 0;
+	if (!k->szx.isEmpty()) {
+		if (comp->rzx.play) rzxStop(comp);
+		res = (loadSZX_buf(comp, (const unsigned char*)k->szx.constData(), k->szx.size()) == ERR_OK);
+		if (res) {
+			szx_exact = true;
+			szx_mount(comp, QString());
+			szx_exact = false;
+			rzx_rec_touch();
+		}
+	} else if (k->st) {
+		res = quick_xstate_load(k->st, comp);
+	}
+	if (res) {
+		game_put(k->game);
+		last_snapshot = k->game.image;
+	}
+	return res;
+}
+
+// the machine as it is, for quick_undo: taken before a quick load switches
+// the machine, which resets it
+static quickKept redoKept = {QByteArray(), NULL, std::string(), xGame()};
+
+void quick_keep_undo(Computer* comp) {
+	emu_lock();
+	if (!quick_keep(comp, &undoKept)) undoKept.mac.clear();
+	emu_unlock();
+}
+
+int quick_load(Computer* comp, const QString& path) {
+	emu_lock();
+	game_set_save(path);
+	szx_exact = true;
+	int res = (load_file(comp, path.toLocal8Bit().data(), FG_ALL, 0) == ERR_OK);
+	szx_exact = false;
+	if (res) {
+		cheats_forget();
+		last_snapshot = game_image();	// the title names the game, not the save
+	}
+	emu_unlock();
+	return res;
+}
+
+int quick_load_held(Computer* comp) {
+	if (!quickState || (quickMac != conf.macId)) return 0;
+	emu_lock();
+	int res = quick_xstate_load(quickState, comp);
 	if (res) cheats_forget();
 	emu_unlock();
 	return res;
 }
 
+std::string quick_undo_machine() {
+	return undoKept.mac;
+}
+
+void quick_undo_prepare(Computer* comp) {
+	emu_lock();
+	if (!quick_keep(comp, &redoKept)) redoKept.mac.clear();
+	emu_unlock();
+}
+
 // back to before the last quick load; again, and that load is back
 int quick_undo(Computer* comp) {
-	if (!undoState || (undoMac != conf.macId)) return 0;
+	if (undoKept.mac.empty() || (undoKept.mac != conf.macId)) return 0;
 	emu_lock();
-	xState* was = xstate_create();
-	bool kept = was && xstate_save(was, comp);
-	int res = quick_xstate_load(undoState, comp);
-	if (res && kept) {
-		xstate_destroy(undoState);
-		undoState = was;
-	} else if (was) {
-		xstate_destroy(was);
-	}
+	int res = quick_put(comp, &undoKept);
+	if (res && !redoKept.mac.empty())
+		std::swap(undoKept, redoKept);
+	redoKept.mac.clear();
+	redoKept.szx.clear();
 	if (res) cheats_forget();
 	emu_unlock();
 	return res;

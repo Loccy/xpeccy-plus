@@ -111,8 +111,9 @@ int loadUDI(Computer* comp, const char* name, int drv) {
 	return err;
 }
 
-int saveUDI(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+// The disk as a UDI file, in memory: every track as it is, so a protected disk
+// comes back as it was. NULL if there is no room; free() it.
+unsigned char* udi_build(Floppy* flp, size_t* len) {
 	const char sign[] = "UDI!";
 	int bits = (flp->trklen + 7) >> 3;	// the sync mark bit field: 782 for a DD track
 	// header, 160 tracks of type + length + bytes + bits, crc; an HD track is
@@ -121,7 +122,7 @@ int saveUDI(Computer* comp, const char* name, int drv) {
 	unsigned char* dptr = img;
 	unsigned char* bptr;
 	int i,j;
-	if (!img) return ERR_CANT_OPEN;
+	if (!img) return NULL;
 
 	memcpy(dptr,sign,4);
 	bptr = img + 4;
@@ -151,13 +152,21 @@ int saveUDI(Computer* comp, const char* name, int drv) {
 	xlog(XLG_FILE, XLL_DEBUG, "crc = %X",j);
 	putint(dptr, j);
 	dptr += 4;
+	*len = dptr - img;
+	return img;
+}
 
+int saveUDI(Computer* comp, const char* name, int drv) {
+	Floppy* flp = comp->dif->flp[drv & 3];
+	size_t len = 0;
+	unsigned char* img = udi_build(flp, &len);
+	if (!img) return ERR_CANT_OPEN;
 	FILE* file = fopen(name, "wb");
 	if (!file) {
 		free(img);
 		return ERR_CANT_OPEN;
 	}
-	fwrite((char*)img, dptr - img, 1, file);
+	fwrite((char*)img, len, 1, file);
 	fclose(file);
 	free(img);
 

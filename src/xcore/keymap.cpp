@@ -502,6 +502,8 @@ static xShortcut short_tab[] = {
 	{SCG_MAIN, XCUT_QUICKSAVE, "key.quick.save", "Quick Save", {}},
 	{SCG_MAIN, XCUT_QUICKLOAD, "key.quick.load", "Quick Load", {}},
 	{SCG_MAIN, XCUT_QUICKUNDO, "key.quick.undo", "Undo Quick Load", {}},
+	{SCG_MAIN, XCUT_RESUME, "key.resume", "Resume Last Session", {}},
+	{SCG_MAIN, XCUT_SAVEHIST, "key.save.history", "Save History", {}},
 	{SCG_MAIN, XCUT_TAPE_START, "key.tape.start", "Tape Rewind to Start", {}},
 
 	{SCG_DEBUGA, XCUT_STEPIN, "key.dbg.stepin", "Debugger: Step in", {}},
@@ -675,7 +677,8 @@ static const xCutDef cutModern[] = {
 	{XCUT_VIDREC, {QKeySequence(Qt::SHIFT | Qt::Key_F7)}},
 	{XCUT_RZXREC, {QKeySequence(Qt::SHIFT | Qt::Key_F6)}},
 	{XCUT_QUICKLOAD, {QKeySequence(Qt::Key_F9)}},
-	{XCUT_QUICKUNDO, {QKeySequence(Qt::SHIFT | Qt::Key_F9)}},
+	{XCUT_SAVEHIST, {QKeySequence(Qt::SHIFT | Qt::Key_F9)}},
+	{XCUT_QUICKUNDO, {QKeySequence(Qt::CTRL | Qt::Key_F9)}},
 #ifdef __APPLE__
 	{XCUT_DEBUG, {QKeySequence(Qt::Key_F10)}},
 #else

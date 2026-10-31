@@ -696,6 +696,7 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	buildRecording();
 	buildFolders();
 	buildPause();
+	buildSaves();
 	ui.vidViewGBox->setIcon(":/images/grp-picture.png");
 	ui.antiflickerGBox->setIcon(":/images/grp-antiflicker.png");
 	ui.groupBox->setIcon(":/images/grp-screenshot.png");
@@ -972,16 +973,18 @@ void SetupWin::start() {
 	int idx;
 	fill_machine_list(ui.machbox);
 	fill_machine_list(cbStart);
-	// the first rows are MS_LAST and MS_ASK, by index; the machines are MS_THIS
-	cbStart->insertItem(MS_LAST, tr("The last one chosen"));
-	cbStart->insertItem(MS_ASK, tr("Ask"));
-	cbStart->setItemData(MS_LAST, tr("The last one you picked. One a file switched to is not kept"), Qt::ToolTipRole);
-	cbStart->insertSeparator(MS_THIS);
+	// the first rows: the last one, Ask, the last session; then the machines (MS_THIS)
+	cbStart->insertItem(0, tr("The last one chosen"), -MS_LAST - 1);
+	cbStart->insertItem(1, tr("Ask"), -MS_ASK - 1);
+	cbStart->insertItem(2, tr("Resume last session"), -MS_RESUME - 1);
+	cbStart->setItemData(0, tr("The last one you picked. One a file switched to is not kept"), Qt::ToolTipRole);
+	cbStart->setItemData(2, tr("Where you left off: the machine, the game\nand its media as they were on exit"), Qt::ToolTipRole);
+	cbStart->insertSeparator(3);
 	cbStart->setMaxVisibleItems(cbStart->count());
 	if (conf.macStart == MS_THIS) {
-		setRFIndex(cbStart, QString::fromLocal8Bit(conf.macStartId.c_str()), MS_ASK);	// gone: it asks
+		setRFIndex(cbStart, QString::fromLocal8Bit(conf.macStartId.c_str()), 1);	// gone: it asks
 	} else {
-		cbStart->setCurrentIndex((conf.macStart == MS_ASK) ? MS_ASK : MS_LAST);
+		cbStart->setCurrentIndex((conf.macStart == MS_ASK) ? 1 : (conf.macStart == MS_RESUME) ? 2 : 0);
 	}
 	updateMachineButtons();
 	roms = conf.roms;
@@ -1018,6 +1021,7 @@ void SetupWin::start() {
 	setRFIndex(ui.cbFastPic, conf.emu.fastPic, FPIC_RASTER);
 	setRFIndex(cbFolderWrite, (int)conf.fold.rw);
 	setRFIndex(cbFolderTrash, (int)conf.fold.trash);
+	fillSaves();
 	ui.cbRewind->setChecked(conf.emu.rewind.on);
 	for (QWidget* w : {(QWidget*)ui.sbRewStep, (QWidget*)ui.labRewStep, (QWidget*)ui.sbRewSecs, (QWidget*)ui.labRewSecs})
 		w->setEnabled(conf.emu.rewind.on);
@@ -1052,6 +1056,17 @@ void SetupWin::start() {
 			g->setColumnMinimumWidth(col, wid);
 	}
 	ui.cbStyleSheet->setFixedWidth(ui.gridLayout_look->columnMinimumWidth(1));	// as wide as the names under it
+	// Saves: the numbers alike, as wide as the widest of them asks; the columns
+	// as Emulation's, so the names stand in one place on both pages
+	int savw = 0;
+	for (QSpinBox* sb : {sbQuickKeep, sbExitKeep, sbTimedMin, sbTimedKeep, sbCleanDays})
+		savw = qMax(savw, sb->sizeHint().width());
+	for (QSpinBox* sb : {sbQuickKeep, sbExitKeep, sbTimedMin, sbTimedKeep, sbCleanDays})
+		sb->setFixedWidth(savw);
+	for (QGridLayout* g : gridSaves) {
+		g->setColumnMinimumWidth(0, qMax(savw, ui.gridLayout_lat->columnMinimumWidth(0)));
+		g->setColumnMinimumWidth(1, ui.gridLayout_lat->columnMinimumWidth(1));
+	}
 // video
 	ui.cbFullscreen->setChecked(conf.vid.fullScreen);
 	fullscreenTip(ui.cbFullscreen);
@@ -1259,7 +1274,9 @@ void SetupWin::apply() {
 	// a folder's mode is taken when it is mounted, which the machine's part does again below
 	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
-	int ms = qMin(cbStart->currentIndex(), (int)MS_THIS);
+	applySaves();
+	int row = cbStart->currentIndex();
+	int ms = (row == 0) ? MS_LAST : (row == 1) ? MS_ASK : (row == 2) ? MS_RESUME : MS_THIS;
 	if ((conf.macStart != MS_UNSET) || (ms != MS_LAST)) conf.macStart = ms;
 	if (ms == MS_THIS) conf.macStartId = getRFSData(cbStart).toLocal8Bit().data();
 	// another machine is not this page with different values in it: it has its
@@ -3067,6 +3084,142 @@ void SetupWin::buildPause() {
 	cbPauseResume = row(tr("Resume by input"), tr("A key, a click or a pad ends your pause"),
 		tr("Pause ends on a key, a click in the picture,\nthe on-screen keyboard or a pad"));
 	ui.verticalLayout_16->insertWidget(ui.verticalLayout_16->indexOf(ui.gbRewind) + 1, box);
+}
+
+// The Saves page, after Emulation: where quick saves and autosaves go and how
+// many of them stay. Its groups are laid out as Emulation's: a control, its
+// name, and a line saying what it does.
+static QLabel* savesHint(const QString& text) {
+	QLabel* lab = new QLabel(text);
+	QFont font = lab->font();
+	font.setItalic(true);
+	lab->setFont(font);
+	return lab;
+}
+
+static QGridLayout* savesGroup(QVBoxLayout* page, const char* icon, const QString& title) {
+	xIconGroup* box = new xIconGroup(icon, title);
+	QGridLayout* grid = new QGridLayout(box);
+	grid->setHorizontalSpacing(12);
+	grid->setVerticalSpacing(8);
+	grid->setColumnStretch(2, 1);
+	page->addWidget(box);
+	return grid;
+}
+
+// a row: the control, its name and what it does; the tip on all three
+static void savesRow(QGridLayout* grid, QWidget* ctl, const QString& name, const QString& hint, const QString& tip) {
+	int row = grid->rowCount();
+	QLabel* lab = new QLabel(name);
+	lab->setBuddy(ctl);
+	ctl->setToolTip(tip);
+	lab->setToolTip(tip);
+	grid->addWidget(ctl, row, 0);
+	grid->addWidget(lab, row, 1);
+	if (!hint.isEmpty()) grid->addWidget(savesHint(hint), row, 2);
+}
+
+void SetupWin::buildSaves() {
+	QWidget* page = new QWidget;
+	QVBoxLayout* lay = new QVBoxLayout(page);
+
+	QGridLayout* grid = gridSaves[0] = savesGroup(lay, ":/images/floppy.png", tr("Quick saves"));
+	cbSavePerGame = new QCheckBox;
+	savesRow(grid, cbSavePerGame, tr("Saves per game"), tr("Each game keeps its own saves"),
+		tr("On: a folder for each game opened\nOff: one for each machine"));
+	sbQuickKeep = new QSpinBox;
+	sbQuickKeep->setRange(1, 99);
+	savesRow(grid, sbQuickKeep, tr("Quick saves kept"), tr("The oldest goes when a new one is past it"),
+		tr("Quick saves each folder keeps"));
+	cbSaveEmbed = new QCheckBox;
+	savesRow(grid, cbSaveEmbed, tr("Embed media in saves"), tr("Off: a save only links to the files"),
+		tr("The tape and the TR-DOS disks go into the save,\nas they were; it loads with the files gone"));
+
+	grid = gridSaves[1] = savesGroup(lay, ":/images/grp-auto.png", tr("Autosaves"));
+	cbExitSave = new QCheckBox;
+	savesRow(grid, cbExitSave, tr("Autosave on exit"), tr("File > Resume Last Session goes back to it"),
+		tr("The machine saved as the emulator closes"));
+	sbExitKeep = new QSpinBox;
+	sbExitKeep->setRange(1, 99);
+	savesRow(grid, sbExitKeep, tr("Exit autosaves kept"), tr("In a game's folder; else one, written over"),
+		tr("A game with quick saves keeps this many;\nany other has the one common file"));
+	sbTimedMin = new QSpinBox;
+	sbTimedMin->setRange(0, 60);
+	sbTimedMin->setSpecialValueText(tr("Off"));
+	savesRow(grid, sbTimedMin, tr("Autosave every"), tr("Minutes, counted while the machine runs"),
+		tr("An autosave every so many minutes;\na pause or the Debugger holds the count"));
+	sbTimedKeep = new QSpinBox;
+	sbTimedKeep->setRange(1, 99);
+	savesRow(grid, sbTimedKeep, tr("Timed autosaves kept"), tr("A ring of their own, beside the exit ones"),
+		tr("Timed autosaves each folder keeps"));
+
+	grid = gridSaves[2] = savesGroup(lay, ":/images/fileopen.png", tr("Folder and clean-up"));
+	leSaveDir = new QLineEdit;
+	// empty: the config folder's, named in words as the log's folder is
+	leSaveDir->setPlaceholderText(tr("saves, in the config folder"));
+	leSaveDir->setToolTip(QDir::toNativeSeparators(QDir(QString::fromLocal8Bit(conf.path.confDir.c_str())).filePath("saves")));
+	QToolButton* pick = new QToolButton;
+	pick->setIcon(QIcon(":/images/fileopen.png"));
+	pick->setToolTip(tr("Pick the folder"));
+	connect(pick, &QToolButton::clicked, this, [this]() {
+		QString dir = QFileDialog::getExistingDirectory(this, tr("Saves folder"),
+			leSaveDir->text().isEmpty() ? leSaveDir->toolTip() : leSaveDir->text());
+		if (!dir.isEmpty()) leSaveDir->setText(QDir::toNativeSeparators(dir));
+	});
+	{
+		int row = grid->rowCount();
+		QLabel* lab = new QLabel(tr("Saves folder"));
+		lab->setBuddy(leSaveDir);
+		lab->setToolTip(tr("Where the saves go. Empty: the config folder"));
+		QHBoxLayout* dirRow = new QHBoxLayout;
+		dirRow->addWidget(leSaveDir, 1);
+		dirRow->addWidget(pick);
+		grid->addWidget(lab, row, 1);
+		grid->addLayout(dirRow, row, 2);
+	}
+	sbCleanDays = new QSpinBox;
+	sbCleanDays->setRange(0, 999);
+	sbCleanDays->setSpecialValueText(tr("Off"));
+	savesRow(grid, sbCleanDays, tr("Delete saves older than"), tr("Days, at start, in every game"),
+		tr("Old saves deleted at each start;\nFile > Save History does it by hand"));
+	cbKeepOne = new QCheckBox;
+	savesRow(grid, cbKeepOne, tr("Keep at least one save"), tr("A game's newest save stays, however old"),
+		tr("Here and in File > Save History"));
+
+	lay->addStretch(1);
+	int at = ui.pages->indexOf(ui.tabEmulation) + 1;
+	ui.pages->insertWidget(at, page);
+	QListWidgetItem* item = new QListWidgetItem(QIcon(":/images/floppy.png"), tr("Saves"));
+	ui.pageList->insertItem(at, item);
+}
+
+void SetupWin::fillSaves() {
+	cbSavePerGame->setChecked(conf.saves.perGame);
+	sbQuickKeep->setValue(conf.saves.quickKeep);
+	cbSaveEmbed->setChecked(conf.saves.carry);
+	cbExitSave->setChecked(conf.saves.exitOn);
+	sbExitKeep->setValue(conf.saves.exitKeep);
+	sbTimedMin->setValue(conf.saves.timedOn ? conf.saves.timedMin : 0);
+	sbTimedKeep->setValue(conf.saves.timedKeep);
+	sbCleanDays->setValue(conf.saves.cleanOn ? conf.saves.cleanDays : 0);
+	cbKeepOne->setChecked(conf.saves.keepOne);
+	leSaveDir->setText(QDir::toNativeSeparators(conf.saves.dir));
+}
+
+void SetupWin::applySaves() {
+	conf.saves.perGame = cbSavePerGame->isChecked() ? 1 : 0;
+	conf.saves.quickKeep = sbQuickKeep->value();
+	conf.saves.carry = cbSaveEmbed->isChecked() ? 1 : 0;
+	conf.saves.exitOn = cbExitSave->isChecked() ? 1 : 0;
+	conf.saves.exitKeep = sbExitKeep->value();
+	// off keeps the number it had, for when it is on again
+	conf.saves.timedOn = (sbTimedMin->value() > 0) ? 1 : 0;
+	if (conf.saves.timedOn) conf.saves.timedMin = sbTimedMin->value();
+	conf.saves.timedKeep = sbTimedKeep->value();
+	conf.saves.cleanOn = (sbCleanDays->value() > 0) ? 1 : 0;
+	if (conf.saves.cleanOn) conf.saves.cleanDays = sbCleanDays->value();
+	conf.saves.keepOne = cbKeepOne->isChecked() ? 1 : 0;
+	conf.saves.dir = QDir::fromNativeSeparators(leSaveDir->text().trimmed());
 }
 
 void SetupWin::buildRecording() {

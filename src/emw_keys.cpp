@@ -327,14 +327,19 @@ void MainWin::xkey_press(int xkey, bool cmd) {
 				setMessage(reloadMedia() ? " reloaded " : " nothing to reload ");
 				break;
 			case XCUT_QUICKSAVE:
-				x = quick_save(comp);
-				setMessage((x == 2) ? " quick save " : (x == 1) ? " quick save, until exit " : " can't quick save ");
+				quickSave();
 				break;
 			case XCUT_QUICKLOAD:
-				setMessage(quick_load(comp) ? " quick load " : " nothing quick saved ");
+				quickLoad();
 				break;
 			case XCUT_QUICKUNDO:
-				setMessage(quick_undo(comp) ? " quick load undone " : " nothing to undo ");
+				quickUndo();
+				break;
+			case XCUT_RESUME:
+				resumeLast();
+				break;
+			case XCUT_SAVEHIST:
+				saveHistory();
 				break;
 			case XCUT_TAPE_START:
 				tapStateChanged(TW_REWIND, 0);

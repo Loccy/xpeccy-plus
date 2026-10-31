@@ -376,6 +376,8 @@ int saveTRD(Computer*,const char*,int);
 
 int loadUDI(Computer*,const char*,int);
 int saveUDI(Computer*,const char*,int);
+// a disk as a UDI file in memory (malloc), every track as it is
+unsigned char* udi_build(Floppy*, size_t* len);
 
 int loadFDI(Computer*,const char*,int);
 
