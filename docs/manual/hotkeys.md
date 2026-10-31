@@ -168,7 +168,9 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 | Save Changed Disks | - | F9 |
 | Quick Save | F5 | - |
 | Quick Load | F9 | - |
-| Undo Quick Load | Shift+F9 | - |
+| Save History | Shift+F9 | - |
+| Undo Quick Load | Ctrl+F9 | - |
+| Resume Last Session | - | - |
 
 ### Machine
 

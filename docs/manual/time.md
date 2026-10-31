@@ -30,7 +30,8 @@ more ways:
   bar, the right-click menu, the menus over the picture in fullscreen, a list from the
   toolbar. It continues when the menu closes; a command that opens a window keeps it
   stopped until that window closes. The volume slider does not stop it - you set the
-  volume by ear. On by default.
+  volume by ear. **Save History** holds it too, opened from the menu or by its key, as the
+  place to pick a save from. On by default.
 - **Resume by input** - after **Machine > Pause**, the first key you press, a click in
   the picture, a click on the [Virtual Keyboard](view.md#virtual-keyboard) or a pad button lets the
   machine go on. The key and the pad button reach the game, so the character moves at

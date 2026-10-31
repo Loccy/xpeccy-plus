@@ -22,6 +22,7 @@ options-sound
 options-input
 options-file-types
 options-emulation
+options-saves
 options-debugger
 hotkeys
 options-appearance
