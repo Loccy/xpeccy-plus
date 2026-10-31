@@ -126,6 +126,10 @@ class SetupWin : public QDialog {
 		QComboBox* cbSaveMedia;
 		QCheckBox* cbExitSave;
 		QSpinBox* sbExitKeep;
+		QSpinBox* sbTimedMin;		// 0: off
+		QSpinBox* sbTimedKeep;
+		QSpinBox* sbCleanDays;		// 0: never
+		QCheckBox* cbKeepOne;
 		QLineEdit* leSaveDir;
 		QGridLayout* gridSaves[3];	// their names lined up with Emulation's
 

@@ -90,21 +90,40 @@ void MainWin::quickUndo() {
 	setMessage(done ? " quick load undone " : " nothing to undo ");
 }
 
-// On exit: into the game's folder when it has one, else the one common file
-// written over each time; the config says which is the last session
-void MainWin::exitSave() {
-	if (!conf.saves.exitOn || !szxCanSave(conf.zx)) return;
+// An autosave, on exit or every few minutes: into the game's folder when it
+// has one, else the one common file written over each time; the config says
+// which is the last session
+void MainWin::autoSave(int kind) {
+	if (!szxCanSave(conf.zx)) return;
 	QImage pic = save_picture();
 	QString dir = saves_auto_dir();
-	QString path = dir.isEmpty() ? saves_session_path() : saves_new_path(dir, SAVE_EXIT);
+	QString path = dir.isEmpty() ? saves_session_path() : saves_new_path(dir, kind);
 	QDir().mkpath(QFileInfo(path).path());
 	if (quick_save(conf.zx, path) != 2) return;
 	if (!pic.isNull()) pic.save(QFileInfo(path).path() + "/" + QFileInfo(path).completeBaseName() + ".png", "PNG");
 	if (dir.isEmpty())
 		saves_note_game(path);
 	else
-		saves_trim(dir, SAVE_EXIT, conf.saves.exitKeep);
+		saves_trim(dir, kind, save_keep(kind));
 	conf.saves.last = path;
+}
+
+void MainWin::exitSave() {
+	if (conf.saves.exitOn) autoSave(SAVE_EXIT);
+}
+
+// every 0.2 s from the window's timer: running time only, so a pause, a menu
+// or the Debugger hold it
+void MainWin::timedSave(int ms) {
+	if (!conf.saves.timedOn) {
+		timedMs = 0;
+		return;
+	}
+	if (conf.emu.pause) return;
+	timedMs += ms;
+	if (timedMs < conf.saves.timedMin * 60000LL) return;
+	timedMs = 0;
+	autoSave(SAVE_TIMED);
 }
 
 bool MainWin::resumeLast() {

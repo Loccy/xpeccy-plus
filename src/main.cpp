@@ -33,6 +33,7 @@
 #include "emulwin.h"
 #include "xcore/cheats.h"
 #include "xcore/arcpath.h"
+#include "xcore/saves.h"
 #include "xgui/debuga/debuger.h"
 #include "xgui/scrwin.h"
 #include "xgui/sndwin.h"
@@ -1047,6 +1048,7 @@ int main(int ac,char** av) {
 			mframe.raise();
 			mframe.activateWindow();
 			if (dbg) mwin.doDebug();
+			saves_clean_old();
 			// where the last session ended, unless the command line says what to run
 			if (!pinned && !given && (conf.macStart == MS_RESUME) && !conf.saves.last.isEmpty())
 				mwin.resumeLast();

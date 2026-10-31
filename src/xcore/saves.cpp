@@ -1,6 +1,7 @@
 #include "saves.h"
 #include "arcpath.h"
 #include "xcore.h"
+#include "../libxpeccy/xlog.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -386,4 +387,25 @@ QList<xSave> saves_old(const xSaveFolder& f, int days, bool keepOne) {
 		if (f.saves.at(i).time < edge) res.append(f.saves.at(i));
 	}
 	return res;
+}
+
+void saves_delete(const QList<xSave>& list) {
+	for (const xSave& sv : list) {
+		saves_remove(sv);
+		QFileInfo fi(sv.path);
+		QFile::remove(fi.path() + "/" + fi.completeBaseName() + ".json");
+		if (QFileInfo(conf.saves.last) == fi) conf.saves.last.clear();
+	}
+}
+
+void saves_clean_old() {
+	if (!conf.saves.cleanOn) return;
+	int count = 0;
+	for (const xSaveFolder& f : saves_folders()) {
+		QList<xSave> old = saves_old(f, conf.saves.cleanDays, conf.saves.keepOne);
+		saves_delete(old);
+		count += old.size();
+		saves_drop_empty(f.dir);
+	}
+	if (count) xlog(XLG_FILE, XLL_INFO, "saves: %i older than %i days deleted", count, conf.saves.cleanDays);
 }

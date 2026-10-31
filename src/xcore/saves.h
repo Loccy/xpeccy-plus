@@ -97,3 +97,7 @@ QString saves_folder_of(const QString& image);
 void saves_drop_empty(const QString& dir);
 // the saves of a folder older than days, the newest kept when keepOne
 QList<xSave> saves_old(const xSaveFolder& f, int days, bool keepOne);
+// gone with its picture, the json beside it and the config's pointer at it
+void saves_delete(const QList<xSave>& list);
+// at start, when the settings say: the old ones of every folder
+void saves_clean_old();

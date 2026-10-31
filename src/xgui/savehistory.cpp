@@ -167,15 +167,6 @@ QString save_history(QWidget* parent) {
 		}
 		return res;
 	};
-	// gone with its picture; the last session's json too, and the config's pointer at it
-	auto drop = [&](const QList<xSave>& list) {
-		for (const xSave& sv : list) {
-			saves_remove(sv);
-			QFileInfo fi(sv.path);
-			QFile::remove(fi.path() + "/" + fi.completeBaseName() + ".json");
-			if (QFileInfo(conf.saves.last) == fi) conf.saves.last.clear();
-		}
-	};
 	auto curDir = [&]() {
 		int i = games->indexOfTopLevelItem(games->currentItem());
 		return ((i >= 0) && (i < folders.size())) ? folders.at(i).dir : QString();
@@ -205,7 +196,7 @@ QString save_history(QWidget* parent) {
 		QString q = QString("Delete %0 saves older than %1 days (%2 MB)?").arg(old.size()).arg(sbDays->value()).arg(mb_text(size));
 		if (QMessageBox::question(&dia, "Clear Old", q, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
 		QString keep = curDir();
-		drop(old);
+		saves_delete(old);
 		for (const xSaveFolder& f : folders) saves_drop_empty(f.dir);
 		fillGames(keep);
 	});
@@ -216,7 +207,7 @@ QString save_history(QWidget* parent) {
 			: QString("Delete %0 saves?").arg(list.size());
 		if (QMessageBox::question(&dia, "Delete", q, QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
 		QString keep = curDir();
-		drop(list);
+		saves_delete(list);
 		saves_drop_empty(keep);
 		fillGames(keep);
 	});

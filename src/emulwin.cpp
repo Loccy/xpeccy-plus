@@ -755,6 +755,7 @@ static struct {
 void MainWin::timerEvent(QTimerEvent* ev) {
 	Computer* comp = conf.zx;
 	if (ev->timerId() == secid) {		// 0.2 sec timer, fps counter
+		timedSave(FPS_TICK_MS);
 		// printf("0.2 sec timer event\n");
 		// the rate jumps tenfold into and out of fast mode: start the window
 		// over rather than average across the jump

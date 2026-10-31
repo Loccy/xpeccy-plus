@@ -255,6 +255,8 @@ class MainWin : public QWidget {
 		void quickLoad();
 		void quickUndo();
 		void exitSave();
+		void autoSave(int kind);
+		void timedSave(int ms);
 		bool resumeLast();
 		void saveHistory();
 		void recentSaves(QMenu* menu, const QString& dir);
@@ -443,6 +445,7 @@ class MainWin : public QWidget {
 		void fillRecent();
 		QMenu* quickMenu;
 		QAction* resumeAct;
+		qint64 timedMs = 0;		// running time since the last periodic autosave
 		void fillQuickSaves();
 		// the toolbar and the status bar (emw_bars.cpp)
 		QToolBar* toolBar;
