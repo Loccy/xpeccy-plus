@@ -220,6 +220,8 @@ void xUpdateRun::fail(const QString& msg) {
 	lab->setText(tr("The update failed: %0").arg(msg));
 	bar->hide();
 	line->hide();
+	// nothing to restart into; Qt 5 builds showed it here, though hidden since the start
+	btnRestart->hide();
 	box->button(QDialogButtonBox::Cancel)->setText(tr("Close"));
 }
 
