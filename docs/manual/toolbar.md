@@ -41,14 +41,14 @@ in groups. Each one is the command of the same name in a menu, described there:
 
 | Described in | Buttons |
 |---|---|
-| [File menu](files.md), [Favorites menu](favorites.md) | **Open...**, **Favorites**, **Reload**, **Save...**, **Save Changed Disks**, **Options...** |
+| [File menu](files.md), [Favorites menu](favorites.md) | **Open...**, **Favorites**, **Reload**, **Save...**, **Save Changed Disks** |
 | [Capture menu](capture.md) | **Screenshot**, **Record Video**, **Record Sound to WAV...**, **Record...** (RZX), **RZX Player** |
 | [Machine menu](machines.md) | **Model**, **Reset**, **NMI**, **Turbo Mode** |
 | [Speed and time](time.md) | **Pause**, **Fast Mode**, **Fast Forward**, **Slow Motion**, **Rewind** |
 | [Media menu](media.md) | **Tape Play/Stop**, **Tape Record/Stop**, **Tape Player**, **Disk Manager**, **Cartridge**, **divMMC**, **SD Card**, **Drives** |
 | [View menu](view.md) | **Fullscreen**, **Keep Aspect Ratio**, **Size**, **Shaders**, **ZX Palette**, **Virtual Keyboard** |
 | [Input menu](input.md) | **Grab Keyboard**, **Grab Mouse**, **Keymap**, **Gamepads** |
-| [Tools menu](tools.md) | **Cheats...**, **Debugger**, **Screen**, **Sound Chips** |
+| [Tools menu](tools.md) | **Cheats...**, **Debugger**, **Screen**, **Sound Chips**, **Options...** |
 | [Mute](machines.md#mute) | **Mute** |
 
 A button for a menu - **Model**, **Turbo Mode**, **Size** and the like - opens that menu

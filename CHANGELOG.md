@@ -61,6 +61,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Changed
 
+- **Options moved to the Tools menu**, from the bottom of File. The right-click menu keeps it
+  at its foot; on macOS it is Settings in the application menu.
+
 - **Save icons say what they do**: a floppy saves, a floppy with a pencil is Save As or
   Export to a new file, two floppies save all changed disks. Storage, the Debugger's FDC
   panel and Copy to disk show a drive.

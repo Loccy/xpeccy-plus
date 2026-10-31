@@ -169,8 +169,6 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 | Quick Save | F5 | - |
 | Quick Load | F9 | - |
 | Undo Quick Load | Shift+F9 | - |
-| Options | Ctrl+, | F1 |
-| Hotkey List | - | - |
 
 ### Machine
 
@@ -264,6 +262,8 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 | Debugger | F10, Ctrl+Pause | Esc |
 | Screen | - | Alt+S |
 | Sound Chips | - | Alt+A |
+| Options | Ctrl+, | F1 |
+| Hotkey List | - | - |
 
 ### Debugger keys
 

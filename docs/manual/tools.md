@@ -3,8 +3,9 @@
 ```{index} Tools
 ```
 
-The **Tools** menu holds the windows for looking into the machine and changing it. The
-right-click menu over the picture has the same list under **Tools**.
+The **Tools** menu holds the windows for looking into the machine and changing it, and the
+settings. The right-click menu over the picture has the same windows under **Tools**, and
+**Options...** at its foot.
 
 - {icon}`cheats` **Cheats...** - trainers and pokes for the program that runs; see
   [Cheats](cheats.md).
@@ -14,6 +15,8 @@ right-click menu over the picture has the same list under **Tools**.
   [Watcher](debugger-watcher.md).
 - {icon}`rulers` **Screen** and {icon}`note` **Sound Chips** - two panels of the Debugger in
   windows of their own, described below.
+- {icon}`other` **Options...** - the settings; see [Options](options.md). On macOS it is
+  **Settings...** in the application menu.
 
 ## Screen and Sound Chips windows
 

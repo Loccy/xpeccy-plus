@@ -4,8 +4,8 @@
 ```
 
 Xpeccy+ opens snapshots, tapes, disks, cartridges and RZX recordings, and saves snapshots,
-tapes and disks. The **File** menu opens and saves them, keeps the quick save, and opens
-**Options**. Tapes and disks have pages of their own under the **Media** menu:
+tapes and disks. The **File** menu opens and saves them and keeps the quick save. Tapes
+and disks have pages of their own under the **Media** menu:
 [Tapes](tapes.md) and [Floppy disks](disks.md). Which machine a file runs on is set on the
 [File types page](options-file-types.md).
 
@@ -221,12 +221,12 @@ it in the **RZX Player**, on exactly the machine it was recorded on. See
 [Playing an RZX](capture.md#playing-an-rzx) and
 [Recording an RZX](capture.md#recording-an-rzx).
 
-## Options and Exit
+## Exit
 
 ```{index} Exit
 ```
 
-**File > Options...** opens the settings; see [Options](options.md). **File > Exit** closes
-the program (on macOS it is **Quit** in the application menu). Before it closes, it asks
-about every changed disk and tape, and with **Confirm exit** on the **Application** page of
-**Options** it asks first whether to close at all.
+**File > Exit** closes the program (on macOS it is **Quit** in the application menu). Before
+it closes, it asks about every changed disk and tape, and with **Confirm exit** on the
+**Application** page of **Options** it asks first whether to close at all. **Options...** is
+in the [Tools menu](tools.md).
