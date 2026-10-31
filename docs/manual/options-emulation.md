@@ -8,6 +8,8 @@
 - **Input lag** - **Low latency** and **Run ahead**. See [Input lag](#input-lag).
 - **Speed and rewind** - how far back rewind goes, how the keys of Slow Motion, Fast
   Forward and Fast Mode work, and what Fast Mode shows. See [Speed and time](time.md).
+- **Pause** - **Pause when inactive**, **Pause in menus** and **Resume by input**: when
+  the machine stops by itself and what lets it go on. See [Pause](time.md#pause).
 - **Folder as a disk** - whether a folder used as a card or a disk takes what the machine
   writes, and where a file it deletes there goes. See
   [Writing to a folder](sd-hdd.md#writing-to-a-folder).
