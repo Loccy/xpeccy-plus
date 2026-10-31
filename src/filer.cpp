@@ -8,6 +8,7 @@
 #include "xcore/sound.h"
 #include "xcore/arcpath.h"
 #include "xcore/saves.h"
+#include "xcore/siblings.h"
 #include "libxpeccy/cpu/Z80/z80.h"
 #include "libxpeccy/filetypes/szx.h"
 #include "libxpeccy/xstate.h"
@@ -17,6 +18,7 @@
 #include <QDebug>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDirIterator>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -35,6 +37,12 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 static QFileDialog* fileDlg = nullptr;
 static QWidget* fileDlgParent = nullptr;
@@ -1072,6 +1080,92 @@ QStringList media_candidates(Computer* comp, const QString& archive, int id, int
 	std::stable_sort(res.begin(), res.end(), natural_less);
 	if (res.isEmpty())
 		*err = QString("%1 holds no image this machine can open here").arg(QFileInfo(archive).fileName());
+	return res;
+}
+
+/* Sibling images
+ *
+ * The other sides, tapes or disks of a set, beside the image in use in its folder, by
+ * their names (xcore/siblings.h). The folder is read when the list is asked for and
+ * nothing is kept. An archive beside it counts when it holds one image the slot takes,
+ * and that entry is what opens.
+ */
+
+// The folder's files whose names start with prefix, any case. On Windows the file system
+// is given the prefix: a TOSEC folder of 37 000 files takes 0.1 ms that way and 75 ms
+// through every name. Its pattern also matches short 8.3 names, so the names are
+// checked again.
+static QStringList folder_names(const QString& dir, const QString& prefix) {
+	QStringList res;
+#ifdef _WIN32
+	const QString pat = QDir::toNativeSeparators(dir) + "\\" + prefix + "*";
+	WIN32_FIND_DATAW fd;
+	HANDLE h = FindFirstFileExW(reinterpret_cast<LPCWSTR>(pat.utf16()), FindExInfoBasic, &fd,
+		FindExSearchNameMatch, NULL, FIND_FIRST_EX_LARGE_FETCH);
+	if (h == INVALID_HANDLE_VALUE) return res;
+	do {
+		const QString name = QString::fromWCharArray(fd.cFileName);
+		if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && name.startsWith(prefix, Qt::CaseInsensitive))
+			res.append(name);
+	} while (FindNextFileW(h, &fd));
+	FindClose(h);
+#else
+	QDirIterator it(dir, QDir::Files);
+	while (it.hasNext()) {
+		it.next();
+		const QString name = it.fileName();
+		if (name.startsWith(prefix, Qt::CaseInsensitive)) res.append(name);
+	}
+#endif
+	return res;
+}
+
+QList<xSibling> media_siblings(Computer* comp, const QString& path, int id, int drv, int* cur) {
+	QList<xSibling> res;
+	QString file = path;
+	arc_split(path, &file);
+	const QFileInfo inf(file);
+	const QString me = inf.fileName();
+	std::string prefix;
+	if (!sib_prefix(me.toUtf8().constData(), &prefix)) return res;
+	QSet<int> types;
+	id_types(comp, id, drv, &types);
+#ifdef _WIN32
+	const Qt::CaseSensitivity cs = Qt::CaseInsensitive;	// a path from Recent may differ in case
+#else
+	const Qt::CaseSensitivity cs = Qt::CaseSensitive;
+#endif
+	// what the slot takes, an archive by the name under its own extension
+	std::vector<std::string> names;
+	QStringList found;
+	int at = -1;
+	for (const QString& name : folder_names(inf.absolutePath(), QString::fromUtf8(prefix.c_str()))) {
+		QString inner = name;
+		if (arc_type(name) != ARC_NONE) inner.truncate(name.lastIndexOf('.'));
+		xFileTypeInfo* ft = file_find_hw_ext(comp->hw->id, inner);
+		if (!ft || !types.contains(ft->id)) continue;
+		if (!name.compare(me, cs)) at = int(found.size());
+		found.append(name);
+		names.push_back(name.toUtf8().constData());
+	}
+	if (at < 0) return res;
+	for (int i : sib_group(names, at)) {
+		const QString name = found[i];
+		const QString full = inf.dir().filePath(name);
+		if (i == at) {
+			res.append({name, path});
+		} else if (arc_type(name) == ARC_NONE) {
+			res.append({name, full});
+		} else {
+			QString err;
+			const QStringList entries = media_candidates(comp, full, id, drv, &err);
+			if (entries.size() == 1) res.append({name, arc_join(full, entries.first())});
+		}
+	}
+	if (res.size() < 2) return QList<xSibling>();
+	std::stable_sort(res.begin(), res.end(), [](const xSibling& a, const xSibling& b) {return natural_less(a.name, b.name);});
+	for (int i = 0; i < res.size(); i++)
+		if (res[i].path == path) *cur = i;
 	return res;
 }
 

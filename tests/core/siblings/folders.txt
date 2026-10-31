@@ -1,0 +1,96 @@
+# Folders of file names, as image collections name them (TOSEC sets, World of Spectrum
+# zips, folders of loose tapes). For each name, siblings-bench prints the others of its
+# set. Every name here stands for a file of the kind the slot takes.
+
+== tosec-sides
+Black Magic (1987)(U.S. Gold)(Side A)[SpeedLock 4].tzx
+Black Magic (1987)(U.S. Gold)(Side B).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2 Side A).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2 Side B).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tap
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tap
+Black Tower, The (1993)(Zenobi)(Tape 1 of 2 Side A).tzx
+Black Tower, The (1993)(Zenobi)(Tape 1 of 2 Side A)[a].tzx
+Black Tower, The (1993)(Zenobi)(Tape 2 of 2 Side B).tzx
+Black Tower, The (1993)(Zenobi)(Tape 2 of 2 Side B)[a].tzx
+Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side A).tzx
+Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side A)[a2].tzx
+Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side B).tzx
+Linkword Spanish (1984)(Silversoft)(Tape 9 of 10).tzx
+Linkword Spanish (1984)(Silversoft)(Tape 10 of 10).tzx
+Eureka! (1984)(Domark)(Tape 1 of 3).tzx
+Digital Studio v2.05 - Disk 1 (1995)(Underground Systems)(RU)(en)[h Viking][AY].trd
+Digital Studio v2.05 - Disk 2 (1995)(Underground Systems)(RU)(en)[h Viking][AY].trd
+Extreme's Tracker v1.31, v1.32 - Disk A (1999)(Red Limited Drunkards Group)(RU)(en).scl
+Extreme's Tracker v1.31, v1.32 - Disk C (1999)(Red Limited Drunkards Group)(RU)(en).scl
+Livingstone Supongo II (1989)(Opera Soft)(48K-128K)(ES)(en-es)(Side A)[small case].tzx
+Livingstone Supongo II (1989)(Opera Soft)(48K-128K)(ES)(en-es)(Side B)[small case].tap
+Regreso al Futuro - Parte II (1990)(MCM)(128K)(ES)(en)(Side A)[aka Back to the Future Part 2][re-release].tzx
+Regreso al Futuro - Parte II (1990)(MCM)(128K)(ES)(en)(Side B)[aka Back to the Future Part 2][re-release].tzx
+ACE 2 - The Ultimate Head to Head Conflict (1989)(MCM)(48K-128K)(ES)(en)(Side A)[Side A].tzx
+ACE 2 - The Ultimate Head to Head Conflict (1989)(MCM)(48K-128K)(ES)(en)(Side B)[Side B].tzx
+Train Game, The - Track A (1983)(Microsphere)(16K).tzx
+Train Game, The - Track B (1983)(Microsphere)(16K).tzx
+
+== tosec-not-sets
+Kyd Cadet v1.1 (2010)(Jenkinson, Paul).tzx
+Kyd Cadet v1.2 (2010)(Jenkinson, Paul).tzx
+Superchess 3 v3.1 (1984)(CP).scl
+Superchess 3 v3.5 (1984)(CP).scl
+Learn to Read 1 (1983)(Macmillan - Sinclair Research).tzx
+Learn to Read 2 (1983)(Macmillan - Sinclair Research).tzx
+Cousin Horace - Chapter 1 (2014-10)(Grussu, Alessandro)(es).tzx
+Cousin Horace - Chapter 2 (2014-10)(Grussu, Alessandro)(es).tzx
+
+== wos
+Solar Empire - Side 1.tzx
+Solar Empire - Side 2.tzx
+Pictionary - Side A (The Hit Squad).tzx
+Pictionary - Side B (The Hit Squad).tzx
+After The War - Part 1.tap
+After The War - Part 2.tap
+Barbarian Part1.TAP
+Barbarian Part2.TAP
+F1 PART 1.tap
+F1 PART 2.TAP
+Thunder Blade - Side 2 (Erbe - Musical 1).tzx
+Thunder Blade - Side 1 (Erbe - Musical 1).tzx
+VIXEN_A.TAP
+VIXEN_B.TAP
+VIXEN_C.TAP
+Taped Off.tzx
+Tapea Off.tzx
+TAPED OFF.tzx
+TAPEA OFF.tzx
+Two-Sided Game.tzx
+Two-Sidea Game.tzx
+
+== wos-series
+Manic Miner 2.tzx
+Manic Miner 4.tzx
+KRAKOUT 2.tzx
+KRAKOUT 3.tzx
+PHANTOM1.TAP
+PHANTOM2.TAP
+Tetris2.tap
+Tetris3.tap
+image8x4.tap
+image8x8.tap
+RiverRaid+_by_thealfest_v0.2.tap
+RiverRaid+_by_thealfest_v0.3.tap
+Game Over - 48k.tzx
+Game Over - 128k.tzx
+
+== packed
+TellingTheTime(2)SideA.tap.zip
+TellingTheTime(2)SideB.tap.zip
+RexSideA.tap.zip
+RexSideB.tap.zip
+ianna-sidea.dsk
+ianna-sideb.dsk
+Game (Side A).tzx.zip
+Game (Side B).tzx
+Lone (Side A).tzx
+Lone.tzx.zip

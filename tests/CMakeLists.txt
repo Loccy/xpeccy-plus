@@ -79,6 +79,9 @@ if(WIN32)
 	target_link_libraries(esp-bench ws2_32 iphlpapi)
 endif()
 
+# sibling images: the side/part sets of file names, the app's own source
+add_executable(siblings-bench core/siblings/main.cpp ${XROOT}/src/xcore/siblings.cpp)
+
 # a folder volume taking writes, with FatFs (thirdparty/fatfs, ChaN's 1-clause BSD) as the guest
 set(FATFS ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/fatfs)
 add_executable(vfat-bench core/vfat/main.c ${FATFS}/ff.c ${FATFS}/ffunicode.c)
@@ -98,4 +101,5 @@ if(MINGW)
 	target_link_options(z80-coretest PRIVATE -static)
 	target_link_options(vfat-bench PRIVATE -static)
 	target_link_options(esp-bench PRIVATE -static)
+	target_link_options(siblings-bench PRIVATE -static)
 endif()

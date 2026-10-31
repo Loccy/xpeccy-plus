@@ -73,6 +73,14 @@ int load_file(Computer* comp, const char* name, int id, int drv);
 // An archive's images the request can take (id and drv as load_file has them), in
 // natural order; empty, err set, when none
 QStringList media_candidates(Computer*, const QString& archive, int id, int drv, QString* err);
+// The set the image at path belongs to (xcore/siblings.h), from its folder: names and
+// paths to open (an archive path for an archive beside it), in natural order, *cur set to
+// the one at path; empty when it has none. For an archive path, the archive's set.
+typedef struct {
+	QString name;	// the file's name in the folder
+	QString path;
+} xSibling;
+QList<xSibling> media_siblings(Computer*, const QString& path, int id, int drv, int* cur);
 // the image to open from an archive, as an archive path: the only one, the one picked
 // when ask, the first otherwise; empty when none or the user cancelled (said why)
 QString media_from_archive(Computer*, const QString& archive, int id, int drv, bool ask);

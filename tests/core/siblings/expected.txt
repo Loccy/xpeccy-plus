@@ -1,0 +1,88 @@
+== tosec-sides
+Black Magic (1987)(U.S. Gold)(Side A)[SpeedLock 4].tzx [black magic (1987)(u.s. gold)]: | Black Magic (1987)(U.S. Gold)(Side B).tzx
+Black Magic (1987)(U.S. Gold)(Side B).tzx [black magic (1987)(u.s. gold)]: | Black Magic (1987)(U.S. Gold)(Side A)[SpeedLock 4].tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2 Side A).tzx [black knight adventure (1988)(atlas adventure)]: | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2 Side B).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2 Side B).tzx [black knight adventure (1988)(atlas adventure)]: | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2 Side A).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tzx [black knight adventure (1988)(atlas adventure)]: | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2 Side A).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2 Side B).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tzx [black knight adventure (1988)(atlas adventure)]: | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2 Side A).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tzx | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2 Side B).tzx
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tap [black knight adventure (1988)(atlas adventure)]: | Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tap
+Black Knight Adventure (1988)(Atlas Adventure)(Tape 2 of 2).tap [black knight adventure (1988)(atlas adventure)]: | Black Knight Adventure (1988)(Atlas Adventure)(Tape 1 of 2).tap
+Black Tower, The (1993)(Zenobi)(Tape 1 of 2 Side A).tzx [black tower, the (1993)(zenobi)]: | Black Tower, The (1993)(Zenobi)(Tape 2 of 2 Side B).tzx
+Black Tower, The (1993)(Zenobi)(Tape 1 of 2 Side A)[a].tzx [black tower, the (1993)(zenobi)]: | Black Tower, The (1993)(Zenobi)(Tape 2 of 2 Side B)[a].tzx
+Black Tower, The (1993)(Zenobi)(Tape 2 of 2 Side B).tzx [black tower, the (1993)(zenobi)]: | Black Tower, The (1993)(Zenobi)(Tape 1 of 2 Side A).tzx
+Black Tower, The (1993)(Zenobi)(Tape 2 of 2 Side B)[a].tzx [black tower, the (1993)(zenobi)]: | Black Tower, The (1993)(Zenobi)(Tape 1 of 2 Side A)[a].tzx
+Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side A).tzx [bloody paws (1990)(g.ll.)(48k-128k)(es)]: | Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side B).tzx
+Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side A)[a2].tzx [bloody paws (1990)(g.ll.)(48k-128k)(es)]: | Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side A).tzx | Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side B).tzx
+Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side B).tzx [bloody paws (1990)(g.ll.)(48k-128k)(es)]: | Bloody Paws (1990)(G.LL.)(48K-128K)(ES)(Side A).tzx
+Linkword Spanish (1984)(Silversoft)(Tape 9 of 10).tzx [linkword spanish (1984)(silversoft)]: | Linkword Spanish (1984)(Silversoft)(Tape 10 of 10).tzx
+Linkword Spanish (1984)(Silversoft)(Tape 10 of 10).tzx [linkword spanish (1984)(silversoft)]: | Linkword Spanish (1984)(Silversoft)(Tape 9 of 10).tzx
+Eureka! (1984)(Domark)(Tape 1 of 3).tzx [eureka! (1984)(domark)]: -
+Digital Studio v2.05 - Disk 1 (1995)(Underground Systems)(RU)(en)[h Viking][AY].trd [digital studio v2.05 -]: | Digital Studio v2.05 - Disk 2 (1995)(Underground Systems)(RU)(en)[h Viking][AY].trd
+Digital Studio v2.05 - Disk 2 (1995)(Underground Systems)(RU)(en)[h Viking][AY].trd [digital studio v2.05 -]: | Digital Studio v2.05 - Disk 1 (1995)(Underground Systems)(RU)(en)[h Viking][AY].trd
+Extreme's Tracker v1.31, v1.32 - Disk A (1999)(Red Limited Drunkards Group)(RU)(en).scl [extreme's tracker v1.31, v1.32 -]: | Extreme's Tracker v1.31, v1.32 - Disk C (1999)(Red Limited Drunkards Group)(RU)(en).scl
+Extreme's Tracker v1.31, v1.32 - Disk C (1999)(Red Limited Drunkards Group)(RU)(en).scl [extreme's tracker v1.31, v1.32 -]: | Extreme's Tracker v1.31, v1.32 - Disk A (1999)(Red Limited Drunkards Group)(RU)(en).scl
+Livingstone Supongo II (1989)(Opera Soft)(48K-128K)(ES)(en-es)(Side A)[small case].tzx [livingstone supongo ii (1989)(opera soft)(48k-128k)(es)(en-es)]: | Livingstone Supongo II (1989)(Opera Soft)(48K-128K)(ES)(en-es)(Side B)[small case].tap
+Livingstone Supongo II (1989)(Opera Soft)(48K-128K)(ES)(en-es)(Side B)[small case].tap [livingstone supongo ii (1989)(opera soft)(48k-128k)(es)(en-es)]: | Livingstone Supongo II (1989)(Opera Soft)(48K-128K)(ES)(en-es)(Side A)[small case].tzx
+Regreso al Futuro - Parte II (1990)(MCM)(128K)(ES)(en)(Side A)[aka Back to the Future Part 2][re-release].tzx [regreso al futuro - parte ii (1990)(mcm)(128k)(es)(en)]: | Regreso al Futuro - Parte II (1990)(MCM)(128K)(ES)(en)(Side B)[aka Back to the Future Part 2][re-release].tzx
+Regreso al Futuro - Parte II (1990)(MCM)(128K)(ES)(en)(Side B)[aka Back to the Future Part 2][re-release].tzx [regreso al futuro - parte ii (1990)(mcm)(128k)(es)(en)]: | Regreso al Futuro - Parte II (1990)(MCM)(128K)(ES)(en)(Side A)[aka Back to the Future Part 2][re-release].tzx
+ACE 2 - The Ultimate Head to Head Conflict (1989)(MCM)(48K-128K)(ES)(en)(Side A)[Side A].tzx [ace 2 - the ultimate head to head conflict (1989)(mcm)(48k-128k)(es)(en)]: | ACE 2 - The Ultimate Head to Head Conflict (1989)(MCM)(48K-128K)(ES)(en)(Side B)[Side B].tzx
+ACE 2 - The Ultimate Head to Head Conflict (1989)(MCM)(48K-128K)(ES)(en)(Side B)[Side B].tzx [ace 2 - the ultimate head to head conflict (1989)(mcm)(48k-128k)(es)(en)]: | ACE 2 - The Ultimate Head to Head Conflict (1989)(MCM)(48K-128K)(ES)(en)(Side A)[Side A].tzx
+Train Game, The - Track A (1983)(Microsphere)(16K).tzx [train game, the - track]: | Train Game, The - Track B (1983)(Microsphere)(16K).tzx
+Train Game, The - Track B (1983)(Microsphere)(16K).tzx [train game, the - track]: | Train Game, The - Track A (1983)(Microsphere)(16K).tzx
+== tosec-not-sets
+Kyd Cadet v1.1 (2010)(Jenkinson, Paul).tzx [-]: -
+Kyd Cadet v1.2 (2010)(Jenkinson, Paul).tzx [-]: -
+Superchess 3 v3.1 (1984)(CP).scl [-]: -
+Superchess 3 v3.5 (1984)(CP).scl [-]: -
+Learn to Read 1 (1983)(Macmillan - Sinclair Research).tzx [-]: -
+Learn to Read 2 (1983)(Macmillan - Sinclair Research).tzx [-]: -
+Cousin Horace - Chapter 1 (2014-10)(Grussu, Alessandro)(es).tzx [-]: -
+Cousin Horace - Chapter 2 (2014-10)(Grussu, Alessandro)(es).tzx [-]: -
+== wos
+Solar Empire - Side 1.tzx [solar empire -]: | Solar Empire - Side 2.tzx
+Solar Empire - Side 2.tzx [solar empire -]: | Solar Empire - Side 1.tzx
+Pictionary - Side A (The Hit Squad).tzx [pictionary -]: | Pictionary - Side B (The Hit Squad).tzx
+Pictionary - Side B (The Hit Squad).tzx [pictionary -]: | Pictionary - Side A (The Hit Squad).tzx
+After The War - Part 1.tap [after the war -]: | After The War - Part 2.tap
+After The War - Part 2.tap [after the war -]: | After The War - Part 1.tap
+Barbarian Part1.TAP [barbarian]: | Barbarian Part2.TAP
+Barbarian Part2.TAP [barbarian]: | Barbarian Part1.TAP
+F1 PART 1.tap [f1]: | F1 PART 2.TAP
+F1 PART 2.TAP [f1]: | F1 PART 1.tap
+Thunder Blade - Side 2 (Erbe - Musical 1).tzx [thunder blade -]: | Thunder Blade - Side 1 (Erbe - Musical 1).tzx
+Thunder Blade - Side 1 (Erbe - Musical 1).tzx [thunder blade -]: | Thunder Blade - Side 2 (Erbe - Musical 1).tzx
+VIXEN_A.TAP [vixen_]: | VIXEN_B.TAP | VIXEN_C.TAP
+VIXEN_B.TAP [vixen_]: | VIXEN_A.TAP | VIXEN_C.TAP
+VIXEN_C.TAP [vixen_]: | VIXEN_A.TAP | VIXEN_B.TAP
+Taped Off.tzx [-]: -
+Tapea Off.tzx [-]: -
+TAPED OFF.tzx [-]: -
+TAPEA OFF.tzx [-]: -
+Two-Sided Game.tzx [-]: -
+Two-Sidea Game.tzx [-]: -
+== wos-series
+Manic Miner 2.tzx [-]: -
+Manic Miner 4.tzx [-]: -
+KRAKOUT 2.tzx [-]: -
+KRAKOUT 3.tzx [-]: -
+PHANTOM1.TAP [-]: -
+PHANTOM2.TAP [-]: -
+Tetris2.tap [-]: -
+Tetris3.tap [-]: -
+image8x4.tap [-]: -
+image8x8.tap [-]: -
+RiverRaid+_by_thealfest_v0.2.tap [-]: -
+RiverRaid+_by_thealfest_v0.3.tap [-]: -
+Game Over - 48k.tzx [-]: -
+Game Over - 128k.tzx [-]: -
+== packed
+TellingTheTime(2)SideA.tap.zip [tellingthetime(2)]: | TellingTheTime(2)SideB.tap.zip
+TellingTheTime(2)SideB.tap.zip [tellingthetime(2)]: | TellingTheTime(2)SideA.tap.zip
+RexSideA.tap.zip [rex]: | RexSideB.tap.zip
+RexSideB.tap.zip [rex]: | RexSideA.tap.zip
+ianna-sidea.dsk [ianna-]: | ianna-sideb.dsk
+ianna-sideb.dsk [ianna-]: | ianna-sidea.dsk
+Game (Side A).tzx.zip [game]: | Game (Side B).tzx
+Game (Side B).tzx [game]: | Game (Side A).tzx.zip
+Lone (Side A).tzx [lone]: -
+Lone.tzx.zip [-]: -
