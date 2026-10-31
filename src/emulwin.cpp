@@ -1050,7 +1050,7 @@ bool MainWin::eventFilter(QObject* obj, QEvent* ev) {
 			if (drv < 0) {
 				emit s_tape_show();
 			} else {
-				diskWin->showWindow();
+				diskWin->showWindow(drv);	// on its own tab
 			}
 			return true;
 		}

@@ -253,9 +253,10 @@ void xDiskWin::showHead() {
 	list->setLive(row);
 }
 
-void xDiskWin::showWindow() {
+void xDiskWin::showWindow(int drv) {
 	fast->setChecked(fdcFlag & FDC_FAST);
 	refresh();
+	if ((drv >= 0) && (drv < tabs->count())) tabs->setCurrentIndex(drv);
 	show();
 	raise();
 	activateWindow();
