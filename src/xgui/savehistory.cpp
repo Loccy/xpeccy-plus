@@ -15,6 +15,7 @@
 #include <QPixmap>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QStyle>
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -30,8 +31,8 @@ static QString machine_of(const QString& path) {
 	return m ? QString::fromLocal8Bit(m->name.c_str()) : QString::fromLocal8Bit(id);
 }
 
-// a table: the first column takes the room, the figures from column num on
-// right-aligned under their headings
+// a table, each column as wide as what is in it and the first taking the room
+// left; the figures from column num on right-aligned under their headings
 static QTreeWidget* sh_table(const QStringList& heads, int num) {
 	QTreeWidget* t = new QTreeWidget;
 	t->setRootIsDecorated(false);
@@ -47,26 +48,41 @@ static QTreeWidget* sh_table(const QStringList& heads, int num) {
 	return t;
 }
 
+// The first column: at least room for chars characters, more for a longer
+// name. The table no narrower than its columns, rows high in view when rows > 0.
+static void sh_fit(QTreeWidget* t, int chars, int rows) {
+	int name = t->fontMetrics().averageCharWidth() * chars;
+	for (int i = 0; i < t->topLevelItemCount(); i++)
+		name = qMax(name, t->fontMetrics().horizontalAdvance(t->topLevelItem(i)->text(0)) + 16);
+	int wid = name;
+	for (int i = 1; i < t->columnCount(); i++)
+		wid += t->header()->sectionSize(i);
+	t->setMinimumWidth(wid + 2 * t->frameWidth() + t->style()->pixelMetric(QStyle::PM_ScrollBarExtent));
+	if (rows > 0) {
+		int row = t->topLevelItemCount() ? t->sizeHintForRow(0) : t->fontMetrics().height() + 6;
+		t->setFixedHeight(t->header()->sizeHint().height() + rows * row + 2 * t->frameWidth());
+	}
+}
+
 static void sh_right(QTreeWidgetItem* it, int from) {
 	for (int i = from; i < it->columnCount(); i++)
 		it->setTextAlignment(i, Qt::AlignRight | Qt::AlignVCenter);
 }
 
-QString save_history(QWidget* parent) {
+QString save_history(QWidget* parent, const QString& current) {
 	QDialog dia(parent);
 	dia.setWindowTitle("Save History");
-	dia.resize(720, 600);
 	QVBoxLayout* lay = new QVBoxLayout(&dia);
 
 	QTreeWidget* games = sh_table({"Game", "Last save", "Quick", "Auto", "MB", "Old", "Old MB"}, 2);
 	games->headerItem()->setToolTip(5, "Saves Clear Old deletes");
 	games->headerItem()->setToolTip(6, "What Clear Old frees");
-	lay->addWidget(games, 3);
+	lay->addWidget(games);
 
 	QHBoxLayout* row = new QHBoxLayout;
 	QLabel* labDays = new QLabel("Older than");
 	QSpinBox* sbDays = new QSpinBox;
-	sbDays->setRange(1, 3650);
+	sbDays->setRange(1, 999);
 	sbDays->setSuffix(" days");
 	sbDays->setValue(conf.saves.cleanDays);
 	labDays->setBuddy(sbDays);
@@ -89,11 +105,12 @@ QString save_history(QWidget* parent) {
 	low->addWidget(saves, 1);
 	QVBoxLayout* side = new QVBoxLayout;
 	QLabel* pic = new QLabel;
-	pic->setFixedSize(196, 148);
+	pic->setFixedSize(260, 196);		// a Spectrum's screen 1:1
 	pic->setAlignment(Qt::AlignCenter);
 	pic->setFrameShape(QFrame::StyledPanel);
 	side->addWidget(pic);
 	QPushButton* pbLoad = new QPushButton(QIcon(":/images/fileopen.png"), "Load");
+	pbLoad->setDefault(true);
 	QPushButton* pbDel = new QPushButton(QIcon(":/images/cancel.png"), "Delete");
 	QPushButton* pbShow = new QPushButton("Show in Folder");
 	side->addWidget(pbLoad);
@@ -101,7 +118,7 @@ QString save_history(QWidget* parent) {
 	side->addWidget(pbShow);
 	side->addStretch(1);
 	low->addLayout(side);
-	lay->addLayout(low, 2);
+	lay->addLayout(low, 1);
 
 	QHBoxLayout* bottom = new QHBoxLayout;
 	bottom->addStretch(1);
@@ -137,6 +154,7 @@ QString save_history(QWidget* parent) {
 			saves->addTopLevelItem(it);
 		}
 		if (saves->topLevelItemCount()) saves->setCurrentItem(saves->topLevelItem(0));
+		sh_fit(saves, 20, 0);
 	};
 	auto fillGames = [&](const QString& keep) {
 		folders = saves_folders();
@@ -154,6 +172,7 @@ QString save_history(QWidget* parent) {
 			if (f.dir == keep) cur = it;
 		}
 		fillOld();
+		sh_fit(games, 26, 10);
 		games->setCurrentItem(cur ? cur : games->topLevelItem(0));
 		fillSaves();
 	};
@@ -218,14 +237,16 @@ QString save_history(QWidget* parent) {
 		dia.accept();
 	};
 	QObject::connect(pbLoad, &QPushButton::clicked, &dia, load);
-	QObject::connect(saves, &QTreeWidget::itemDoubleClicked, &dia, load);
+	QObject::connect(saves, &QTreeWidget::itemActivated, &dia, load);	// a double click, Enter
 	QObject::connect(pbShow, &QPushButton::clicked, &dia, [&]() {
 		QString dir = curDir();
 		QDesktopServices::openUrl(QUrl::fromLocalFile(dir.isEmpty() ? saves_root() : dir));
 	});
 	QObject::connect(pbClose, &QPushButton::clicked, &dia, &QDialog::reject);
 
-	fillGames(QString());
+	fillGames(current);
+	saves->setFocus();		// the newest of the game in use: Enter loads it
+	dia.adjustSize();
 	dia.exec();
 	// the window's choices are the settings' own
 	conf.saves.cleanDays = sbDays->value();

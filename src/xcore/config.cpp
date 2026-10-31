@@ -1444,7 +1444,7 @@ void loadConfig() {
 					if (pnam == "auto.keep") conf.saves.timedKeep = getRanged(arg.s, 1, 99);
 					if (pnam == "folder") conf.saves.dir = QString::fromUtf8(pval.c_str());
 					if (pnam == "clean") conf.saves.cleanOn = arg.b;
-					if (pnam == "clean.days") conf.saves.cleanDays = getRanged(arg.s, 1, 3650);
+					if (pnam == "clean.days") conf.saves.cleanDays = getRanged(arg.s, 1, 999);
 					if (pnam == "keep.one") conf.saves.keepOne = arg.b;
 					if (pnam == "last") conf.saves.last = QString::fromUtf8(pval.c_str());
 					break;

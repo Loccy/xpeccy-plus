@@ -1056,16 +1056,15 @@ void SetupWin::start() {
 			g->setColumnMinimumWidth(col, wid);
 	}
 	ui.cbStyleSheet->setFixedWidth(ui.gridLayout_look->columnMinimumWidth(1));	// as wide as the names under it
-	// Saves: its controls alike, its names where Emulation's are
-	int savw = qMax(comboFitWidth(cbSaveMedia), sbCleanDays->sizeHint().width());
-	cbSaveMedia->setFixedWidth(savw);
-	sbQuickKeep->setFixedWidth(savw);
-	sbExitKeep->setFixedWidth(savw);
-	sbTimedMin->setFixedWidth(savw);
-	sbTimedKeep->setFixedWidth(savw);
-	sbCleanDays->setFixedWidth(savw);
+	// Saves: the numbers alike, as wide as the widest of them asks; the columns
+	// as Emulation's, so the names stand in one place on both pages
+	int savw = 0;
+	for (QSpinBox* sb : {sbQuickKeep, sbExitKeep, sbTimedMin, sbTimedKeep, sbCleanDays})
+		savw = qMax(savw, sb->sizeHint().width());
+	for (QSpinBox* sb : {sbQuickKeep, sbExitKeep, sbTimedMin, sbTimedKeep, sbCleanDays})
+		sb->setFixedWidth(savw);
 	for (QGridLayout* g : gridSaves) {
-		g->setColumnMinimumWidth(0, savw);
+		g->setColumnMinimumWidth(0, qMax(savw, ui.gridLayout_lat->columnMinimumWidth(0)));
 		g->setColumnMinimumWidth(1, ui.gridLayout_lat->columnMinimumWidth(1));
 	}
 // video
@@ -3098,8 +3097,8 @@ static QLabel* savesHint(const QString& text) {
 	return lab;
 }
 
-static QGridLayout* savesGroup(QVBoxLayout* page, const QString& title) {
-	QGroupBox* box = new QGroupBox(title);
+static QGridLayout* savesGroup(QVBoxLayout* page, const char* icon, const QString& title) {
+	xIconGroup* box = new xIconGroup(icon, title);
 	QGridLayout* grid = new QGridLayout(box);
 	grid->setHorizontalSpacing(12);
 	grid->setVerticalSpacing(8);
@@ -3124,7 +3123,7 @@ void SetupWin::buildSaves() {
 	QWidget* page = new QWidget;
 	QVBoxLayout* lay = new QVBoxLayout(page);
 
-	QGridLayout* grid = gridSaves[0] = savesGroup(lay, tr("Quick saves"));
+	QGridLayout* grid = gridSaves[0] = savesGroup(lay, ":/images/floppy.png", tr("Quick saves"));
 	cbSavePerGame = new QCheckBox;
 	savesRow(grid, cbSavePerGame, tr("Saves per game"), tr("Each game keeps its own saves"),
 		tr("On: a folder for each game opened\nOff: one for each machine"));
@@ -3132,13 +3131,11 @@ void SetupWin::buildSaves() {
 	sbQuickKeep->setRange(1, 99);
 	savesRow(grid, sbQuickKeep, tr("Quick saves kept"), tr("The oldest goes when a new one is past it"),
 		tr("Quick saves each folder keeps"));
-	cbSaveMedia = new QComboBox;
-	cbSaveMedia->addItem(tr("Tape and disks"), 1);
-	cbSaveMedia->addItem(tr("Names only"), 0);
-	savesRow(grid, cbSaveMedia, tr("Media in saves"), tr("A save brings its tape and TR-DOS disks back"),
-		tr("Tape and disks: carried in the save, as they were\nNames only: smaller, the files must stay put"));
+	cbSaveEmbed = new QCheckBox;
+	savesRow(grid, cbSaveEmbed, tr("Embed media in saves"), tr("Off: a save only links to the files"),
+		tr("The tape and the TR-DOS disks go into the save,\nas they were; it loads with the files gone"));
 
-	grid = gridSaves[1] = savesGroup(lay, tr("Autosaves"));
+	grid = gridSaves[1] = savesGroup(lay, ":/images/grp-auto.png", tr("Autosaves"));
 	cbExitSave = new QCheckBox;
 	savesRow(grid, cbExitSave, tr("Autosave on exit"), tr("File > Resume Last Session goes back to it"),
 		tr("The machine saved as the emulator closes"));
@@ -3149,32 +3146,41 @@ void SetupWin::buildSaves() {
 	sbTimedMin = new QSpinBox;
 	sbTimedMin->setRange(0, 60);
 	sbTimedMin->setSpecialValueText(tr("Off"));
-	sbTimedMin->setSuffix(tr(" min"));
-	savesRow(grid, sbTimedMin, tr("Autosave every"), tr("Counted while the machine runs"),
+	savesRow(grid, sbTimedMin, tr("Autosave every"), tr("Minutes, counted while the machine runs"),
 		tr("An autosave every so many minutes;\na pause or the Debugger holds the count"));
 	sbTimedKeep = new QSpinBox;
 	sbTimedKeep->setRange(1, 99);
 	savesRow(grid, sbTimedKeep, tr("Timed autosaves kept"), tr("A ring of their own, beside the exit ones"),
 		tr("Timed autosaves each folder keeps"));
 
-	grid = gridSaves[2] = savesGroup(lay, tr("Folder and clean-up"));
+	grid = gridSaves[2] = savesGroup(lay, ":/images/fileopen.png", tr("Folder and clean-up"));
 	leSaveDir = new QLineEdit;
-	leSaveDir->setPlaceholderText(QDir::toNativeSeparators(
-		QDir(QString::fromLocal8Bit(conf.path.confDir.c_str())).filePath("saves")));
+	// empty: the config folder's, named in words as the log's folder is
+	leSaveDir->setPlaceholderText(tr("saves, in the config folder"));
+	leSaveDir->setToolTip(QDir::toNativeSeparators(QDir(QString::fromLocal8Bit(conf.path.confDir.c_str())).filePath("saves")));
 	QToolButton* pick = new QToolButton;
 	pick->setIcon(QIcon(":/images/fileopen.png"));
+	pick->setToolTip(tr("Pick the folder"));
 	connect(pick, &QToolButton::clicked, this, [this]() {
 		QString dir = QFileDialog::getExistingDirectory(this, tr("Saves folder"),
-			leSaveDir->text().isEmpty() ? leSaveDir->placeholderText() : leSaveDir->text());
+			leSaveDir->text().isEmpty() ? leSaveDir->toolTip() : leSaveDir->text());
 		if (!dir.isEmpty()) leSaveDir->setText(QDir::toNativeSeparators(dir));
 	});
-	savesRow(grid, pick, tr("Saves folder"), QString(), tr("Where the saves go. Empty: the settings folder"));
-	grid->addWidget(leSaveDir, grid->rowCount() - 1, 2);
+	{
+		int row = grid->rowCount();
+		QLabel* lab = new QLabel(tr("Saves folder"));
+		lab->setBuddy(leSaveDir);
+		lab->setToolTip(tr("Where the saves go. Empty: the config folder"));
+		QHBoxLayout* dirRow = new QHBoxLayout;
+		dirRow->addWidget(leSaveDir, 1);
+		dirRow->addWidget(pick);
+		grid->addWidget(lab, row, 1);
+		grid->addLayout(dirRow, row, 2);
+	}
 	sbCleanDays = new QSpinBox;
-	sbCleanDays->setRange(0, 3650);
-	sbCleanDays->setSpecialValueText(tr("Never"));
-	sbCleanDays->setSuffix(tr(" days"));
-	savesRow(grid, sbCleanDays, tr("Delete saves older than"), tr("At start, in every game"),
+	sbCleanDays->setRange(0, 999);
+	sbCleanDays->setSpecialValueText(tr("Off"));
+	savesRow(grid, sbCleanDays, tr("Delete saves older than"), tr("Days, at start, in every game"),
 		tr("Old saves deleted at each start;\nFile > Save History does it by hand"));
 	cbKeepOne = new QCheckBox;
 	savesRow(grid, cbKeepOne, tr("Keep at least one save"), tr("A game's newest save stays, however old"),
@@ -3190,7 +3196,7 @@ void SetupWin::buildSaves() {
 void SetupWin::fillSaves() {
 	cbSavePerGame->setChecked(conf.saves.perGame);
 	sbQuickKeep->setValue(conf.saves.quickKeep);
-	setRFIndex(cbSaveMedia, conf.saves.carry ? 1 : 0);
+	cbSaveEmbed->setChecked(conf.saves.carry);
 	cbExitSave->setChecked(conf.saves.exitOn);
 	sbExitKeep->setValue(conf.saves.exitKeep);
 	sbTimedMin->setValue(conf.saves.timedOn ? conf.saves.timedMin : 0);
@@ -3203,7 +3209,7 @@ void SetupWin::fillSaves() {
 void SetupWin::applySaves() {
 	conf.saves.perGame = cbSavePerGame->isChecked() ? 1 : 0;
 	conf.saves.quickKeep = sbQuickKeep->value();
-	conf.saves.carry = getRFIData(cbSaveMedia) ? 1 : 0;
+	conf.saves.carry = cbSaveEmbed->isChecked() ? 1 : 0;
 	conf.saves.exitOn = cbExitSave->isChecked() ? 1 : 0;
 	conf.saves.exitKeep = sbExitKeep->value();
 	// off keeps the number it had, for when it is on again

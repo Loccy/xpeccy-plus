@@ -123,7 +123,7 @@ class SetupWin : public QDialog {
 		// the Saves page
 		QCheckBox* cbSavePerGame;
 		QSpinBox* sbQuickKeep;
-		QComboBox* cbSaveMedia;
+		QCheckBox* cbSaveEmbed;
 		QCheckBox* cbExitSave;
 		QSpinBox* sbExitKeep;
 		QSpinBox* sbTimedMin;		// 0: off

@@ -2708,9 +2708,9 @@ void MainWin::initMenuBar() {
 	quickMenu->setToolTipsVisible(true);		// the tip is the save's picture
 	fileMenu->addMenu(quickMenu);
 	connect(quickMenu, &QMenu::aboutToShow, this, &MainWin::fillQuickSaves);
+	cutAction(fileMenu, "Save History...", XCUT_SAVEHIST);
 	cutAction(fileMenu, "Undo Quick Load", XCUT_QUICKUNDO);
 	resumeAct = cutAction(fileMenu, "Resume Last Session", XCUT_RESUME);
-	cutAction(fileMenu, "Save History...", XCUT_SAVEHIST);
 	// the Capture menu's, which is made with the machine's menus
 	cutAct("Screenshot", XCUT_SCRSHOT, "grp-screenshot");
 	cutAct("Screenshot Series", XCUT_COMBOSHOT);

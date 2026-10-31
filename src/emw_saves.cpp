@@ -17,18 +17,26 @@
 #include <QMenu>
 #include <QUrl>
 
-// the picture of a save: what the window shows, no wider than this
-#define SAVE_PIC_W	192
-#define SAVE_PIC_H	144
+// the picture of a save, no bigger than a Spectrum's screen: that one 1:1
+#define SAVE_PIC_W	256
+#define SAVE_PIC_H	192
 
+// The screen alone on a Spectrum; the window as shown on the machines whose
+// modes draw over the border too: the Evo, the ATM it comes from, the Next.
 static QImage save_picture() {
 	Computer* comp = conf.zx;
 	Video* vid = comp->vid;
+	int id = comp->hw->id;
+	bool whole = (id == HW_PENTEVO) || (id == HW_TSLAB) || (id == HW_ATM1) || (id == HW_ATM2) || (id == HW_ZXNEXT);
 	QImage img(frame_shown_lock(), vid->full.x * 2, bufSize / bytesPerLine, bytesPerLine, QImage::Format_RGBA8888);
-	img = img.copy(vid->lcut.x * 2, vid->lcut.y, vid->vsze.x * 2, vid->vsze.y);
+	if (whole)
+		img = img.copy(vid->lcut.x * 2, vid->lcut.y, vid->vsze.x * 2, vid->vsze.y);
+	else
+		img = img.copy(vid->bord.x * 2, vid->bord.y, vid->scrn.x * 2, vid->scrn.y);
 	frame_shown_unlock();
 	if (img.isNull()) return img;
-	QSize nat(qMax(1, (int)(vid->vsze.x * comp->hw->xscale)), qMax(1, vid->vsze.y));
+	QSize size = whole ? QSize(vid->vsze.x, vid->vsze.y) : QSize(vid->scrn.x, vid->scrn.y);
+	QSize nat(qMax(1, (int)(size.width() * comp->hw->xscale)), qMax(1, size.height()));
 	return img.scaled(nat.scaled(SAVE_PIC_W, SAVE_PIC_H, Qt::KeepAspectRatio), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
 		.convertToFormat(QImage::Format_RGB32);
 }
@@ -133,8 +141,14 @@ bool MainWin::resumeLast() {
 	return done;
 }
 
+// Pause in menus holds the machine here too: the window is where a save is
+// picked, as from the menu. A reason of its own - the menu's goes as the menu
+// that opened the window closes.
 void MainWin::saveHistory() {
-	QString path = save_history(this);
+	bool hold = conf.pauseMenu;
+	if (hold) pause(true, PR_SAVES);
+	QString path = save_history(this, saves_dir(false));
+	if (hold) pause(false, PR_SAVES);
 	if (!path.isEmpty())
 		setMessage(loadState(path) ? " quick load " : " can't load the save ");
 	setFocus();
