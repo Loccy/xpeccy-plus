@@ -6,7 +6,7 @@
 ```{index} see: preferences; Options
 ```
 
-**File > Options...** opens the settings. The pages are listed on the left, and each one
+**Tools > Options...** opens the settings. The pages are listed on the left, and each one
 has a page of its own here, in the same order.
 
 {icon}`ok-apply` **OK** applies the changes and closes the window, **Apply** applies them

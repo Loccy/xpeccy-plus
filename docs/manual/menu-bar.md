@@ -5,14 +5,14 @@
 
 | Menu | What is in it |
 |---|---|
-| **File** | open and save files, recent files, quick save and load, **Options** |
+| **File** | open and save files, recent files, quick save and load |
 | **View** | window size, border, fullscreen, side fill, shaders and palette, menu bar, toolbar and status bar, virtual keyboard, input overlay |
 | **Favorites** | files you keep at hand |
 | **Machine** | which machine runs, reset, turbo, pause, fast mode, slow motion, fast forward, rewind |
 | **Input** | keyboard and mouse grab, keymaps, gamepads |
 | **Media** | tape player, disk manager, floppy drives, fast disk access, divMMC, cartridge, SD card, hard disks |
 | **Capture** | screenshots, video and sound recording, RZX |
-| **Tools** | **Cheats**, the **Debugger** and its windows |
+| **Tools** | **Cheats**, the **Debugger** and its windows, **Options** |
 | **Help** | this manual, the project page, what is new, reporting a problem |
 
 A command that has a key shows it in the menu. The keys are set on the **Hotkeys** page of

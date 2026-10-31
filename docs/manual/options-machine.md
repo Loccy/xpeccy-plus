@@ -16,7 +16,7 @@ in [Your own machines](#your-own-machines).
 ```{index} Memory
 ```
 
-**File > Options...** opens **Options**; **Machine** is its first page. At the top:
+**Tools > Options...** opens **Options**; **Machine** is its first page. At the top:
 
 - **Model** - the machine. The {icon}`settings` gear beside it opens
   **Machine: Advanced Settings**.
