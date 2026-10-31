@@ -72,7 +72,7 @@ before that point is upstream's history and is not repeated here.
   after the pointer leaves them. *(thanks to lovebeam and Volutar)*
 
 - **Update check**: once a day the program looks for a newer version, on the releases or
-  the nightly channel, and shows what is new since yours. Help > Check for Updates asks at
+  the development channel, and shows what is new since yours. Help > Check for Updates asks at
   once; how often, and which channel, is set in the same window or in Options. On Windows
   and with the AppImage, **Update** puts the new version in place of the old one; settings,
   machines and the files you changed are kept.
@@ -93,6 +93,11 @@ before that point is upstream's history and is not repeated here.
   Pick it in View > ZX Palette. *(thanks to Volutar)*
 
 ### Changed
+
+- **New download names**: `win-x64` is the Windows 10 and 11 build (was `win-x64-qt6`);
+  `win-x64-legacy` and `win-x86-legacy` are for Windows 7 and 8.1 (were `win-x64` and
+  `win-x86`); macOS is `macos-arm64`. A development build named the old way updates itself
+  to the new name; an old `win-x64` one becomes the Windows 10 and 11 build.
 
 - **Pause settings on the Emulation page**: Pause when inactive moved there from
   Application, beside Pause in menus and Resume by input.
