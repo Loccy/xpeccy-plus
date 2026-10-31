@@ -255,6 +255,7 @@ class MainWin : public QWidget {
 		void vsyncProbe();
 		void vsyncUpdate();
 		void updateSatellites();
+		void menuShow();
 		void menuHide();
 		void optResize();
 		void optApply();
@@ -278,6 +279,10 @@ class MainWin : public QWidget {
 		unsigned grabMice:1;
 		long long mouseReadAt = 0;	// when a program last read the mouse, host ns
 		bool relArmed = false;		// both release keys are down, nothing else since
+		int menusOpen = 0;		// menus of this window up, submenus counted (PR_MENU)
+		bool menuPick = false;		// the UI port picks an item: its aboutToShow opens nothing
+		bool clickResumed = false;	// the button down took the pause off: its release is not the machine's
+		void menuWatch(QMenu*);
 		QMetaObject::Connection screenGeometryConnection;
 		QMetaObject::Connection screenRateConnection;
 		int vsyncShown = 0;		// the rate x100 the VSync note last gave

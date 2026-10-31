@@ -474,10 +474,13 @@ void MainWin::initBars() {
 	foreach(const xTbItem& it, tbCatalog) {
 		// a list opened from here has had no right-click menu fill it; one opened
 		// inside a menu has, and refilling everything on each hover costs disk reads
-		if (QMenu* list = it.list ? it.list : it.act->menu())
+		if (QMenu* list = it.list ? it.list : it.act->menu()) {
 			connect(list, &QMenu::aboutToShow, this, [this]() {
 				if (!QApplication::activePopupWidget()) fillUserMenu();
 			});
+			// the volume is set by ear: the machine plays on under it
+			if (it.act != muteAct) menuWatch(list);
+		}
 	}
 
 	tbList = QString::fromStdString((conf.win.tbItems == "*") ? std::string(tbDefault) : conf.win.tbItems).split(',', X_SkipEmptyParts);

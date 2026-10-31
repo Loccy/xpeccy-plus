@@ -464,7 +464,7 @@ MainWin::MainWin(QMainWindow* frm) {
 #endif
 	frm_tmr.start(20);
 
-	connect(userMenu, &QMenu::aboutToHide, this, &MainWin::menuHide);
+	menuWatch(userMenu);
 	connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState st) {
 		bool away = (st != Qt::ApplicationActive);
 		if (away == bool(conf.emu.pause & PR_FOCUS)) return;
@@ -1056,13 +1056,34 @@ bool MainWin::eventFilter(QObject* obj, QEvent* ev) {
 	return QObject::eventFilter(obj, ev);
 }
 
-// a menu does not hold the machine: nothing it does needs it stopped
+// a menu of this window: its opening and closing are counted for the menu pause
+void MainWin::menuWatch(QMenu* menu) {
+	connect(menu, &QMenu::aboutToShow, this, &MainWin::menuShow, Qt::UniqueConnection);
+	connect(menu, &QMenu::aboutToHide, this, &MainWin::menuHide, Qt::UniqueConnection);
+}
+
+// the first menu up holds the machine, with Pause in menus on
+void MainWin::menuShow() {
+	if (menuPick) return;
+	menusOpen++;
+	if (conf.pauseMenu && !(conf.emu.pause & PR_MENU)) pause(true, PR_MENU);
+}
+
 void MainWin::menuHide() {
+	if (menusOpen > 0) menusOpen--;
 	// A submenu closing leaves its parent open, and Favorites is one in the right-click
 	// menu: what is still up is asked once it has gone. The line fullscreen grew for the
 	// menus goes with the last of them, unless the bar over the picture is still there.
+	// An item that opens a dialog fires after its menu has gone, and the dialog holds
+	// the machine before its own loop runs this: no frame between the two.
 	QTimer::singleShot(0, this, [this]() {
 		if (QApplication::activePopupWidget()) return;
+		// a mac's menus are its own, not Qt's popups: there the count says. Elsewhere
+		// Qt does, and a count gone astray cannot hold the machine
+#ifndef __APPLE__
+		menusOpen = 0;
+#endif
+		if ((menusOpen == 0) && (conf.emu.pause & PR_MENU)) pause(false, PR_MENU);
 		setFocus();
 		fsCompose(false);
 		if (fsBar && fsBar->isVisible()) fsLinger.start();	// the bars over the top: is the pointer still there
@@ -2810,7 +2831,7 @@ void MainWin::initMenuBar() {
 	act->setMenuRole(QAction::AboutRole);
 
 	foreach(QMenu* menu, QList<QMenu*>() << fileMenu << bookmarkMenu << viewMenu << help)
-		connect(menu, &QMenu::aboutToHide, this, &MainWin::menuHide);
+		menuWatch(menu);
 	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::syncActions);
 	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::fillRecent);
 	connect(viewMenu, &QMenu::aboutToShow, this, &MainWin::syncActions);
@@ -3232,7 +3253,7 @@ void MainWin::initMachineMenus() {
 	foreach(QMenu* m, QList<QMenu*>() << mac << inp << media << cap << tools) {
 		frame->menuBar()->insertMenu(helpMenu->menuAction(), m);
 		if (fsBar) fsBar->insertMenu(helpMenu->menuAction(), m);
-		connect(m, &QMenu::aboutToHide, this, &MainWin::menuHide);
+		menuWatch(m);
 		connect(m, &QMenu::aboutToShow, this, &MainWin::syncActions);
 	}
 	// the switches only these menus have

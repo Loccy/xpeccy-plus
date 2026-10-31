@@ -355,6 +355,8 @@ void MainWin::socketRead() {
 		// anything - the answer comes first, a dialog it opens after it
 		QStringList names = QString(arr).trimmed().mid(com.size()).trimmed().split('/', X_SkipEmptyParts);
 		const bool pick = (com == "menu-action");
+		menuPick = pick;		// its aboutToShow opens no menu, none will close: no menu pause
+		struct Unpick {bool& on; ~Unpick() {on = false;}} unpick{menuPick};
 		auto plain = [](QString t) {return t.remove('&').section('\t', 0, 0).trimmed();};
 		QMenu* menu = NULL;
 		QPoint at;
