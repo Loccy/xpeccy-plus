@@ -393,11 +393,19 @@ int zx_rom_code(Computer* comp, int pc) {
 // is followed: the bits are tested where it goes (Havoc's key scan calls its
 // BIT 0,A .. BIT 4,A). An AND r right after the IN is the same test with its
 // mask in a register, read as it stands (Joe Blade 2's AND L, Kat Trap's AND D:
-// a key bit each). pc is the address after the IN.
+// a key bit each), and so is a CPL then AND r: CPL leaves every bit where it is
+// (The Last Mission's LD A,D / IN / CPL / AND E). A byte copied by LD r,A right
+// after the IN is tested in r as in A: BIT n,r (Fred's menu, LD C,A / BIT 3,C).
+// pc is the address after the IN.
 int zx_in_use(Computer* comp, int pc) {
 	unsigned char b[9];
 	int and20 = 0;
 	int op = memRd(comp->mem, pc & 0xffff) & 0xff;
+	int reg = 7;		// the register the byte read is tested in: A, or the one LD r,A copies it to
+	if ((op & 0xc7) == 0x47 && (op != 0x77) && (op != 0x7f))
+		reg = (op >> 3) & 7;
+	if (op == 0x2f)
+		op = memRd(comp->mem, (pc + 1) & 0xffff) & 0xff;
 	if (((op & 0xf8) == 0xa0) && (op != 0xa6) && (op != 0xa7)) {
 		CPU* cpu = comp->cpu;
 		int regs[6] = {cpu->regB, cpu->regC, cpu->regD, cpu->regE, cpu->regH, cpu->regL};
@@ -417,7 +425,7 @@ int zx_in_use(Computer* comp, int pc) {
 	for (int i = 0; i < 6; i++) {
 		unsigned char x = b[i];
 		unsigned char y = b[i + 1];
-		if (((x == 0xe6) && (y == 0x40)) || ((x == 0xcb) && (y == 0x77))) return ZX_IN_EAR;
+		if (((x == 0xe6) && (y == 0x40)) || ((x == 0xcb) && ((y == 0x77) || (y == (0x70 | reg))))) return ZX_IN_EAR;
 		if ((x == 0x1f) && (((y == 0xe6) && (b[i + 2] == 0x20))
 				|| ((y == 0xa9) && (b[i + 2] == 0xe6) && (b[i + 3] == 0x20))))
 			return ZX_IN_EAR;
@@ -431,7 +439,7 @@ int zx_in_use(Computer* comp, int pc) {
 		// AND #3F / CP #3F per half-row): bit 5 is the ear only after an RRA
 		if ((x == 0xe6) && (y & 0x1f) && !(y & 0x40) && !rotated) return ZX_IN_KEYS;
 		rotated |= (x == 0x1f) || (x == 0x0f) || (x == 0x17) || (x == 0x07) || (x == 0xcb);
-		if ((x == 0xcb) && ((y & 0xc7) == 0x47) && (y < 0x68)) return ZX_IN_KEYS;
+		if ((x == 0xcb) && (((y & 0xc7) == 0x47) || ((y & 0xc7) == (0x40 | reg))) && (y < 0x68)) return ZX_IN_KEYS;
 		if ((x == 0xf6) && (y == 0xe0)) return ZX_IN_KEYS;
 		if (x == 0xa6) return ZX_IN_KEYS;
 		if ((x == 0x1f) && !and20 && ((y == 0x30) || (y == 0x38) || ((y & 0xf7) == 0xd2) || ((y & 0xf7) == 0xd0)))
