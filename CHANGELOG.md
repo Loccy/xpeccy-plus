@@ -11,6 +11,14 @@ before that point is upstream's history and is not repeated here.
 
 ### Added
 
+- **Pause in menus**: the machine waits while a menu of the window is open - the menu
+  bar, the right-click menu, a toolbar list - and goes on when it closes. On by default;
+  the volume slider does not stop it.
+
+- **Resume by input**: after Pause, a key, a click in the picture, a click on the Virtual
+  Keyboard or a pad button lets the machine go on. The key and the pad reach the game.
+  Off by default.
+
 - **Images in archives**: a snapshot, tape or disk opens from a .zip, .gz or .7z; with
   several images in it, a list asks which. The drive and tape menus offer the archive's
   other sides and disks. *(requested by Volutar)*
@@ -60,6 +68,9 @@ before that point is upstream's history and is not repeated here.
   Pick it in View > ZX Palette. *(thanks to Volutar)*
 
 ### Changed
+
+- **Pause settings on the Emulation page**: Pause when inactive moved there from
+  Application, beside Pause in menus and Resume by input.
 
 - **Options moved to the Tools menu**, from the bottom of File. The right-click menu keeps it
   at its foot; on macOS it is Settings in the application menu.
