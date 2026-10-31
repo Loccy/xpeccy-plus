@@ -912,6 +912,22 @@ struct xConfig {
 		unsigned trash:1;	// a file the guest deletes goes to the trash, not for good
 		unsigned asked:1;	// the user has answered the first write's question
 	} fold;
+	// quick saves and autosaves (xcore/saves.cpp), [SAVES]
+	struct {
+		unsigned perGame:1;	// a folder per game, else one per machine
+		unsigned carry:1;	// the tape and the Beta disks go into the save, not only their names
+		unsigned exitOn:1;	// an autosave on exit
+		unsigned timedOn:1;	// and every timedMin minutes of running
+		unsigned cleanOn:1;	// saves older than cleanDays go at start
+		unsigned keepOne:1;	// ...but a game's newest stays
+		int quickKeep;		// how many of each kind a folder keeps
+		int exitKeep;
+		int timedKeep;
+		int timedMin;
+		int cleanDays;
+		QString dir;		// empty: <config>/saves
+		QString last;		// the last session's autosave
+	} saves;
 	// the ZX Spectrum Next's own card (xcore/sysnext.cpp, xgui/nextcard.cpp), next.card in [MEDIA]
 	struct {
 		std::string card;	// a folder or an image; empty: none made or picked yet

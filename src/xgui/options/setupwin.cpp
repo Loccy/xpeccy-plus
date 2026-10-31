@@ -696,6 +696,7 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	buildRecording();
 	buildFolders();
 	buildPause();
+	buildSaves();
 	ui.vidViewGBox->setIcon(":/images/grp-picture.png");
 	ui.antiflickerGBox->setIcon(":/images/grp-antiflicker.png");
 	ui.groupBox->setIcon(":/images/grp-screenshot.png");
@@ -1018,6 +1019,7 @@ void SetupWin::start() {
 	setRFIndex(ui.cbFastPic, conf.emu.fastPic, FPIC_RASTER);
 	setRFIndex(cbFolderWrite, (int)conf.fold.rw);
 	setRFIndex(cbFolderTrash, (int)conf.fold.trash);
+	fillSaves();
 	ui.cbRewind->setChecked(conf.emu.rewind.on);
 	for (QWidget* w : {(QWidget*)ui.sbRewStep, (QWidget*)ui.labRewStep, (QWidget*)ui.sbRewSecs, (QWidget*)ui.labRewSecs})
 		w->setEnabled(conf.emu.rewind.on);
@@ -1052,6 +1054,14 @@ void SetupWin::start() {
 			g->setColumnMinimumWidth(col, wid);
 	}
 	ui.cbStyleSheet->setFixedWidth(ui.gridLayout_look->columnMinimumWidth(1));	// as wide as the names under it
+	// Saves: its controls alike, its names where Emulation's are
+	int savw = qMax(comboFitWidth(cbSaveMedia), sbQuickKeep->sizeHint().width());
+	cbSaveMedia->setFixedWidth(savw);
+	sbQuickKeep->setFixedWidth(savw);
+	for (QGridLayout* g : gridSaves) {
+		g->setColumnMinimumWidth(0, savw);
+		g->setColumnMinimumWidth(1, ui.gridLayout_lat->columnMinimumWidth(1));
+	}
 // video
 	ui.cbFullscreen->setChecked(conf.vid.fullScreen);
 	fullscreenTip(ui.cbFullscreen);
@@ -1259,6 +1269,7 @@ void SetupWin::apply() {
 	// a folder's mode is taken when it is mounted, which the machine's part does again below
 	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
+	applySaves();
 	int ms = qMin(cbStart->currentIndex(), (int)MS_THIS);
 	if ((conf.macStart != MS_UNSET) || (ms != MS_LAST)) conf.macStart = ms;
 	if (ms == MS_THIS) conf.macStartId = getRFSData(cbStart).toLocal8Bit().data();
@@ -3067,6 +3078,92 @@ void SetupWin::buildPause() {
 	cbPauseResume = row(tr("Resume by input"), tr("A key, a click or a pad ends your pause"),
 		tr("Pause ends on a key, a click in the picture,\nthe on-screen keyboard or a pad"));
 	ui.verticalLayout_16->insertWidget(ui.verticalLayout_16->indexOf(ui.gbRewind) + 1, box);
+}
+
+// The Saves page, after Emulation: where quick saves and autosaves go and how
+// many of them stay. Its groups are laid out as Emulation's: a control, its
+// name, and a line saying what it does.
+static QLabel* savesHint(const QString& text) {
+	QLabel* lab = new QLabel(text);
+	QFont font = lab->font();
+	font.setItalic(true);
+	lab->setFont(font);
+	return lab;
+}
+
+static QGridLayout* savesGroup(QVBoxLayout* page, const QString& title) {
+	QGroupBox* box = new QGroupBox(title);
+	QGridLayout* grid = new QGridLayout(box);
+	grid->setHorizontalSpacing(12);
+	grid->setVerticalSpacing(8);
+	grid->setColumnStretch(2, 1);
+	page->addWidget(box);
+	return grid;
+}
+
+// a row: the control, its name and what it does; the tip on all three
+static void savesRow(QGridLayout* grid, QWidget* ctl, const QString& name, const QString& hint, const QString& tip) {
+	int row = grid->rowCount();
+	QLabel* lab = new QLabel(name);
+	lab->setBuddy(ctl);
+	ctl->setToolTip(tip);
+	lab->setToolTip(tip);
+	grid->addWidget(ctl, row, 0);
+	grid->addWidget(lab, row, 1);
+	if (!hint.isEmpty()) grid->addWidget(savesHint(hint), row, 2);
+}
+
+void SetupWin::buildSaves() {
+	QWidget* page = new QWidget;
+	QVBoxLayout* lay = new QVBoxLayout(page);
+
+	QGridLayout* grid = gridSaves[0] = savesGroup(lay, tr("Quick saves"));
+	cbSavePerGame = new QCheckBox;
+	savesRow(grid, cbSavePerGame, tr("Saves per game"), tr("Each game keeps its own saves"),
+		tr("On: a folder for each game opened\nOff: one for each machine"));
+	sbQuickKeep = new QSpinBox;
+	sbQuickKeep->setRange(1, 99);
+	savesRow(grid, sbQuickKeep, tr("Quick saves kept"), tr("The oldest goes when a new one is past it"),
+		tr("Quick saves each folder keeps"));
+	cbSaveMedia = new QComboBox;
+	cbSaveMedia->addItem(tr("Tape and disks"), 1);
+	cbSaveMedia->addItem(tr("Names only"), 0);
+	savesRow(grid, cbSaveMedia, tr("Media in saves"), tr("A save brings its tape and TR-DOS disks back"),
+		tr("Tape and disks: carried in the save, as they were\nNames only: smaller, the files must stay put"));
+
+	grid = gridSaves[1] = savesGroup(lay, tr("Folder"));
+	leSaveDir = new QLineEdit;
+	leSaveDir->setPlaceholderText(QDir::toNativeSeparators(
+		QDir(QString::fromLocal8Bit(conf.path.confDir.c_str())).filePath("saves")));
+	QToolButton* pick = new QToolButton;
+	pick->setIcon(QIcon(":/images/fileopen.png"));
+	connect(pick, &QToolButton::clicked, this, [this]() {
+		QString dir = QFileDialog::getExistingDirectory(this, tr("Saves folder"),
+			leSaveDir->text().isEmpty() ? leSaveDir->placeholderText() : leSaveDir->text());
+		if (!dir.isEmpty()) leSaveDir->setText(QDir::toNativeSeparators(dir));
+	});
+	savesRow(grid, pick, tr("Saves folder"), QString(), tr("Where the saves go. Empty: the settings folder"));
+	grid->addWidget(leSaveDir, grid->rowCount() - 1, 2);
+
+	lay->addStretch(1);
+	int at = ui.pages->indexOf(ui.tabEmulation) + 1;
+	ui.pages->insertWidget(at, page);
+	QListWidgetItem* item = new QListWidgetItem(QIcon(":/images/floppy.png"), tr("Saves"));
+	ui.pageList->insertItem(at, item);
+}
+
+void SetupWin::fillSaves() {
+	cbSavePerGame->setChecked(conf.saves.perGame);
+	sbQuickKeep->setValue(conf.saves.quickKeep);
+	setRFIndex(cbSaveMedia, conf.saves.carry ? 1 : 0);
+	leSaveDir->setText(QDir::toNativeSeparators(conf.saves.dir));
+}
+
+void SetupWin::applySaves() {
+	conf.saves.perGame = cbSavePerGame->isChecked() ? 1 : 0;
+	conf.saves.quickKeep = sbQuickKeep->value();
+	conf.saves.carry = getRFIData(cbSaveMedia) ? 1 : 0;
+	conf.saves.dir = QDir::fromNativeSeparators(leSaveDir->text().trimmed());
 }
 
 void SetupWin::buildRecording() {

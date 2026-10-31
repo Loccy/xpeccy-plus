@@ -84,7 +84,8 @@ typedef struct {
 	int run;
 	bool pinned;	// on the running machine, whatever the file wants
 } xMediaOpen;
-// a file the user opened: kept for Reload, and its labels come with it
+// a file the user opened: kept for Reload, and its labels come with it; one
+// into drive A, a tape or a snapshot is the game the quick saves are of
 void media_opened(const QString& path, int id, int drv, int run, bool pinned);
 xMediaOpen media_last_open();
 // a snapshot loaded since the last call, empty when none
@@ -114,11 +115,22 @@ void media_autorun_forget();
 int save_file(Computer* comp, const char* name, int id, int drv, int live = 0, const QString& suggest = QString());
 // write back to path, or ask where when its format cannot be written
 int save_back(Computer*, const char* path, int id, int drv);
-// One slot per machine: kept in memory, and as an .szx too, so it outlives the
-// session. Save: 0 failed, 1 memory only, 2 memory and file. Load: 0 nothing to
-// load, 1 done.
-int quick_save(Computer*);
-int quick_load(Computer*);
+// Quick saves, where xcore/saves.h says. Save: the machine into path, an .szx
+// carrying its media unless the settings say links only; a machine that cannot
+// be an .szx is held in memory until exit. 0 failed, 1 memory only, 2 the file.
+int quick_save(Computer*, const QString& path);
+// A quick load: the machine as it is kept for quick_undo first, then - the
+// caller having switched to the machine the save names - the save put back.
+// load: 1 done
+void quick_keep_undo(Computer*);
+int quick_load(Computer*, const QString& path);
+// the one held in memory, 0 when there is none of this machine
+int quick_load_held(Computer*);
+// Back to before the last quick load; again, and that load is back. The same
+// two steps: prepare keeps the machine as it is, then the caller switches to
+// quick_undo_machine(). 0 when there is nothing to go back to.
+std::string quick_undo_machine();
+void quick_undo_prepare(Computer*);
 int quick_undo(Computer*);
 
 // a changed disk or tape asked about: ERR_OK when it is safe to lose

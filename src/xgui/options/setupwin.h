@@ -72,6 +72,9 @@ class SetupWin : public QDialog {
 		void buildRecording();
 		void buildFolders();
 		void buildPause();
+		void buildSaves();
+		void fillSaves();
+		void applySaves();
 		void fillRecording();
 		void applyRecording();
 		void showFfmpeg();
@@ -117,6 +120,12 @@ class SetupWin : public QDialog {
 		QCheckBox* cbPauseInactive;	// the Pause group
 		QCheckBox* cbPauseMenu;
 		QCheckBox* cbPauseResume;
+		// the Saves page
+		QCheckBox* cbSavePerGame;
+		QSpinBox* sbQuickKeep;
+		QComboBox* cbSaveMedia;
+		QLineEdit* leSaveDir;
+		QGridLayout* gridSaves[2];	// lined up with Emulation's
 
 		// the devices' own controls, see makeDevWidgets()
 		QCheckBox *cbTapeAuto, *cbTapeRewind, *cbTapeFast, *cbTapeFlash, *cbTapeEdge, *bdtbox, *cbAddBoot, *a80box, *b80box, *c80box, *d80box, *adsbox, *bdsbox, *cdsbox, *ddsbox, *gsrbox, *ratWheel, *cbSwapButtons;

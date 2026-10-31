@@ -1,0 +1,124 @@
+// Quick saves from the window: the keys, the picture beside each save and the
+// File menu's list of them. Where they go is xcore/saves.cpp; the files
+// themselves are filer.cpp's.
+
+#include "emulwin.h"
+#include "filer.h"
+#include "xcore/xcore.h"
+#include "xcore/saves.h"
+#include "libxpeccy/filetypes/filetypes.h"
+
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
+#include <QIcon>
+#include <QImage>
+#include <QMenu>
+#include <QUrl>
+
+// the picture of a save: what the window shows, no wider than this
+#define SAVE_PIC_W	192
+#define SAVE_PIC_H	144
+
+static QImage save_picture() {
+	Computer* comp = conf.zx;
+	Video* vid = comp->vid;
+	QImage img(frame_shown_lock(), vid->full.x * 2, bufSize / bytesPerLine, bytesPerLine, QImage::Format_RGBA8888);
+	img = img.copy(vid->lcut.x * 2, vid->lcut.y, vid->vsze.x * 2, vid->vsze.y);
+	frame_shown_unlock();
+	if (img.isNull()) return img;
+	QSize nat(qMax(1, (int)(vid->vsze.x * comp->hw->xscale)), qMax(1, vid->vsze.y));
+	return img.scaled(nat.scaled(SAVE_PIC_W, SAVE_PIC_H, Qt::KeepAspectRatio), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+		.convertToFormat(QImage::Format_RGB32);
+}
+
+static int save_keep(int kind) {
+	return (kind == SAVE_EXIT) ? conf.saves.exitKeep : (kind == SAVE_TIMED) ? conf.saves.timedKeep : conf.saves.quickKeep;
+}
+
+// a new save of that kind in the folder of the game: 2 written, 1 held in
+// memory (a machine with no .szx), 0 failed
+int MainWin::saveState(int kind) {
+	QImage pic = save_picture();		// the frame the key was pressed on
+	if (!szxCanSave(conf.zx)) return quick_save(conf.zx, QString());	// held in memory: no folder
+	QString dir = saves_dir(true);
+	QString path = dir.isEmpty() ? QString() : saves_new_path(dir, kind);
+	int res = quick_save(conf.zx, path);
+	if (res == 2) {
+		if (!pic.isNull()) pic.save(QFileInfo(path).path() + "/" + QFileInfo(path).completeBaseName() + ".png", "PNG");
+		saves_trim(dir, kind, save_keep(kind));
+	}
+	return res;
+}
+
+// a save put back, on the machine it was taken on
+bool MainWin::loadState(const QString& path) {
+	char id[256] = "";
+	szx_machine_of(path.toLocal8Bit().constData(), id, sizeof(id));
+	quick_keep_undo(conf.zx);
+	if (*id && (conf.macId != id) && xm_find(id)) setMachine(id);
+	return quick_load(conf.zx, path) != 0;
+}
+
+void MainWin::quickSave() {
+	int x = saveState(SAVE_QUICK);
+	setMessage((x == 2) ? " quick save " : (x == 1) ? " quick save, until exit " : " can't quick save ");
+}
+
+// the newest quick save of the game, else the one held in memory
+void MainWin::quickLoad() {
+	QList<xSave> list = saves_list(saves_dir(false), SAVE_QUICK);
+	bool done = false;
+	if (!list.isEmpty()) {
+		done = loadState(list.first().path);
+	} else {
+		quick_keep_undo(conf.zx);
+		done = quick_load_held(conf.zx) != 0;
+	}
+	setMessage(done ? " quick load " : " nothing quick saved ");
+}
+
+void MainWin::quickUndo() {
+	std::string mac = quick_undo_machine();
+	bool done = false;
+	if (!mac.empty()) {
+		quick_undo_prepare(conf.zx);
+		if ((mac != conf.macId) && xm_find(mac)) setMachine(mac);
+		done = quick_undo(conf.zx) != 0;
+	}
+	setMessage(done ? " quick load undone " : " nothing to undo ");
+}
+
+// File > Quick Saves: the game's saves, newest first, the picture shown as the
+// tip; empty when there is none
+void MainWin::fillQuickSaves() {
+	quickMenu->clear();
+	QString dir = saves_dir(false);
+	QList<xSave> list = saves_list(dir);
+	QString title = game_name();
+	if (title.isEmpty())
+		title = QString::fromLocal8Bit(xm_find(conf.macId) ? xm_find(conf.macId)->name.c_str() : conf.macId.c_str());
+	quickMenu->addAction(title.replace("&", "&&"))->setEnabled(false);
+	if (list.isEmpty())
+		quickMenu->addAction("No saves yet")->setEnabled(false);
+	for (const xSave& sv : list) {
+		QString text = saves_time_text(sv.time);
+		if (sv.kind != SAVE_QUICK) text += "  " + saves_kind_name(sv.kind);
+		QAction* act = quickMenu->addAction(text);
+		QString path = sv.path;
+		connect(act, &QAction::triggered, this, [this, path]() {
+			setMessage(loadState(path) ? " quick load " : " can't load the save ");
+			setFocus();
+		});
+		if (!sv.pic.isEmpty()) {
+			act->setIcon(QIcon(sv.pic));
+			act->setToolTip(QString("<img src=\"%0\">").arg(QUrl::fromLocalFile(sv.pic).toString()));
+		}
+	}
+	quickMenu->addSeparator();
+	QAction* show = quickMenu->addAction("Show Saves Folder");
+	show->setEnabled(!dir.isEmpty());
+	connect(show, &QAction::triggered, this, [dir]() {
+		QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+	});
+}
