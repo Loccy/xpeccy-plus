@@ -471,10 +471,11 @@ int tapPlay(Tape* tap) {
 }
 
 // "Rewind at end": a tape read to its end goes back the next time it is asked
-// for - under the Play button and at the rom's load trap. Not at the end
-// itself, where autoplay would start it over for ever, and not for a loader the
-// detector hears: what it wants may be on the other side (Echelon's "rewind to
-// start of side 2" waits with its loader running).
+// for - under the Play button, at the rom's load trap, and when auto play hears
+// a loader of its own, as often as that comes: a multi-load game reloads its
+// level after every game over (Narc). Not at the end itself. A game that wants
+// another side gets this one over again (Echelon's "rewind to start of side 2");
+// with the option off the tape stays at its end for the side to be changed.
 static int tap_at_end(Tape* tap) {
 	return tap->autorew && !tap->on && (tap->blkCount > 0) && (tap->block >= tap->blkCount);
 }
@@ -537,9 +538,8 @@ int tap_wind_on_for(Tape* tap, int flag, int len) {
 }
 
 // Play, as a person pressing the button: a tape sitting at its end starts over,
-// else play would do nothing until it is rewound by hand. Only for that - the
-// loader detector below must not come through here, or a stray pattern during
-// a game would replay a tape nobody asked for.
+// else play would do nothing until it is rewound by hand. The button clears a
+// Stop pressed by hand; the automatics do not, so they do not come through here.
 int tapUserPlay(Tape* tap) {
 	tap->userStop = 0;
 	tap_rewind_at_end(tap);
@@ -646,8 +646,11 @@ void tapDetectLoader(Tape* tap, int tick, int pc, const unsigned char* regs, int
 		tapPlay(tap);
 	} else if ((tap->detectOn || tap->armed) && (kind != TAPE_RD_EDGE) && (kind != TAPE_RD_KEYS) && (tickDiff <= 500)
 			&& ((kind == TAPE_RD_EAR) || (turn && fromRam))) {
-		if (++tap->detectReads >= 10)
+		if (++tap->detectReads >= 10) {
+			if (tap->detectOn)
+				tap_rewind_at_end(tap);
 			tapPlay(tap);
+		}
 	} else {
 		tap->detectReads = 0;
 	}
@@ -888,9 +891,8 @@ void tapNextBlock(Tape* tap) {
 		tap->blkData[tap->block].vol = 0;
 		tap->volPlay = 0x7f;
 	} else {
-		// past the last block: stay there. Winding back here let autoplay start
-		// the tape over for ever - "Rewind at end" is acted on under the Play
-		// button and where a load is asked for (tap_catch_load), not at the end.
+		// past the last block: stay there. "Rewind at end" is acted on when a
+		// load asks for the tape again (tap_rewind_at_end), not at the end.
 		tapStop(tap);
 	}
 	tap->xirq(IRQ_TAP_BLK, tap->xptr);
