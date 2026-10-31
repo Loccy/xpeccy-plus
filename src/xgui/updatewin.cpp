@@ -260,6 +260,17 @@ void xUpdateRun::got(const QString& file) {
 		ok = false;
 		err = tr("the archive has no program in it");
 	}
+	// a Qt 5 build is the one for Windows 7 and 8.1, where Qt 6 does not start: an update
+	// never moves an install from one Qt to the other, whatever the file was called
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+	static const int qtOwn = 6, qtOther = 5;
+#else
+	static const int qtOwn = 5, qtOther = 6;
+#endif
+	if (ok && QFileInfo::exists(QString("%0/Qt%1Core.dll").arg(root).arg(qtOther))) {
+		ok = false;
+		err = tr("the archive is a Qt %0 build and this one is Qt %1 - download the file for your system from the release page").arg(qtOther).arg(qtOwn);
+	}
 	if (!ok) {
 		QDir(stage).removeRecursively();
 		if (running) fail(err);
@@ -270,7 +281,7 @@ void xUpdateRun::got(const QString& file) {
 	if (zip.isEmpty()) {
 		updPend.version = upd_rel_name(rel);
 	} else {
-		// xpeccy-plus-<version>-win-x64[-qt6]
+		// xpeccy-plus-<version>-win-x64[-legacy]
 		static const QRegularExpression rx("^" XPKGNAME "-(.+)-win-");
 		QRegularExpressionMatch m = rx.match(QFileInfo(root).fileName());
 		updPend.version = m.hasMatch() ? m.captured(1) : QString("new");
@@ -331,11 +342,17 @@ xUpdateWin::xUpdateWin(QWidget* p, const upRelease& r, const QString& news):QDia
 	QLabel* head = new QLabel;
 	head->setTextFormat(Qt::RichText);
 	head->setText(rel.nightly
-		? tr("<b>A new nightly build is available</b> (%0)").arg(upd_date(rel.build.date))
+		? tr("<b>A new development build is available</b> (%0)").arg(upd_date(rel.build.date))
 		: tr("<b>Xpeccy+ %0 is available</b>").arg(rel.build.base));
 	lay->addWidget(head);
 	QLabel* mine = new QLabel(tr("You have %0.").arg(upd_name()));
 	lay->addWidget(mine);
+	// a package renamed or no longer made: the page is all there is, and why is said
+	if (rel.asset.url.isEmpty() && !QString(XPACKAGE).isEmpty()) {
+		QLabel* none = new QLabel(tr("It has no %0 file like yours: download the one for your system from the release page.").arg(XPACKAGE));
+		none->setWordWrap(true);
+		lay->addWidget(none);
+	}
 
 	// what changed since this build: the changelog's new entries, else the release's notes
 	QString text = news;
@@ -375,7 +392,7 @@ xUpdateWin::xUpdateWin(QWidget* p, const upRelease& r, const QString& news):QDia
 	cbCheck->addItems(QStringList() << tr("Every day") << tr("Every week") << tr("Never"));
 	cbCheck->setCurrentIndex(upd_period());
 	QComboBox* cbChannel = new QComboBox;
-	cbChannel->addItems(QStringList() << tr("Releases") << tr("Nightly"));
+	cbChannel->addItems(QStringList() << tr("Releases") << tr("Development"));
 	cbChannel->setCurrentIndex(upd_channel());
 	grid->addWidget(new QLabel(tr("Check for updates")), 0, 0);
 	grid->addWidget(cbCheck, 0, 1);
@@ -553,9 +570,9 @@ static void upd_start(QWidget* main, bool manual) {
 	updNow->manual = manual;
 	updNow->channel = upd_channel();
 	QString what[2] = {UP_API "latest", UP_API "tags/nightly"};
-	int count = (updNow->channel == UP_NIGHTLY) ? 2 : 1;
+	int count = (updNow->channel == UP_DEV) ? 2 : 1;
 	xlog(XLG_NET, XLL_INFO, "update check: %s, %s channel%s", qPrintable(upd_name()),
-		(updNow->channel == UP_NIGHTLY) ? "nightly" : "releases", manual ? ", asked" : "");
+		(updNow->channel == UP_DEV) ? "development" : "releases", manual ? ", asked" : "");
 	updNow->waiting = count;
 	for (int i = 0; i < count; i++) {
 		updNow->dl[i].reset(new xDownload);

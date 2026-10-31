@@ -15,7 +15,7 @@
 #define UP_RAW		"https://raw.githubusercontent.com/" UP_REPO "/"
 #define UP_COMPARE	"https://api.github.com/repos/" UP_REPO "/compare/"
 
-enum {UP_RELEASES = 0, UP_NIGHTLY};
+enum {UP_RELEASES = 0, UP_DEV};	// UP_DEV: the nightly tag's builds too
 
 // a build: this one, or one on GitHub
 struct upBuild {

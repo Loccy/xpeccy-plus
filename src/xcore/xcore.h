@@ -886,7 +886,7 @@ struct xConfig {
 	unsigned short port;		// port to listen
 	struct {
 		int check;		// UPC_*: how often to ask GitHub for a newer build
-		int channel;		// UP_RELEASES, UP_NIGHTLY (xcore/update.h); -1: the build's default
+		int channel;		// UP_RELEASES, UP_DEV (xcore/update.h); -1: the build's default
 		qint64 last;		// unix time of the last check; 0: none yet, the clock starts now
 		unsigned off:1;		// --no-update-check: none this run
 	} upd;
