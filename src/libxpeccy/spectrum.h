@@ -644,6 +644,7 @@ typedef struct Computer {
 	unsigned char brkIOMap[MEM_64K];	// io brk
 	xHeatBank heatRam;			// ram read/write/exec hit counters, sized to mem->ramMask+1
 	xHeatBank heatRom;			// rom read/write/exec hit counters, sized to mem->romMask+1
+	xHeatBank heatDiv;			// divMMC's EEPROM and SRAM (not on the Next: its SRAM image has them)
 	// the ZX Spectrum Next's ~120K, apart from the struct: a snapshot takes them only on the Next
 	xNextState* next;			// the ZX Spectrum Next
 	DS1307* rtc;				// the Next's clock, on its I2C bus: on its own battery, not reset with it

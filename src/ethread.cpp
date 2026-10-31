@@ -1440,6 +1440,15 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 					if (bk->size) hHeat = bench_mix(hHeat, (unsigned char*)c, bk->size * sizeof(unsigned int));
 			}
 			fprintf(stdout, "heat: %016llx\n", hHeat);
+			// divMMC's own memory apart, so RAM and ROM compare with builds that had no such bank
+			xHeatBank* div = &comp->heatDiv;
+			if (div->size) {
+				unsigned long long hDiv = 0xcbf29ce484222325ULL;
+				unsigned int* cnt[] = {div->rd, div->wr, div->ex};
+				for (unsigned int* c : cnt)
+					hDiv = bench_mix(hDiv, (unsigned char*)c, div->size * sizeof(unsigned int));
+				fprintf(stdout, "heat-div: %016llx\n", hDiv);
+			}
 		}
 	}
 	// the last finished frame, whole raster, as a binary ppm
