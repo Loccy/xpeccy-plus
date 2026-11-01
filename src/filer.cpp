@@ -1051,7 +1051,9 @@ static void szx_mount(Computer* comp, const QString& snap) {
 	for (int i = 0; i < 4; i++)
 		if (gone & (1 << i)) comp->dif->flp[i]->changed = 1;
 	szx_card_mount(comp, load);
-	if (szxCardChanged && szx_exact)	// a quick load: a word on the screen, no box to stop the game
+	// a quick load: a word on the screen, no box to stop the game; at the start (the command
+	// line, Resume) szx_warn shows no box either
+	if (szxCardChanged && (szx_exact || !conf.running))
 		comp->msg = (char*)" the SD card has changed since this save ";
 }
 
