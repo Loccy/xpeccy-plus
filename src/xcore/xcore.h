@@ -178,6 +178,7 @@ QString gethexword(int);
 extern std::atomic<int> xUserResets;
 void x_user_reset(Computer*, int);
 void x_state_replaced();		// under emu_lock
+void x_media_replaced();		// under emu_lock
 int unreal_num(QString, bool*);		// #/$/0x hex, 0 octal, else decimal
 int str_num(QString, bool*);		// #/$/0x hex, else decimal (no octal)
 QString getPortString(int, int);

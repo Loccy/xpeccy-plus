@@ -406,6 +406,28 @@ void tapEject(Tape* tap) {
 	tap->blkData = NULL;
 }
 
+// A tape read elsewhere goes into the deck: the deck left as tapEject leaves it, the
+// image's blocks and name put in, and what the deck held handed back in img, to be
+// freed away from the emulation
+void tap_take_image(Tape* deck, Tape* img) {
+	TapeBlock* blk = deck->blkData;
+	int cnt = deck->blkCount;
+	char* path = deck->path;
+	deck->blkData = NULL;
+	deck->blkCount = 0;
+	deck->path = NULL;
+	tapEject(deck);
+	deck->blkData = img->blkData;
+	deck->blkCount = img->blkCount;
+	deck->path = img->path;
+	deck->isData = img->isData;
+	deck->changed = img->changed;
+	memcpy(deck->blkText, img->blkText, sizeof(deck->blkText));
+	img->blkData = blk;
+	img->blkCount = cnt;
+	img->path = path;
+}
+
 void tapStop(Tape* tap) {
 	tape_settle(tap);
 	if (tap->on) {

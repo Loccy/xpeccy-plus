@@ -63,6 +63,7 @@ void initFileDialog(QWidget*);
 void fitFileDialog(QWidget*);
 void file_errors(int);
 bool file_is_pok(const QString&);	// cheats: the Cheats window opens them, load_file does not
+bool file_is_medium(Computer*, const QString& path, int id);	// a tape or a disk, not a machine state
 // the save dialog alone, for a file type the tables do not carry
 // suggest: a path to start from, folder and name; empty for the last folder
 QString file_ask_save(const char* title, const char* filter, const char* ext, const QString& suggest = QString(), const QString& own = QString());
@@ -70,6 +71,37 @@ QString file_ask_save(const char* title, const char* filter, const char* ext, co
 QString file_ask_open(Computer*, int* id, int* drv);
 QString file_ask_load(const char* title, const char* filter);
 int load_file(Computer* comp, const char* name, int id, int drv);
+// A tape or a disk put into the running machine, read on a thread of its own into a Tape
+// or a Floppy nobody else sees: begin (gui thread; asks to save the one it replaces), read
+// (any thread), end (gui thread: in under the emulation lock, if the deck or the drive
+// still holds what it did at begin), free. load_file's way for anything else.
+struct xMount {
+	Computer* comp = nullptr;
+	QString path;		// canonical; an archive's entry as an archive path
+	int ftype = 0;		// FL_*
+	bool disk = false;
+	int drv = 0;
+	QByteArray boot;	// the boot file a TR-DOS disk gets, when one does
+	QByteArray stamp;	// what the deck or the drive held at begin
+	bool game = false;	// it becomes the game: its hash is worked out on the way (saves.h)
+	Tape* tape = nullptr;
+	Floppy* flp = nullptr;
+	int err = 0;
+	QString why;		// the archive's word when the bytes could not be had
+};
+bool media_mount_can(Computer*, const QString& path, int id, int drv);
+bool media_mount_asks(Computer*, const QString& path, int id, int drv);	// begin will ask about a change
+// ask false: a changed medium in the way is not asked about, begin refuses instead
+int media_mount_begin(Computer*, const QString& path, int id, int drv, xMount*, bool ask = true);
+void media_mount_read(xMount*);
+int media_mount_end(xMount*);		// ERR_CANCEL: something else went in meanwhile
+// end's parts, for a caller that holds the emulation lock itself: fits (read well, and
+// nothing else went in), put (fits, then in; under the lock), note (after a put)
+bool media_mount_fits(xMount*);
+bool media_mount_put(xMount*);
+void media_mount_note(xMount*);
+void media_mount_fail(xMount*);		// says why read failed
+void media_mount_free(xMount*);
 // An archive's images the request can take (id and drv as load_file has them), in
 // natural order; empty, err set, when none
 QStringList media_candidates(Computer*, const QString& archive, int id, int drv, QString* err);
@@ -100,7 +132,7 @@ typedef struct {
 } xMediaOpen;
 // a file the user opened: kept for Reload, and its labels come with it; one
 // into drive A, a tape or a snapshot is the game the quick saves are of
-void media_opened(const QString& path, int id, int drv, int run, bool pinned);
+void media_opened(const QString& path, int id, int drv, int run, bool pinned, bool newGame = true);
 xMediaOpen media_last_open();
 // a snapshot loaded since the last call, empty when none
 QString file_take_snapshot();
@@ -113,6 +145,7 @@ void media_set_current(const QString& path);
 // the machine that file should be opened on, before it is (xcore/filemachine.h):
 // *mac comes back empty to keep the running one, false means do not open it
 bool media_machine(Computer*, const QString& path, int id, int drv, int run, std::string* mac);
+bool media_machine_known(Computer*, const QString& path, int id, int drv, int run);	// ...without asking
 // a tape, or a disk going into drive A: there is a choice between running it and mounting it
 bool media_runnable(Computer*, const QString& path, int id, int drv);
 bool media_to_drive(Computer*, const QString& path, int id);	// a disk image, or a file put on one

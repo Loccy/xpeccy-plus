@@ -9,6 +9,7 @@ static int interleave = 8;		// 1,9,2,10...: the order TR-DOS formats in
 Floppy* flpCreate(int id, cbflpirq cb, void* p) {
 	Floppy* flp = (Floppy*)malloc(sizeof(Floppy));
 	memset(flp,0x00,sizeof(Floppy));
+	flp->data = (flpTrack*)calloc(256, sizeof(flpTrack));
 	flp->id = id;
 	flp->fitted = 1;
 	flp->trk80 = 1;
@@ -27,6 +28,7 @@ Floppy* flpCreate(int id, cbflpirq cb, void* p) {
 
 void flpDestroy(Floppy* flp) {
 	free(flp->path);
+	free(flp->data);
 	free(flp);
 }
 
@@ -343,6 +345,25 @@ void flp_insert(Floppy* flp, const char* path) {
 	flp->changed = 0;
 	if (!path) flpClearDisk(flp);
 	flp_set_path(flp, path);
+}
+
+// A disk read into a Floppy of its own goes into the drive, as flp_insert puts one
+// in: its tracks and name by pointer, the drive's head, motor and sides as they
+// are. What the drive held goes back in disk, to be freed away from the emulation.
+void flp_take_disk(Floppy* flp, Floppy* disk) {
+	flpTrack* data = flp->data;
+	char* path = flp->path;
+	flp->data = disk->data;
+	flp->path = disk->path;
+	disk->data = data;
+	disk->path = path;
+	flp->trklen = disk->trklen;
+	flp->protect = disk->protect;
+	flp->xirq(IRQ_FDD_RDY, flp->xptr);	// rdy 1->0
+	flp->insert = 1;
+	flp->door = 0;
+	flp->dwait = 5e8;	// door will be closing after .5 sec
+	flp->changed = disk->changed;
 }
 
 // A drive that is not there has no sensor either: a restore steps out until

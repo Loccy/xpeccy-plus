@@ -12,15 +12,14 @@ int stdAccumulate(unsigned char* ptr, int size, int res) {
 	return res;
 }
 
-int loadHobeta(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+int hobeta_read(Floppy* flp, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 	int err = ERR_OK;
 	unsigned char buf[0x10000];
 	TRFile nfle;
 
-	xlog(XLG_FILE, XLL_DEBUG, "drv %i : %i", drv, flp->insert);
+	xlog(XLG_FILE, XLL_DEBUG, "drv %i : %i", flp->id, flp->insert);
 	if (!flp->insert) {
 		flp_insert(flp, NULL);
 		trd_format(flp);
@@ -46,6 +45,10 @@ int loadHobeta(Computer* comp, const char* name, int drv) {
 	}
 	fclose(file);
 	return err;
+}
+
+int loadHobeta(Computer* comp, const char* name, int drv) {
+	return hobeta_read(comp->dif->flp[drv & 3], name);
 }
 
 int saveHobeta(TRFile dsc,char* data,const char* name) {

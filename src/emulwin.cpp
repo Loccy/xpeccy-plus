@@ -39,6 +39,8 @@
 #endif
 
 #include <fstream>
+#include <memory>
+#include <thread>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -2028,17 +2030,28 @@ void MainWin::dropAsk(QString path) {
 // path asks the file dialog, and pinned keeps the running machine. The machine the file wants is set up first, then
 // it is held while the file is read, and started right there - arming resets
 // it anyway, so there is nothing to gain from letting it run a cycle first.
-void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned) {
+// A tape or a disk put into the running machine goes in without holding it
+// (mountMedia); the machine is held only while a dialog can come up.
+void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned, bool side) {
 	Computer* comp = conf.zx;
-	pause(true, PR_FILE);
+	const QString from = side ? mediaIn(id, drv) : QString();
+	bool held = false;
+	auto hold = [this, &held]() {
+		if (!held) pause(true, PR_FILE);
+		held = true;
+	};
+	if (path.isEmpty()) hold();
 	QString fpath = path.isEmpty() ? file_ask_open(comp, &id, &drv) : path;
 	// an archive: the image in it, picked when it holds several
-	if (arc_bare(fpath) && (id != FG_RAW))
+	if (arc_bare(fpath) && (id != FG_RAW)) {
+		QString err;
+		if (media_candidates(comp, fpath, id, drv, &err).size() != 1) hold();	// a list, or why not
 		fpath = media_from_archive(comp, fpath, id, drv, true);
+	}
 	// cheats only fill their window: nothing is reset, replaced or started
 	if (file_is_pok(fpath)) {
 		if (openCheats(fpath)) recent_add(fpath);
-		pause(false, PR_FILE);
+		if (held) pause(false, PR_FILE);
 		return;
 	}
 	// Shift held as the dialog is left asks, as it does on a drop
@@ -2047,37 +2060,114 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		if (run < 0) fpath.clear();
 	}
 	if (!fpath.isEmpty() && (run == AR_ASK)) {
+		hold();
 		// a snapshot starts anyway, and a disk in drive B cannot: nothing to ask
 		run = media_runnable(comp, fpath, id, drv) ? askRunKeep(fpath) : AR_MOUNT;
 		if (run < 0) fpath.clear();
 	}
 	// a disk for drives the divMMC has out: the board goes, or the disk does not go in
-	if (!fpath.isEmpty() && media_to_drive(comp, fpath, id) && !drivesBack())
-		fpath.clear();
+	if (!fpath.isEmpty() && media_to_drive(comp, fpath, id)) {
+		if (comp->dif->out) hold();
+		if (!drivesBack()) fpath.clear();
+	}
 	std::string mac;
+	// the machine the file wants may be asked
+	if (!fpath.isEmpty() && !pinned && !media_machine_known(comp, fpath, id, drv, run)) hold();
 	if (!fpath.isEmpty() && (pinned || media_machine(comp, fpath, id, drv, run, &mac))) {
 		if (!mac.empty()) setMachine(mac);
+		if ((run == AR_MOUNT) && mac.empty() && media_mount_can(comp, fpath, id, drv)) {
+			if (held) pause(false, PR_FILE);
+			mountMedia(fpath, id, drv, pinned, from);
+			return;
+		}
+		hold();
 		QByteArray loc = fpath.toLocal8Bit();
+		bool medium = file_is_medium(comp, fpath, id);
 		// the pause does not wait for the cycle, and a snapshot resets the machine
 		emu_lock();
-		x_state_replaced();		// a run arms again below
+		if (medium)
+			x_media_replaced();		// a run resets the machine below, and that replaces it
+		else
+			x_state_replaced();
 		int err = load_file(comp, loc.data(), id, drv);
 		emu_unlock();
-		if (err == ERR_OK) {
-			recent_add(fpath);		// the list is saved with the rest on exit
-			if (drv < 1) {			// a disk in drive B is not the game
-				padGame(fpath);
-				cheats_pick(fpath);
-			}
-			media_opened(fpath, id, drv, run, pinned);
-		}
+		if (err == ERR_OK)
+			mediaOpened(fpath, id, drv, run, pinned, from, media_to_drive(comp, fpath, id));
 		media_autorun(comp, run);
 		// its reset starts the game, not ends it
 		if ((err == ERR_OK) && (drv < 1)) game_restamp();
 	}
-	pause(false, PR_FILE);
+	if (held) pause(false, PR_FILE);
 	rzxWatch();
 	emit s_tape_upd(comp->tape);
+}
+
+// Work on a thread of its own, then done on the gui thread - unless the window has gone
+// meanwhile, as the program closes: the application outlives it.
+void MainWin::mediaThread(std::function<void()> work, std::function<void()> done) {
+	QPointer<MainWin> self(this);
+	std::thread([self, work, done]() {
+		work();
+		QMetaObject::invokeMethod(qApp, [self, done]() {if (self) done();}, Qt::QueuedConnection);
+	}).detach();
+}
+
+// what the deck or a drive holds, as its path: a side's place in the game
+QString MainWin::mediaIn(int id, int drv) {
+	Computer* comp = conf.zx;
+	const char* raw = (id == FG_TAPE) ? comp->tape->path : comp->dif->flp[((drv < 0) ? 0 : drv) & 3]->path;
+	return QString::fromLocal8Bit(raw ? raw : "");
+}
+
+// An image is in: Recent has it, and it is the game - its .pad, its pokes, its quick saves
+// - unless a disk went into drive B, or it is another side picked for the game's own tape
+// or disk (from: what went out), which keeps the game, as auto play's next tape does.
+void MainWin::mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk) {
+	recent_add(path);		// the list is saved with the rest on exit
+	bool kept = (drv < 1) && game_side_next(from, path, disk);
+	if ((drv < 1) && !kept) {
+		padGame(path);
+		cheats_pick(path);
+	}
+	media_opened(path, id, drv, run, pinned, !kept);
+}
+
+// A tape or a disk into the running machine, read on a thread of its own: the machine
+// runs on meanwhile, and the image goes in under the lock once it is whole. Held only
+// while the one it replaces is asked about. A mount started later wins: an earlier one
+// that ends after it is dropped.
+void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from) {
+	Computer* comp = conf.zx;
+	std::shared_ptr<xMount> job = std::make_shared<xMount>();
+	bool ask = media_mount_asks(comp, path, id, drv);
+	if (ask) pause(true, PR_FILE);
+	int err = media_mount_begin(comp, path, id, drv, job.get());
+	if (ask) pause(false, PR_FILE);
+	job->game = (drv < 1);		// media_opened makes it the game
+	if (err != ERR_OK) {			// as load_file: a cancel or a path not there says nothing
+		media_mount_free(job.get());
+		return;
+	}
+	quint64 gen = ++mountGen;
+	auto done = [this, job, gen, path, id, drv, pinned, from]() {
+		int err = job->err;
+		if (gen != mountGen) {
+			err = ERR_CANCEL;
+		} else if (err != ERR_OK) {
+			pause(true, PR_FILE);
+			media_mount_fail(job.get());
+			pause(false, PR_FILE);
+		} else {
+			err = media_mount_end(job.get());
+		}
+		media_mount_free(job.get());		// what went out, or what did not go in
+		if (err != ERR_OK) return;
+		mediaOpened(path, id, drv, AR_MOUNT, pinned, from, job->disk);
+		if (drv < 1) game_restamp();
+		emit s_tape_upd(conf.zx->tape);
+		if (diskWin->isVisible()) diskWin->refresh();
+	};
+	mediaThread([job]() {media_mount_read(job.get());}, done);
 }
 
 // The floppy drives are there for a disk: true at once unless the divMMC has them
@@ -3862,27 +3952,67 @@ void MainWin::watchTapeSet(Computer* comp) {
 		tapeSeen.prepend(path);
 		while (tapeSeen.size() > 16) tapeSeen.removeLast();
 	}
-	const QString next = path.isEmpty() ? QString() : media_next_tape(comp, path, tapeSeen);
+	QString place;
+	const QString next = path.isEmpty() ? QString() : media_next_tape(comp, path, tapeSeen, &place);
 	const bool set = !next.isEmpty();
 	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
 	emu_lock();
 	if (QByteArray(tap->path ? tap->path : "") == raw) tap->inSet = set;
 	emu_unlock();
+	spareTape(comp, next, place);
+}
+
+// past this a tape is not read ahead: a WAV of half an hour is hundreds of megabytes parsed
+#define SPARE_TAPE_MAX	(32 << 20)
+
+// The next tape of the set, read ahead on a thread of its own as soon as this one is in,
+// so that auto play's swap only hands it over. Not when the deck's tape is changed (it
+// would have to be saved first), nor a big one. Another tape in the deck drops it.
+void MainWin::spareTape(Computer* comp, const QString& next, const QString& place) {
+	if (tapeSpare && tapeSpareReady)
+		media_mount_free(tapeSpare.get());
+	tapeSpare.reset();			// one still being read is freed when it ends
+	tapeSpareReady = false;
+	quint64 gen = ++spareGen;
+	if (next.isEmpty() || comp->rzx.play) return;
+	QString archive;
+	if (QFileInfo(arc_split(next, &archive, nullptr) ? archive : next).size() > SPARE_TAPE_MAX) return;
+	std::shared_ptr<xMount> job = std::make_shared<xMount>();
+	if (media_mount_begin(comp, next, FG_TAPE, -1, job.get(), false) != ERR_OK) {
+		media_mount_free(job.get());
+		return;
+	}
+	tapeSpare = job;
+	tapeSpareNext = next;
+	tapeSparePlace = place;
+	auto done = [this, job, gen]() {
+		if ((gen == spareGen) && (tapeSpare == job))
+			tapeSpareReady = true;
+		else
+			media_mount_free(job.get());
+	};
+	mediaThread([job]() {media_mount_read(job.get());}, done);
 }
 
 // Auto play asked for the next tape of the set and the machine waits: it goes in at its
-// start, and the loader's next reads play it. Not a user's open: no Recent, and the game
-// stays the one opened. Should it not open, this tape rewinds as a lone one does.
+// start, and the loader's next reads play it - the one read ahead (spareTape) when it is
+// whole and the deck is as it was, else read now. Not a user's open: no Recent, and the
+// game stays the one opened. Should it not open, this tape rewinds as a lone one does.
 void MainWin::tapeNext() {
 	Computer* comp = conf.zx;
 	Tape* tap = comp->tape;
 	const QString now = QString::fromLocal8Bit(tap->path ? tap->path : "");
-	QString place;
-	const QString next = (tap->wantNext && !comp->rzx.play) ? media_next_tape(comp, now, tapeSeen, &place) : QString();
+	std::shared_ptr<xMount> spare = (tapeSpareReady && tap->wantNext && !comp->rzx.play
+		&& media_mount_fits(tapeSpare.get())) ? tapeSpare : nullptr;
+	QString place = spare ? tapeSparePlace : QString();
+	const QString next = spare ? tapeSpareNext
+		: (tap->wantNext && !comp->rzx.play) ? media_next_tape(comp, now, tapeSeen, &place) : QString();
 	bool done = false;
+	bool put = false;
 	emu_lock();
 	if (tap->wantNext) {
-		done = !next.isEmpty() && (load_file(comp, next.toLocal8Bit().data(), FG_TAPE, -1) == ERR_OK);
+		put = spare && media_mount_put(spare.get());
+		done = put || (!next.isEmpty() && (load_file(comp, next.toLocal8Bit().data(), FG_TAPE, -1) == ERR_OK));
 		if (!done) {
 			xlog(XLG_TAPE, XLL_WARN, "the next tape of the set did not go in: this one rewinds");
 			tap->inSet = 0;
@@ -3891,6 +4021,12 @@ void MainWin::tapeNext() {
 	}
 	conf.emu.pause &= ~PR_TAPE;
 	emu_unlock();
+	if (put) media_mount_note(spare.get());
+	if (spare) {
+		media_mount_free(spare.get());		// the tape that went out, or the spare unused
+		tapeSpare.reset();
+		tapeSpareReady = false;
+	}
 	if (!done) return;
 	game_tape_next(now, next);
 	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be

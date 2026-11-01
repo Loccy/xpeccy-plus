@@ -37,6 +37,9 @@ typedef struct {
 // started from the tape or drive A since. A user reset or a machine switch
 // ends it. The bytes as opened are hashed here (an entry's for an archive path).
 void game_set(const QString& image);
+// the hash game_set will want, worked out on another thread: an image read in the
+// background (xMount) does not hash megabytes on the gui thread
+void game_hash_ahead(const QString& image);
 // the tape or drive A started with this image: the game, unless it is already
 void game_follow(const QString& image);
 // the game of a save, as its folder's json has it (or the json beside it):
@@ -62,6 +65,9 @@ bool game_stale();
 void game_restamp();
 // the game's tape gave way to the next one of its set (Rewind at end): still the game
 void game_tape_next(const QString& from, const QString& to);
+// another side of its set took the place of the game's tape or disk (picked from a
+// menu): still the game. False when the image that went out was not the game's
+bool game_side_next(const QString& from, const QString& to, bool disk);
 QString game_image();			// empty: none
 QString game_name();			// what the folder and the menus call it
 

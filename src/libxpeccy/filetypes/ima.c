@@ -2,11 +2,10 @@
 
 // 160trk x 18sec x 512bytes hd fdd image (1,44MB)
 
-int load_ima(Computer* comp, const char* path, int drv) {
+int ima_read(Floppy* flp, const char* path) {
 	int res = ERR_OK;
 	int trk;
 	char buf[512 * 18];
-	Floppy* flp = comp->dif->flp[drv & 3];
 	FILE* file = fopen(path, "rb");
 	if (file) {
 		for (trk = 0; trk < 160; trk++) {
@@ -21,4 +20,8 @@ int load_ima(Computer* comp, const char* path, int drv) {
 		res = ERR_CANT_OPEN;
 	}
 	return res;
+}
+
+int load_ima(Computer* comp, const char* path, int drv) {
+	return ima_read(comp->dif->flp[drv & 3], path);
 }

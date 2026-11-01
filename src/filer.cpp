@@ -781,12 +781,18 @@ static bool media_ask_machine(const QString& path, const std::vector<std::string
 // back empty to keep the running one. Only what is about to run gets a say - a
 // snapshot always, a tape or a disk only when it is started, and a disk only
 // from drive A, the one that boots. false: the user backed out of the question.
-bool media_machine(Computer* comp, const QString& path, int id, int drv, int run, std::string* mac) {
-	mac->clear();
+// a tape or a disk that is not started stays on the running machine: nothing to look at
+bool media_machine_known(Computer* comp, const QString& path, int id, int drv, int run) {
 	xFileTypeInfo* inf = file_type_of(comp, id, path);
 	if (!inf) return true;
 	int kind = as_kind_of(inf->id);		// AS_NONE: a snapshot, or nothing that runs
-	if ((kind != AS_NONE) && (!run || !as_runnable(kind, drv))) return true;
+	return (kind != AS_NONE) && (!run || !as_runnable(kind, drv));
+}
+
+bool media_machine(Computer* comp, const QString& path, int id, int drv, int run, std::string* mac) {
+	mac->clear();
+	if (media_machine_known(comp, path, id, drv, run)) return true;
+	xFileTypeInfo* inf = file_type_of(comp, id, path);
 	QString err;
 	QString local = arc_local(path, &err);		// its bytes say which machine
 	if (local.isEmpty()) return true;			// opening it says why not
@@ -1552,13 +1558,195 @@ bool file_is_pok(const QString& path) {
 	return path.endsWith(".pok", Qt::CaseInsensitive);
 }
 
+// a tape or a disk, or a file into the disk in a drive: what it opens into leaves the
+// machine's state as it is
+bool file_is_medium(Computer* comp, const QString& path, int id) {
+	xFileTypeInfo* inf = file_type_of(comp, id, path);
+	return inf && (inf->ch || (as_kind_of(inf->id) == AS_TAPE) || (inf->id == FL_HOBETA));
+}
+
+// MOUNTING AWAY FROM THE EMULATION (xMount, filer.h)
+
+typedef int (*xTapeReader)(Tape*, const char*);
+typedef int (*xDiskReader)(Floppy*, const char*);
+
+static xTapeReader mount_tape_reader(int ftype) {
+	switch (ftype) {
+		case FL_TAP: return tap_read;
+		case FL_TZX: return tzx_read;
+		case FL_WAV: return wav_read;
+	}
+	return nullptr;
+}
+
+// hobeta is not here: it writes into the disk already in the drive
+static xDiskReader mount_disk_reader(int ftype) {
+	switch (ftype) {
+		case FL_TRD: return trd_read;
+		case FL_SCL: return scl_read;
+		case FL_FDI: return fdi_read;
+		case FL_UDI: return udi_read;
+		case FL_TD0: return td0_read;
+		case FL_DSK: return dsk_read;
+		case FL_IMA: case FL_PCIMG: return ima_read;
+	}
+	return nullptr;
+}
+
+static void mount_no_irq(int, void*) {}
+
+// what the deck or the drive holds: another image put in meanwhile changes it
+static QByteArray mount_stamp(Computer* comp, const xMount* m) {
+	if (m->disk) {
+		Floppy* flp = comp->dif->flp[m->drv];
+		return QByteArray(flp->path ? flp->path : "") + '|' + QByteArray::number(flp->insert)
+			+ '|' + QByteArray::number(flp->changed);
+	}
+	Tape* tap = comp->tape;
+	return QByteArray(tap->path ? tap->path : "") + '|' + QByteArray::number(tap->blkCount)
+		+ '|' + QByteArray::number(tap->changed);
+}
+
+// No RZX playing, which a load stops; an archive given whole is picked from first, and a
+// disk goes only into a drive that is there for it - load_file says why not
+bool media_mount_can(Computer* comp, const QString& path, int id, int drv) {
+	if (comp->rzx.play || arc_bare(path)) return false;
+	xFileTypeInfo* inf = file_type_of(comp, id, path);
+	if (!inf || !inf->load) return false;
+	if (!inf->ch) return mount_tape_reader(inf->id) != nullptr;
+	Floppy* flp = comp->dif->flp[((drv < 0) ? 0 : drv) & 3];
+	return mount_disk_reader(inf->id) && flp->fitted && !comp->dif->out;
+}
+
+bool media_mount_asks(Computer* comp, const QString& path, int id, int drv) {
+	xFileTypeInfo* inf = file_type_of(comp, id, path);
+	if (inf && inf->ch) return comp->dif->flp[((drv < 0) ? 0 : drv) & 3]->changed;
+	return comp->tape->changed && (comp->tape->blkCount > 0);
+}
+
+int media_mount_begin(Computer* comp, const QString& path, int id, int drv, xMount* m, bool ask) {
+	m->comp = comp;
+	m->path = arc_canonical(path);
+	if (m->path.isEmpty()) return ERR_CANT_OPEN;
+	xFileTypeInfo* inf = file_type_of(comp, id, m->path);
+	m->ftype = inf->id;
+	m->disk = inf->ch;
+	m->drv = (drv < 0) ? 0 : (drv & 3);
+	if (!ask && media_mount_asks(comp, m->path, id, drv)) return ERR_CANCEL;
+	if (replace_ok(comp, inf, m->drv) != ERR_OK) return ERR_CANCEL;	// a failed save has been shown
+	if (m->disk) {
+		Floppy* flp = comp->dif->flp[m->drv];
+		m->flp = flpCreate(flp->id, mount_no_irq, nullptr);
+		// what the drive is, and the protect tab a disk keeps unless its file says
+		m->flp->trk80 = flp->trk80;
+		m->flp->doubleSide = flp->doubleSide;
+		m->flp->trklen = flp->trklen;
+		m->flp->protect = flp->protect;
+		int i = 0;
+		while (boot_ft[i] && (boot_ft[i] != m->ftype))
+			i++;
+		if (conf.boot && boot_ft[i])
+			m->boot = QByteArray(conf.path.boot.c_str());
+	} else {
+		m->tape = tape_create(nullptr, nullptr);
+	}
+	m->stamp = mount_stamp(comp, m);
+	return ERR_OK;
+}
+
+void media_mount_read(xMount* m) {
+	QString local = arc_local(m->path, &m->why);	// the bytes, unpacked when in an archive
+	if (local.isEmpty()) {
+		m->err = ERR_CANCEL;
+		return;
+	}
+	QByteArray loc = local.toLocal8Bit();
+	QByteArray name = m->path.toLocal8Bit();
+	if (m->disk) {
+		m->err = mount_disk_reader(m->ftype)(m->flp, loc.constData());
+		if ((m->err == ERR_OK) && !m->boot.isEmpty())
+			boot_read(m->flp, m->boot.constData());
+		if (local != m->path)
+			flp_set_path(m->flp, name.constData());
+	} else {
+		m->err = mount_tape_reader(m->ftype)(m->tape, loc.constData());
+		if (local != m->path)
+			tape_set_path(m->tape, name.constData());
+	}
+	if ((m->err == ERR_OK) && m->game)
+		game_hash_ahead(m->path);
+}
+
+bool media_mount_fits(xMount* m) {
+	Computer* comp = m->comp;
+	return (m->err == ERR_OK) && (comp == conf.zx) && (mount_stamp(comp, m) == m->stamp)
+		&& (!m->disk || (comp->dif->flp[m->drv]->fitted && !comp->dif->out));
+}
+
+bool media_mount_put(xMount* m) {
+	if (!media_mount_fits(m)) return false;
+	Computer* comp = m->comp;
+	xspeed_modes_off();		// as load_file
+	if (m->disk)
+		flp_take_disk(comp->dif->flp[m->drv], m->flp);
+	else
+		tap_take_image(comp->tape, m->tape);
+	return true;
+}
+
+int media_mount_end(xMount* m) {
+	emu_lock();
+	bool put = media_mount_put(m);
+	if (put) x_media_replaced();
+	emu_unlock();
+	if (!put) {
+		xlog(XLG_FILE, XLL_INFO, "open %s: something else went in meanwhile", m->path.toLocal8Bit().constData());
+		return ERR_CANCEL;
+	}
+	media_mount_note(m);
+	return ERR_OK;
+}
+
+void media_mount_note(xMount* m) {
+	QByteArray name = m->path.toLocal8Bit();
+	last_as_kind = as_kind_of(m->ftype);
+	last_as_drv = m->drv;
+	last_loaded = m->path;
+	xFileTypeInfo* inf = file_find_type(m->ftype);
+	if (m->disk) {
+		xlog(XLG_FILE, XLL_INFO, "open %s into drive %c: %s", inf->name, 'A' + m->drv, name.constData());
+	} else {
+		xlog(XLG_FILE, XLL_INFO, "open %s: %s", inf->name, name.constData());
+	}
+}
+
+void media_mount_fail(xMount* m) {
+	last_as_kind = AS_NONE;
+	QByteArray name = m->path.toLocal8Bit();
+	if (!m->why.isEmpty()) {
+		xlog(XLG_FILE, XLL_WARN, "open %s: %s", name.constData(), m->why.toLocal8Bit().constData());
+		shitHappens(m->why.toLocal8Bit().constData());
+		return;
+	}
+	xlog(XLG_FILE, XLL_WARN, "open %s failed, error %i", name.constData(), m->err);
+	file_errors(m->err);
+}
+
+// after end the Tape or the Floppy holds what went out
+void media_mount_free(xMount* m) {
+	if (m->tape) tape_destroy(m->tape);
+	if (m->flp) flpDestroy(m->flp);
+	m->tape = nullptr;
+	m->flp = nullptr;
+}
+
 static xMediaOpen media_last = {QString(), FG_ALL, 0, 0, false};
 
-void media_opened(const QString& path, int id, int drv, int run, bool pinned) {
+void media_opened(const QString& path, int id, int drv, int run, bool pinned, bool newGame) {
 	media_last = {path, id, drv, run, pinned};
 	if (drv < 1) {				// a disk in drive B is not the program
 		labels_image(path);
-		game_set(last_loaded.isEmpty() ? path : last_loaded);
+		if (newGame) game_set(last_loaded.isEmpty() ? path : last_loaded);
 	}
 }
 

@@ -266,9 +266,10 @@ rows you added.
 **Game bindings.** When the box **Game bindings** on the **Input** page of **Options** is
 ticked, opening a tape, disk or snapshot looks for a `.pad` file of the same name beside it:
 for `Exolon.tzx` that is `Exolon.pad`. Player 1 uses those bindings until the next file is
-opened, and the window says **From Exolon.pad, until the next image** beside a
-{icon}`cancel` **Revert** button, which goes back to your own bindings. **Save as...**
-offers that name and place, so saving a table for a game is one click.
+opened (another side of the game picked from its list keeps them), and the window says
+**From Exolon.pad, until the next image** beside a {icon}`cancel` **Revert** button, which
+goes back to your own bindings. **Save as...** offers that name and place, so saving a table
+for a game is one click.
 
 When you change player 1's bindings while a game's file is in use, the program asks where the
 change goes: **Game config** saves it into the game's `.pad` file, **User config** makes the

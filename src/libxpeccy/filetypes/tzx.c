@@ -622,8 +622,7 @@ typedef struct {
 // The blocks are read in the order the tape plays them: #23 jumps, #24/#25 loop
 // and #26/#27 call - all relative to the block they stand in. A jump taken a
 // second time is a tape that loops for ever, and the reading ends there.
-int loadTZX(Computer* comp, const char* name, int drv) {
-	Tape* tape = comp->tape;
+int tzx_read(Tape* tape, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 
@@ -729,4 +728,8 @@ int loadTZX(Computer* comp, const char* name, int drv) {
 	tape_set_path(tape, name);
 	fclose(file);
 	return ERR_OK;
+}
+
+int loadTZX(Computer* comp, const char* name, int drv) {
+	return tzx_read(comp->tape, name);
 }

@@ -10,6 +10,10 @@
 #include <QWidget>
 #include <QString>
 
+#include <memory>
+
+struct xMount;
+
 #ifdef USENETWORK
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -169,7 +173,12 @@ class MainWin : public QWidget {
 		void hotkeysNote();
 		void setMessage(QString, double = 2.0, bool hold = false);
 		void fillUserMenu();
-		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false);
+		// side: another side of the set in the deck or the drive, picked from its list
+		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false, bool side = false);
+		void mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from);	// a tape or a disk, read in the background
+		QString mediaIn(int id, int drv);
+		void mediaThread(std::function<void()> work, std::function<void()> done);
+		void mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk);
 		void padGame(const QString&);		// an image opened: player 1 takes its .pad, or its own table back
 		bool openCheats(const QString&);	// a .pok, into the Cheats window
 		void fsOverlay(QWidget*);
@@ -338,6 +347,13 @@ class MainWin : public QWidget {
 		QByteArray setRaw;
 		QStringList tapeSeen;	// the tapes that were in, newest first, for the side a set turns back to
 		void watchTapeSet(Computer*);
+		void spareTape(Computer*, const QString& next, const QString& place);
+		std::shared_ptr<xMount> tapeSpare;	// the next tape of the set, read ahead for auto play
+		bool tapeSpareReady = false;		// ...and whole
+		QString tapeSpareNext;		// its path and place in the set, as watchTapeSet found them
+		QString tapeSparePlace;
+		quint64 spareGen = 0;
+		quint64 mountGen = 0;		// the last mount started (mountMedia)
 		double hwMulSeen = 1.0;	// the board's turbo as last reported
 		std::string macSeen;	// ...on this machine
 		void watchClock();

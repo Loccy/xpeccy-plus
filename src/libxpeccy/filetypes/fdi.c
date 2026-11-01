@@ -29,8 +29,7 @@ typedef struct {
 
 #pragma pack (pop)
 
-int loadFDI(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+int fdi_read(Floppy* flp, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 
@@ -98,4 +97,8 @@ int loadFDI(Computer* comp, const char* name, int drv) {
 	//for (i = 0; i < 256; i++) if (trkImg[i].data) free(trkImg[i].data);
 	fclose(file);
 	return err;
+}
+
+int loadFDI(Computer* comp, const char* name, int drv) {
+	return fdi_read(comp->dif->flp[drv & 3], name);
 }

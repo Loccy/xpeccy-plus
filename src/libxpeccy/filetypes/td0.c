@@ -182,8 +182,7 @@ void doTD0(Floppy* flp, size_t(*getBytes)(void*, size_t,void*), void* dptr, int 
 
 #undef TD0_GET
 
-int loadTD0(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+int td0_read(Floppy* flp, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 
@@ -212,4 +211,8 @@ int loadTD0(Computer* comp, const char* name, int drv) {
 	}
 	fclose(file);
 	return err;
+}
+
+int loadTD0(Computer* comp, const char* name, int drv) {
+	return td0_read(comp->dif->flp[drv & 3], name);
 }
