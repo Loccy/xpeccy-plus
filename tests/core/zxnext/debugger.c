@@ -440,6 +440,22 @@ int debugger_check(void) {
 	check("heat of layer 2 over a BRAM page", ok);
 	compDestroy(comp);
 
+	// a HALT's M1 cycles fetch the byte after it: exec on the bus, not a data read
+	comp = machine();
+	{
+		int code = 0x40000 + 0x30 * 0x2000;
+		next_mmu_set(comp, 4, 0x30);
+		comp->mem->ramData[code] = 0x76;		// halt
+		comp_heat_sync(comp);
+		comp->flgHEAT = 1;
+		comp->cpu->regPC = 0x8000;
+		comp->cpu->flgIFF1 = 0;		// no interrupt to end it
+		for (int i = 0; i < 3; i++) compExec(comp);
+		ok = comp->heatRam.ex[code] == 1 && comp->heatRam.ex[code + 1] == 2 && !comp->heatRam.rd[code + 1];
+	}
+	check("heat of a HALT's fetches", ok);
+	compDestroy(comp);
+
 	// and divMMC's own memory, outside the Next, in a bank of its own
 	comp = compCreate();
 	compSetHardware(comp, "ZX128");

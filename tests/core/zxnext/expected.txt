@@ -28,4 +28,5 @@ divMMC entry point on the PC row: ok
 long prefix chain: ok
 dump by area and page: ok
 heat of layer 2 over a BRAM page: ok
+heat of a HALT's fetches: ok
 heat of divMMC memory: ok
