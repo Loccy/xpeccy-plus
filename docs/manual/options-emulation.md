@@ -33,4 +33,5 @@ see the result of a key press a frame or two earlier than the machine itself wou
 it. The cost is CPU time - the frames are emulated more than once - and the sound stays
 a frame behind the picture. **Off** is the default. Run ahead does nothing while an RZX
 recording plays, in Fast Mode and Fast Forward, while the machine is paused, and while
-you rewind.
+you rewind. Where the lag comes from, and the settings for the least of it, are in
+[Low input lag](input-lag.md).
