@@ -22,7 +22,9 @@ path instead, as reading gigabytes at every open would take too long.
 The game ends at a reset you make - from the menu, a key, **Hard Reset**, the **Debugger** - and
 at a change of machine; after that, saves go to the machine's own folder until a tape or drive A
 starts something again. A program that jumps to address 0 by itself is not a reset you made,
-and changes nothing. Loading a save brings its game back with it.
+and changes nothing. Another side of the same set - picked from its list, or put in by auto
+play when the tape runs out - is still the same game. Loading a save brings its game back with
+it.
 
 ## Where the saves go
 
