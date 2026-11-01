@@ -138,7 +138,8 @@ Shift+F4 (Modern).
 is off, and the picture is updated only as many times a second as **Fast Mode render**
 sets (see [Fast Mode](time.md#fast-mode)). When the loading is
 over, the machine goes back to the moment the loader finished, so the program starts at
-normal speed.
+normal speed. How a loader is recognized, and what each switch does with it, is in
+[Tape loading by itself](tape-loading.md).
 
 Two more settings refine it. They are on the **Machine: Tape** sheet of **Options** (see
 [Machine: Tape](options-machine.md#machine-tape)), and work only with **Fast loading** on:
