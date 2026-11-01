@@ -2116,6 +2116,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned) {
 	if (ask) pause(true, PR_FILE);
 	int err = media_mount_begin(comp, path, id, drv, job.get());
 	if (ask) pause(false, PR_FILE);
+	job->game = (drv < 1);		// media_opened makes it the game
 	if (err != ERR_OK) {			// as load_file: a cancel or a path not there says nothing
 		media_mount_free(job.get());
 		return;

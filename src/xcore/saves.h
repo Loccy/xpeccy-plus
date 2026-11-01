@@ -37,6 +37,9 @@ typedef struct {
 // started from the tape or drive A since. A user reset or a machine switch
 // ends it. The bytes as opened are hashed here (an entry's for an archive path).
 void game_set(const QString& image);
+// the hash game_set will want, worked out on another thread: an image read in the
+// background (xMount) does not hash megabytes on the gui thread
+void game_hash_ahead(const QString& image);
 // the tape or drive A started with this image: the game, unless it is already
 void game_follow(const QString& image);
 // the game of a save, as its folder's json has it (or the json beside it):

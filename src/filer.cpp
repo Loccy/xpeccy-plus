@@ -1666,6 +1666,8 @@ void media_mount_read(xMount* m) {
 		if (local != m->path)
 			tape_set_path(m->tape, name.constData());
 	}
+	if ((m->err == ERR_OK) && m->game)
+		game_hash_ahead(m->path);
 }
 
 int media_mount_end(xMount* m) {

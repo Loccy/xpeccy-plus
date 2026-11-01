@@ -83,6 +83,7 @@ struct xMount {
 	int drv = 0;
 	QByteArray boot;	// the boot file a TR-DOS disk gets, when one does
 	QByteArray stamp;	// what the deck or the drive held at begin
+	bool game = false;	// it becomes the game: its hash is worked out on the way (saves.h)
 	Tape* tape = nullptr;
 	Floppy* flp = nullptr;
 	int err = 0;

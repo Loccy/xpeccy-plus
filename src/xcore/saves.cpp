@@ -4,6 +4,7 @@
 #include "../libxpeccy/xlog.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -12,6 +13,7 @@
 #include <QJsonObject>
 
 #include <algorithm>
+#include <mutex>
 
 // past this an image is a hard disk or a card, keyed by its path: reading
 // gigabytes on every open is no way to find a folder
@@ -54,7 +56,7 @@ static QString saves_clean(QString name) {
 	return name.isEmpty() ? QString("game") : name;
 }
 
-static QString game_hash(const QString& image) {
+static QString game_hash_read(const QString& image) {
 	QString err;
 	QString local = arc_local(image, &err);
 	QFile file(local);
@@ -66,6 +68,46 @@ static QString game_hash(const QString& image) {
 		sha.addData(QByteArray("path:") + QDir::fromNativeSeparators(image).toUtf8());
 	}
 	return QString::fromLatin1(sha.result().toHex());
+}
+
+// the last hash worked out ahead, kept while its file is the same
+static std::mutex game_ahead_mtx;
+static struct {
+	QString image;
+	qint64 size;
+	QDateTime time;
+	QString hash;
+} game_ahead;
+
+static void game_file_stamp(const QString& image, qint64* size, QDateTime* time) {
+	QString archive;
+	const QFileInfo info(arc_split(image, &archive, nullptr) ? archive : image);
+	*size = info.size();
+	*time = info.lastModified();
+}
+
+void game_hash_ahead(const QString& image) {
+	QString hash = game_hash_read(image);
+	qint64 size;
+	QDateTime time;
+	game_file_stamp(image, &size, &time);
+	std::lock_guard<std::mutex> hold(game_ahead_mtx);
+	game_ahead.image = image;
+	game_ahead.size = size;
+	game_ahead.time = time;
+	game_ahead.hash = hash;
+}
+
+static QString game_hash(const QString& image) {
+	qint64 size;
+	QDateTime time;
+	game_file_stamp(image, &size, &time);
+	{
+		std::lock_guard<std::mutex> hold(game_ahead_mtx);
+		if ((game_ahead.image == image) && (game_ahead.size == size) && (game_ahead.time == time))
+			return game_ahead.hash;
+	}
+	return game_hash_read(image);
 }
 
 static QJsonObject saves_json(const QString& dir) {
