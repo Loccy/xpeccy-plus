@@ -39,6 +39,8 @@
 #endif
 
 #include <fstream>
+#include <memory>
+#include <thread>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -2028,17 +2030,26 @@ void MainWin::dropAsk(QString path) {
 // path asks the file dialog, and pinned keeps the running machine. The machine the file wants is set up first, then
 // it is held while the file is read, and started right there - arming resets
 // it anyway, so there is nothing to gain from letting it run a cycle first.
+// A tape or a disk put into the running machine goes in without holding it
+// (mountMedia); the machine is held only while a dialog can come up.
 void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned) {
 	Computer* comp = conf.zx;
-	pause(true, PR_FILE);
+	bool held = false;
+	auto hold = [this, &held]() {
+		if (!held) pause(true, PR_FILE);
+		held = true;
+	};
+	if (path.isEmpty()) hold();
 	QString fpath = path.isEmpty() ? file_ask_open(comp, &id, &drv) : path;
 	// an archive: the image in it, picked when it holds several
-	if (arc_bare(fpath) && (id != FG_RAW))
+	if (arc_bare(fpath) && (id != FG_RAW)) {
+		hold();
 		fpath = media_from_archive(comp, fpath, id, drv, true);
+	}
 	// cheats only fill their window: nothing is reset, replaced or started
 	if (file_is_pok(fpath)) {
 		if (openCheats(fpath)) recent_add(fpath);
-		pause(false, PR_FILE);
+		if (held) pause(false, PR_FILE);
 		return;
 	}
 	// Shift held as the dialog is left asks, as it does on a drop
@@ -2047,16 +2058,26 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		if (run < 0) fpath.clear();
 	}
 	if (!fpath.isEmpty() && (run == AR_ASK)) {
+		hold();
 		// a snapshot starts anyway, and a disk in drive B cannot: nothing to ask
 		run = media_runnable(comp, fpath, id, drv) ? askRunKeep(fpath) : AR_MOUNT;
 		if (run < 0) fpath.clear();
 	}
 	// a disk for drives the divMMC has out: the board goes, or the disk does not go in
-	if (!fpath.isEmpty() && media_to_drive(comp, fpath, id) && !drivesBack())
-		fpath.clear();
+	if (!fpath.isEmpty() && media_to_drive(comp, fpath, id)) {
+		if (comp->dif->out) hold();
+		if (!drivesBack()) fpath.clear();
+	}
 	std::string mac;
+	if (!fpath.isEmpty() && !pinned) hold();		// the machine the file wants may be asked
 	if (!fpath.isEmpty() && (pinned || media_machine(comp, fpath, id, drv, run, &mac))) {
 		if (!mac.empty()) setMachine(mac);
+		if ((run == AR_MOUNT) && mac.empty() && media_mount_can(comp, fpath, id, drv)) {
+			if (held) pause(false, PR_FILE);
+			mountMedia(fpath, id, drv, pinned);
+			return;
+		}
+		hold();
 		QByteArray loc = fpath.toLocal8Bit();
 		bool medium = file_is_medium(comp, fpath, id);
 		// the pause does not wait for the cycle, and a snapshot resets the machine
@@ -2079,9 +2100,54 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		// its reset starts the game, not ends it
 		if ((err == ERR_OK) && (drv < 1)) game_restamp();
 	}
-	pause(false, PR_FILE);
+	if (held) pause(false, PR_FILE);
 	rzxWatch();
 	emit s_tape_upd(comp->tape);
+}
+
+// A tape or a disk into the running machine, read on a thread of its own: the machine
+// runs on meanwhile, and the image goes in under the lock once it is whole. Held only
+// while the one it replaces is asked about. A mount started later wins: an earlier one
+// that ends after it is dropped.
+void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned) {
+	Computer* comp = conf.zx;
+	std::shared_ptr<xMount> job = std::make_shared<xMount>();
+	bool ask = media_mount_asks(comp, path, id, drv);
+	if (ask) pause(true, PR_FILE);
+	int err = media_mount_begin(comp, path, id, drv, job.get());
+	if (ask) pause(false, PR_FILE);
+	if (err != ERR_OK) {			// as load_file: a cancel or a path not there says nothing
+		media_mount_free(job.get());
+		return;
+	}
+	quint64 gen = ++mountGen;
+	auto done = [this, job, gen, path, id, drv, pinned]() {
+		int err = job->err;
+		if (gen != mountGen) {
+			err = ERR_CANCEL;
+		} else if (err != ERR_OK) {
+			pause(true, PR_FILE);
+			media_mount_fail(job.get());
+			pause(false, PR_FILE);
+		} else {
+			err = media_mount_end(job.get());
+		}
+		media_mount_free(job.get());		// what went out, or what did not go in
+		if (err != ERR_OK) return;
+		recent_add(path);
+		if (drv < 1) {			// a disk in drive B is not the game
+			padGame(path);
+			cheats_pick(path);
+		}
+		media_opened(path, id, drv, AR_MOUNT, pinned);
+		if (drv < 1) game_restamp();
+		emit s_tape_upd(conf.zx->tape);
+		if (diskWin->isVisible()) diskWin->refresh();
+	};
+	std::thread([this, job, done]() {
+		media_mount_read(job.get());
+		QMetaObject::invokeMethod(this, done, Qt::QueuedConnection);
+	}).detach();
 }
 
 // The floppy drives are there for a disk: true at once unless the divMMC has them

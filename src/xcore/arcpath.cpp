@@ -8,6 +8,7 @@
 #include <QMap>
 
 #include <memory>
+#include <mutex>
 
 bool arc_split(const QString& path, QString* archive, QString* entry) {
 	const QString clean = QDir::fromNativeSeparators(path);
@@ -78,6 +79,8 @@ static QString arc_root() {
 }
 
 static std::unique_ptr<QLockFile> arc_lock;
+// a tape or a disk is unpacked on a thread of its own while the menus read archives
+static std::recursive_mutex arc_mtx;
 
 void arc_start() {
 	QDir temp(QDir::tempPath());
@@ -93,6 +96,7 @@ void arc_start() {
 }
 
 void arc_finish() {
+	std::lock_guard<std::recursive_mutex> hold(arc_mtx);
 	if (!arc_lock) return;
 	arc_lock->unlock();
 	arc_lock.reset();
@@ -150,6 +154,7 @@ static arcKept* arc_keep(const QString& archive) {
 }
 
 const QVector<arcEntry>* arc_entries(const QString& archive, QString* err) {
+	std::lock_guard<std::recursive_mutex> hold(arc_mtx);
 	arcKept* kept = arc_keep(archive);
 	if (!kept) {
 		arc_fail(err, QDir::toNativeSeparators(archive) + " is not there");
@@ -163,6 +168,7 @@ const QVector<arcEntry>* arc_entries(const QString& archive, QString* err) {
 }
 
 QString arc_temp_file(const QString& name, QString* err) {
+	std::lock_guard<std::recursive_mutex> hold(arc_mtx);
 	if (!arc_own_root(err)) return QString();
 	static int count = 0;
 	const QString dir = QDir(arc_root()).filePath(QString("t%1").arg(++count));
@@ -176,6 +182,7 @@ QString arc_temp_file(const QString& name, QString* err) {
 QString arc_local(const QString& path, QString* err) {
 	QString archive, entry;
 	if (!arc_split(path, &archive, &entry)) return path;
+	std::lock_guard<std::recursive_mutex> hold(arc_mtx);
 	arcKept* kept = arc_keep(archive);
 	if (!kept) {
 		arc_fail(err, QDir::toNativeSeparators(archive) + " is not there");

@@ -347,6 +347,25 @@ void flp_insert(Floppy* flp, const char* path) {
 	flp_set_path(flp, path);
 }
 
+// A disk read into a Floppy of its own goes into the drive, as flp_insert puts one
+// in: its tracks and name by pointer, the drive's head, motor and sides as they
+// are. What the drive held goes back in disk, to be freed away from the emulation.
+void flp_take_disk(Floppy* flp, Floppy* disk) {
+	flpTrack* data = flp->data;
+	char* path = flp->path;
+	flp->data = disk->data;
+	flp->path = disk->path;
+	disk->data = data;
+	disk->path = path;
+	flp->trklen = disk->trklen;
+	flp->protect = disk->protect;
+	flp->xirq(IRQ_FDD_RDY, flp->xptr);	// rdy 1->0
+	flp->insert = 1;
+	flp->door = 0;
+	flp->dwait = 5e8;	// door will be closing after .5 sec
+	flp->changed = disk->changed;
+}
+
 // A drive that is not there has no sensor either: a restore steps out until
 // the controller gives up, which is how software finds a drive missing.
 int flp_trk0(Floppy* flp) {

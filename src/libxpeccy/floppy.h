@@ -78,6 +78,7 @@ void flp_sync(Floppy*, int);
 
 void flp_insert(Floppy*, const char*);
 void flp_eject(Floppy*);
+void flp_take_disk(Floppy* flp, Floppy* disk);
 int flp_trk0(Floppy*);		// the head is at track 0, as the drive's sensor says
 
 unsigned char flpRd(Floppy*, int);

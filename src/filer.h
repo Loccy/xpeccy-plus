@@ -71,6 +71,30 @@ QString file_ask_save(const char* title, const char* filter, const char* ext, co
 QString file_ask_open(Computer*, int* id, int* drv);
 QString file_ask_load(const char* title, const char* filter);
 int load_file(Computer* comp, const char* name, int id, int drv);
+// A tape or a disk put into the running machine, read on a thread of its own into a Tape
+// or a Floppy nobody else sees: begin (gui thread; asks to save the one it replaces), read
+// (any thread), end (gui thread: in under the emulation lock, if the deck or the drive
+// still holds what it did at begin), free. load_file's way for anything else.
+struct xMount {
+	Computer* comp = nullptr;
+	QString path;		// canonical; an archive's entry as an archive path
+	int ftype = 0;		// FL_*
+	bool disk = false;
+	int drv = 0;
+	QByteArray boot;	// the boot file a TR-DOS disk gets, when one does
+	QByteArray stamp;	// what the deck or the drive held at begin
+	Tape* tape = nullptr;
+	Floppy* flp = nullptr;
+	int err = 0;
+	QString why;		// the archive's word when the bytes could not be had
+};
+bool media_mount_can(Computer*, const QString& path, int id, int drv);
+bool media_mount_asks(Computer*, const QString& path, int id, int drv);	// begin will ask about a change
+int media_mount_begin(Computer*, const QString& path, int id, int drv, xMount*);
+void media_mount_read(xMount*);
+int media_mount_end(xMount*);		// ERR_CANCEL: something else went in meanwhile
+void media_mount_fail(xMount*);		// says why read failed
+void media_mount_free(xMount*);
 // An archive's images the request can take (id and drv as load_file has them), in
 // natural order; empty, err set, when none
 QStringList media_candidates(Computer*, const QString& archive, int id, int drv, QString* err);

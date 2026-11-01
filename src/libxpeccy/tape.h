@@ -182,6 +182,7 @@ void tape_destroy(Tape*);
 void tape_set_path(Tape*, const char*);
 
 void tapEject(Tape*);
+void tap_take_image(Tape* deck, Tape* img);
 int tapPlay(Tape*);
 int tapUserPlay(Tape*);
 void tapRec(Tape*);
