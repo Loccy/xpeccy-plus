@@ -8,8 +8,8 @@ emulation code comes from that project. This fork does not claim authorship of i
 Current version: **2026.8.2**. Forked from upstream build `20260807`.
 
 Windows, Linux and macOS are built by CI on every nightly and off every release tag. The
-macOS build is arm64 only and carries no developer signature, so a downloaded DMG has to be
-allowed through Gatekeeper by hand.
+macOS build is arm64 only, runs on macOS 13 and later and carries no developer signature, so
+a downloaded DMG has to be allowed through Gatekeeper by hand.
 
 ## Why a fork
 
@@ -51,18 +51,21 @@ On top of upstream build `20260807`:
   included. And divMMC with esxDOS on the 48K to the +3 and the Pentagons.
 - **Input lag** measured with a photosensor and kept low, and run ahead for less still.
 - **Ready to use.** Every machine is built in, ROMs and all, so it runs straight out of the
-  archive, and what you change is kept for that machine. macOS builds included.
+  archive, and what you change is kept for that machine. macOS builds included. A newer
+  version is announced, and on Windows and with the AppImage it puts itself in place.
 - **A window like any desktop program's.** A menu bar with every command and its key, a
   toolbar of your choosing and a status bar. Hotkeys come in Modern and Classic layouts that
   leave the machine its own keys, with your changes kept on top.
 - **Media that starts itself.** A tape or disk opens and runs, or asks first, from the menu, a
-  drop or the command line, on a machine that can run it. A Disk manager lists and copies
+  drop or the command line, on a machine that can run it, straight from a zip, gz or 7z;
+  the other sides of a set are found by their names. A Disk manager lists and copies
   what is on a TR-DOS or +3DOS disk, and a host folder can stand in for an SD card or a hard
   disk, keeping what the machine saves there.
 - **Tapes.** Fast loading that works whatever the loader, every TZX block, a WAV read back
   as the tape it records and a tape written out as one, and a player laid out like a deck.
 - **Speed.** Up to three times faster with nothing emulated differently - fast forward at
-  x18 to x30 on most machines - and one slider from slow motion to an overclocked CPU.
+  x18 to x30 on most machines. The whole machine steps from 1/8 to x16, and the CPU alone
+  can be overclocked up to x8.
 - **Rewind.** Hold a key to go back through the last half minute, picture and sound, and
   keys for slow motion and fast forward.
 - **Gamepads.** A pad plays at once as any joystick interface, its buttons bind to keys,
@@ -75,10 +78,13 @@ On top of upstream build `20260807`:
   windows of their own.
 - **Sound.** The FM half of TurboSound runs on ymfm, latency looks after itself, and the mix
   can be filtered.
-- **Snapshots.** SZX by default, on every machine, coming back exactly where it was saved;
-  `.z80` and `.sna` as well, and quick save and load on a key.
-- **Looks.** Eight interface styles, six border sizes, a picture always at whole pixels, and
-  an optional antiflicker that leaves moving pictures alone.
+- **Snapshots.** SZX by default, on every machine, the Next included, coming back exactly
+  where it was saved, with the tape and disks inside if you like; `.z80` and `.sna` as well.
+  Quick saves are kept for each game, twenty deep, and Resume Last Session picks up where
+  you left off.
+- **Looks.** Eight interface styles, six border sizes, a window that maximizes and resizes
+  with the picture fitted and the sides filled from its edges, VSync for even motion, and an
+  optional antiflicker that leaves moving pictures alone.
 - **Machines built from their own sources.** ZX Evo, BaseConf and TSConf alike, follows its
   FPGA sources; Scorpion ZS 256 and Profi, two boards each, follow their schematics.
 - **Fixes.** Tape loading, disks with loaders of their own, sound that does not click.
