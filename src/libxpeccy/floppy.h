@@ -34,6 +34,12 @@ typedef struct {
 typedef void(*cbflpirq)(int, void*);
 
 typedef struct {
+	unsigned char byte[TRKLEN_HD];
+	unsigned char field[TRKLEN_HD];
+	int map[256];		// position of sector n = 1+
+} flpTrack;
+
+typedef struct {
 	unsigned trk80:1;	// fdd is 80T
 	unsigned doubleSide:1;	// fdd is DS
 	unsigned motor:1;	// fdd motor is on
@@ -58,11 +64,9 @@ typedef struct {
 	int pos;
 	int trklen;		// 12500 HD, 6250 DD
 	char* path;
-	struct {
-		unsigned char byte[TRKLEN_HD];
-		unsigned char field[TRKLEN_HD];
-		int map[256];		// position of sector n = 1+
-	} data[256];
+	// 256 tracks in an allocation of their own, past what xstate keeps of the
+	// drive: a disk read elsewhere goes in by this pointer
+	flpTrack* data;
 } Floppy;
 
 Floppy* flpCreate(int, cbflpirq, void*);
