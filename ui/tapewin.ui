@@ -180,7 +180,8 @@ stop it between blocks</string>
          <item>
           <widget class="QCheckBox" name="cbRewind">
            <property name="toolTip">
-            <string>At the end of the tape, Play or the next load starts it again.
+            <string>At the end of the tape, Play or the next load starts it again;
+a load goes on to the next tape of a set.
 Off: the tape stops at the end</string>
            </property>
            <property name="text">

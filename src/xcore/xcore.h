@@ -221,6 +221,7 @@ enum {
 #define	PR_FOCUS	(1<<9)		// another application has the focus
 #define	PR_MENU		(1<<10)		// a menu of the main window is open
 #define	PR_SAVES	(1<<11)		// Save History is open: a menu of saves, held as menus are
+#define	PR_TAPE		(1<<12)		// the machine waits for the gui to put in the next tape of a set
 
 // labels
 

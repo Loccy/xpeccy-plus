@@ -37,6 +37,7 @@ class xThread : public QThread {
 		void dbgRequest();
 		void scrRequest();
 		void tapeSignal(int,int);
+		void s_tape_next();
 	private:
 		void run();
 		void emuCycle(Computer*);

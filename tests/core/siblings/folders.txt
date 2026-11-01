@@ -94,3 +94,17 @@ Game (Side A).tzx.zip
 Game (Side B).tzx
 Lone (Side A).tzx
 Lone.tzx.zip
+
+== wos-levels
+Narc - 128k.tzx
+Narc - 128k - Levels.tzx
+Popeye 3 - Wrestle Crazy - Game.tzx
+Popeye 3 - Wrestle Crazy - Levels.tzx
+Bloodwych - The Game.tzx
+Bloodwych - Level Data.tzx
+Logic Levels.tzx
+Renegade Levels, The (19xx)(Theo Devil)(128K)(GR)(en).tap
+Space Game.tzx
+Space Game.tap
+Pair (Side A) - Levels.tzx
+Pair (Side B).tzx

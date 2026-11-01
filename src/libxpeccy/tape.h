@@ -114,6 +114,8 @@ typedef struct {
 	unsigned mute:1;	// a playing tape is not heard (fast loading has it)
 	unsigned userStop:1;	// stopped by hand: the automatics may not start it again
 	unsigned autorew:1;	// play starts the tape over once it has run to the end
+	unsigned inSet:1;	// the gui has the next tape of this one's set: auto play asks for it at the end
+	unsigned wantNext:1;	// ...and has: the gui puts that tape in
 	unsigned changed:1;	// blocks added, moved or taken out since the image was read or saved
 	unsigned detectOn:1;	// auto play / stop: the tape follows how the tape port is read
 	unsigned autoPlay:1;	// the automatics started it, not Play
