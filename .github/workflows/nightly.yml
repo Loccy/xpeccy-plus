@@ -77,11 +77,17 @@ jobs:
           merge-multiple: true
           skip-decompress: true
 
+      # the script that writes the page's list of files
+      - uses: actions/checkout@v7
+        with:
+          path: src
+          sparse-checkout: packaging
+
       - name: Publish the nightly pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-          # nothing is checked out here, and gh reads the repository off a git
-          # remote unless it is told which one
+          # gh reads the repository off a git remote unless it is told which one,
+          # and the copy in src/ is not where this runs
           GH_REPO: ${{ github.repository }}
         run: |
           # Bridge for builds made before the Windows files were renamed (2026-11):
@@ -92,6 +98,22 @@ jobs:
           for f in dist/*-win-x64.zip; do cp "$f" "${f%-win-x64.zip}-win-x64-qt6.zip"; done
           for f in dist/*-win-x86-legacy.zip; do cp "$f" "${f%-win-x86-legacy.zip}-win-x86.zip"; done
           ls -lh dist
+          # the page: which file is for which system (packaging/release-files.sh),
+          # and why two are there twice - that part goes with the copies above
+          base=$(basename dist/*-win-x64.zip -win-x64.zip)
+          {
+            echo "Automated build from the latest commit on \`main\` (${GITHUB_SHA:0:7}, $(date -u +%Y-%m-%d)). May be unstable - see Releases for the latest stable version."
+            echo
+            sh src/packaging/release-files.sh nightly "$base"
+            echo
+            echo "**Copies under the old names**"
+            echo
+            echo "The Windows files were renamed in November 2026. Builds made before look for their file by its old name, so two files are here a second time under it - for those builds to update themselves, not to download:"
+            echo
+            echo "- \`$base-win-x64-qt6.zip\` is \`$base-win-x64.zip\`"
+            echo "- \`$base-win-x86.zip\` is \`$base-win-x86-legacy.zip\`"
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
           # deleted and recreated rather than edited: the tag has to move to the
           # commit that was just built. It stays "nightly" whatever the release
           # is called: every build with the update check asks for it by that name
@@ -100,4 +122,4 @@ jobs:
             --prerelease \
             --target "$GITHUB_SHA" \
             --title "Development build" \
-            --notes "Automated build from the latest commit on \`main\` (${GITHUB_SHA:0:7}, $(date -u +%Y-%m-%d)). May be unstable - see Releases for the latest stable version. Windows: \`win-x64\` for Windows 10 and 11, \`win-x64-legacy\` (64-bit) or \`win-x86-legacy\` (32-bit) for Windows 7 and 8.1; \`win-x64-qt6\` and \`win-x86\` are copies under the old names, so that older builds can update themselves."
+            --notes-file "$RUNNER_TEMP/notes.md"
