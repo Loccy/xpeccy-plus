@@ -32,8 +32,8 @@ where the [quick saves](files.md#quick-saves) and autosaves go and how many of t
 
 - **Autosave on exit** - the machine is saved as the program closes, for
   **File > Resume Last Session**.
-- **Exit autosaves kept** - how many a game with quick saves keeps. A game with none has
-  one autosave, written over each time.
+- **Exit autosaves kept** - how many exit autosaves a folder keeps, the game's or the
+  machine's.
 - **Autosave every** - a save every so many minutes. Only the time the machine runs counts:
   a pause, a menu or the Debugger holds it. **Off** by default.
 - **Timed autosaves kept** - how many of those a game keeps, apart from the exit ones.
