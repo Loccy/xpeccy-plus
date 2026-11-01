@@ -11,9 +11,12 @@ snapshot is in [Snapshots](files.md#snapshots). The code is `src/libxpeccy/filet
 (the standard blocks) and `szx_ext.c` (our own data); where this page and the code disagree,
 the code is right.
 
-It is written so that another emulator can read our files, write files we read, and - for the
-two machines the spec has no blocks for, TSConf and TurboSound FM - agree on a shared block.
-The last section is that proposal.
+The page is written for the authors of other programs. The format has no version newer
+than 1.5, and machines it never named - TSConf, TurboSound FM, the ZX Spectrum
+Next - are now common. If each program keeps them its own way, a snapshot can only be opened
+where it was made. So everything Xpeccy+ writes is described here, field by field: another
+program can read our files and write files we read, and for TSConf and TurboSound FM the last
+section proposes blocks to share instead of each program inventing its own.
 
 ## Two kinds of file
 
@@ -95,6 +98,9 @@ What the spec leaves open, and how it is read here:
   `dwUncompressedSize` its length; with `COMPRESSED` too, the bytes are a zlib stream that
   unpacks to that length. It writes an extended `.dsk` (`EXTENDED CPC DSK File`), packed when
   that gains anything.
+- **An embedded `BDSK`** is read as the type its `chDiskType` names - TRD, SCL, FDI or UDI - and
+  written as a UDI, whatever file the disk came from: a UDI keeps the whole track, sector
+  layout and protection included.
 - **Carried media**: an image written into the file (the tape as its file is, a Beta disk as
   a UDI, a +3 disk as a `.dsk`) still goes back in under its old name, from our `LINK`
   record. A disk that was unsaved when the file was written, or whose file is gone, comes

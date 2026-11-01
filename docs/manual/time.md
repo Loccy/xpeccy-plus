@@ -121,7 +121,8 @@ screen. Everything that came after that picture is gone.
 Rewind is on by default. **Machine > Allow Rewind** switches it off and on; with it
 off, the **Rewind** button is grayed out. While it is on, the program keeps a history
 of the machine in memory, a snapshot every few frames. This takes 20 to 45 MB with the
-default settings and costs a little emulation speed.
+default settings and costs a little emulation speed. How the history is kept is in
+[Keeping time and going back](frame-timing.md#rewind).
 
 **Rewind** on the **Emulation** page of **Options** is the same switch, with two
 settings beside it:

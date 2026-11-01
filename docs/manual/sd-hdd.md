@@ -61,7 +61,8 @@ mounted when you switch machines, and are opened again at the next start.
 **Open Folder...** in **Media > SD Card**, in a divMMC's card menus and in **Media > Drives**
 lets the machine use a folder of your computer as if it were a FAT32 card or disk. There is
 no image to make: copy programs into the folder and open it. The window that picks the
-folder is **Folder to serve as the card** or **Folder to serve as the disk**.
+folder is **Folder to serve as the card** or **Folder to serve as the disk**. How the disk is made and
+written back is in [A folder as a disk](folder-as-disk.md) of Under the Hood.
 
 - The folder is read when it is opened, and again at **Machine > Reset > Hard Reset**,
   when you switch machines or click **Apply** in **Options**. Files added later show up
