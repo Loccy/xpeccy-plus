@@ -1,8 +1,9 @@
 name: Release
 
 # Builds every platform from a version tag and leaves a draft release with the
-# five archives attached, so the notes can be written after seeing what was
-# actually built. Publishing stays a manual click.
+# five archives attached and the list of which file is for which system, so the
+# notes can be written above it after seeing what was actually built.
+# Publishing stays a manual click.
 #
 #   git tag v2026.1 && git push origin v2026.1
 #
@@ -67,17 +68,27 @@ jobs:
           merge-multiple: true
           skip-decompress: true
 
+      # the script that writes the page's list of files
+      - uses: actions/checkout@v7
+        with:
+          path: src
+          sparse-checkout: packaging
+
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          # nothing is checked out here, and gh reads the repository off a git
-          # remote unless it is told which one
+          # gh reads the repository off a git remote unless it is told which one,
+          # and the copy in src/ is not where this runs
           GH_REPO: ${{ github.repository }}
         run: |
           ls -lh dist
+          # the draft holds the end of the page: which file is for which system,
+          # with links. The notes written later go above it, before the rule
+          { echo "---"; echo; sh src/packaging/release-files.sh "$GITHUB_REF_NAME" "xpeccy-plus-${GITHUB_REF_NAME#v}"; } > "$RUNNER_TEMP/files.md"
+          cat "$RUNNER_TEMP/files.md"
           gh release create "$GITHUB_REF_NAME" dist/* \
             --draft \
             --verify-tag \
             --title "Xpeccy+ ${GITHUB_REF_NAME#v}" \
-            --generate-notes
+            --notes-file "$RUNNER_TEMP/files.md"
           echo "Draft release $GITHUB_REF_NAME is ready to review and publish." >> "$GITHUB_STEP_SUMMARY"
