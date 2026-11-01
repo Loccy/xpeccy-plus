@@ -503,11 +503,13 @@ static const szxField fld_next[] = {
 };
 
 // The Next's times count from when the machine was made (CLK_28 edges, T), so the
-// clock they count by comes back with them
+// clock they count by comes back with them. And whether the firmware's hand-off is
+// still to come: a snapshot right after a power-on (an RZX started there) has it ahead
 static const szxField fld_nclk[] = {
 	FLD(Computer, tickTotal),
 	FLD(Computer, nsBase),
 	FLD(Computer, nsBaseTick),
+	FLDRAW("boot", offsetof(Computer, flgBOOT), sizeof(bool)),
 	FLDEND
 };
 

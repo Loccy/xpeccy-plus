@@ -15,6 +15,7 @@
 #include "zxnext.h"
 #include "zx_step.h"
 #include "../fatfile.h"
+#include "../filetypes/filetypes.h"
 #include "../xlog.h"
 #include "../cpu/Z80/z80.h"
 
@@ -977,7 +978,7 @@ void next_irq_ack(Computer* comp) {
 		long long u = nx_irq_quiet_until(comp, s);
 		if (u > s) NX.irqDead = ts + (u - s) / nx_tick28(comp);
 	}
-	comp->cpu->flgACK = act && !comp->rzx.play;
+	comp->cpu->flgACK = act;		// a recording played too: the Next takes its INTs itself (rzx_play_step)
 	if (act)
 		comp->cpu->intrq |= Z80_INT;
 	else
@@ -1064,6 +1065,9 @@ static void nx_irq(Computer* comp, int t) {
 			break;
 		case IRQ_NMI:
 			nx_nmi_raise(comp, 1, 0);	// the NMI key: the M1 button (F9), the Multiface's
+			break;
+		case IRQ_RZX_INT:		// a recording's frame ends (a seek): the Next raises its INTs itself
+			rzx_frame_end(comp);
 			break;
 		case IRQ_VID_HBLANK:
 			nx_hblank(comp);
@@ -2855,7 +2859,7 @@ void next_snap_loaded(Computer* comp, int vmode) {
 	NX.spr.idleTo = idle;		// worked out for that same raster
 	nx_map_mem(comp);
 	nxHaltLast.tick = -1;
-	comp->flgBOOT = 0;		// the firmware's hand-off is long over in the state
+	comp->flgBOOT = 0;		// a reset's, not the state's: NCLK says whether one is due
 }
 
 HardWare nxt_hw_core = {HW_ZXNEXT, "ZXNext", "ZX Spectrum Next", MEM_2M, 1.0, NULL, NULL,

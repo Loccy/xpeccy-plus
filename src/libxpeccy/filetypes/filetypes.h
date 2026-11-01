@@ -228,6 +228,8 @@ unsigned int swap32(unsigned int);
 int loadRZX(Computer*, const char*, int);
 int rzxGetHardware(const char*);
 void rzxGetFrame(Computer*);
+void rzx_frame_end(Computer*);		// the frame played ends: the next one in
+void rzx_play_step(Computer*, int t);	// after an exec, a Next recording: its own frame ends
 
 // one block of a recording as the file has it
 typedef struct {

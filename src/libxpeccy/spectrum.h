@@ -625,8 +625,10 @@ typedef struct Computer {
 		// the file back by them, see rzx_reread()
 		long long next;
 		long long dataAt;
+		int playT;		// a Next recording's frame so far in T (rzx_play_step)
 		struct {
 			int fetches;
+			int all;		// ...of the fetches the frame came with
 			int size;
 			unsigned char data[0x10000];
 			int pos;
