@@ -122,6 +122,11 @@ set of the disk in drive A, so the program's second disk goes into B with one cl
 that is in another drive is shown with that drive's letter and cannot be picked. While the
 tape plays, its other sides cannot be picked either, as it cannot be ejected.
 
+A side picked from the list is still the same game: the quick saves go on into its folder,
+and its gamepad bindings and its cheat file stay, as when the next tape of a set goes in by
+itself (see [Tapes](tapes.md)). The side goes in while the machine runs, with no pause in
+the picture or the sound.
+
 The set is found by the names: files named the same but for the side or the part, as
 `Game (Side A).tzx` and `Game (Side B).tzx`, `Game - Side 1.tzx`, `game_a.tap` and
 `game_b.tap`, `Game (Tape 1 of 2).tzx`, `Game - Disk 2.trd`. A number alone does not make a
@@ -251,10 +256,11 @@ and `.sna` snapshots too, through NextZXOS, from its SD card: see
 **File > Quick Save** (F5) saves the machine as it is now into the folder of the game that
 runs: the image you opened last into drive A, as a tape or as a snapshot, or the tape or the
 disk in drive A that started since - a disk run from TR-DOS, say. A disk in drive B does not
-count. Each game keeps the last 20 quick saves; a new one past that number deletes the
-oldest. The game is known by its contents, so the same game opened from an archive, as a
-plain file or from another folder shares its saves. When no game is open, or the game's tape
-or disk has been taken out, the saves go to the folder of the machine instead.
+count, nor does another side of the game picked from its list. Each game keeps the last 20
+quick saves; a new one past that number deletes the oldest. The game is known by its
+contents, so the same game opened from an archive, as a plain file or from another folder
+shares its saves. When no game is open, or the game's tape or disk has been taken out, the
+saves go to the folder of the machine instead.
 
 A reset, a hard reset or a switch to another machine ends the game: until a tape or a disk
 starts again, the saves go to the folder of the machine, and the window title names no image.

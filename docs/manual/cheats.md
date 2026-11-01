@@ -30,7 +30,8 @@ When you open a tape, snapshot or disk, Xpeccy+ looks for its cheat file by itse
 `POKES\NAME.pok` beside the image, then `NAME.pok` beside it, where `NAME` is the image's
 name. The file goes into the window with nothing ticked, and the window says
 **(found beside the image)**. Opening an image without one takes such a file out of the
-window again; a file you opened yourself stays.
+window again; a file you opened yourself stays, and so does the game's own when you pick
+another side of it from its list.
 
 A file that is not a cheat file at all is refused with a message.
 
