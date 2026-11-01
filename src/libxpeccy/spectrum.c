@@ -440,9 +440,10 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 	}
 	if (comp->flgHEAT && !x_runahead) {	// an ahead frame would count every access twice
 		// a byte is part of the instruction stream (opcode, prefix, immediate/displacement
-		// operand) whenever it lands right where PC just advanced past it; everything else
-		// is a real data read (memory operand, stack pop, etc)
-		comp_heat_hit(comp, adr, isExecByte ? HEAT_EX : HEAT_RD,
+		// operand) whenever it lands right where PC just advanced past it, and so is every
+		// M1 cycle - the ones a HALT runs fetch the byte after it, with PC left on the HALT;
+		// everything else is a real data read (memory operand, stack pop, etc)
+		comp_heat_hit(comp, adr, (isExecByte || m1) ? HEAT_EX : HEAT_RD,
 			access);
 	}
 	if (comp->flgBRKMEM) {

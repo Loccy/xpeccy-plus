@@ -96,8 +96,9 @@ are there only on a machine with a disk interface. **ZX Evo** is there only on a
 Evolution, with TSConf or BaseConf, and **Palette** on every other machine. **ZX Next** is
 there only on a ZX Spectrum Next.
 
-**Screen** and **Sound Chip** can also be windows of their own: **Tools > Screen** and
-**Tools > Sound Chips** open them, and they work while the machine runs. **ZX Evo** and
+**Screen**, **Sound Chip** and **Heat map** can also be windows of their own: **Tools >
+Screen**, **Tools > Sound Chips** and **Tools > Heat Map** open them, and they work while
+the machine runs. **ZX Evo** and
 **ZX Next** can be too, from the {icon}`display` button at the top right of the panel. See
 [Device panels](#device-panels).
 

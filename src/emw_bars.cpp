@@ -451,6 +451,7 @@ void MainWin::initBars() {
 	add("menu.debug", "Tools", dbgMenu->menuAction(), TB_SPLIT);
 	add("key.scrwin", "Tools", cut("Screen", XCUT_SCRWIN, "rulers"), TB_PLAIN);
 	add("key.sndwin", "Tools", cut("Sound Chips", XCUT_SNDWIN, "note"), TB_PLAIN);
+	add("key.heatwin", "Tools", cut("Heat Map", XCUT_HEATWIN, "memory"), TB_PLAIN);
 	add("key.options", "Tools", cut("Options...", XCUT_OPTIONS, "other"), TB_PLAIN);
 	muteAct = cut("Mute", XCUT_MUTE, "speaker");
 	muteAct->setCheckable(true);

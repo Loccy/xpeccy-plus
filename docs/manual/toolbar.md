@@ -48,7 +48,7 @@ in groups. Each one is the command of the same name in a menu, described there:
 | [Media menu](media.md) | **Tape Play/Stop**, **Tape Record/Stop**, **Tape Player**, **Disk Manager**, **Cartridge**, **divMMC**, **SD Card**, **Drives** |
 | [View menu](view.md) | **Fullscreen**, **Keep Aspect Ratio**, **Size**, **Shaders**, **ZX Palette**, **Virtual Keyboard** |
 | [Input menu](input.md) | **Grab Keyboard**, **Grab Mouse**, **Keymap**, **Gamepads** |
-| [Tools menu](tools.md) | **Cheats...**, **Debugger**, **Screen**, **Sound Chips**, **Options...** |
+| [Tools menu](tools.md) | **Cheats...**, **Debugger**, **Screen**, **Sound Chips**, **Heat Map**, **Options...** |
 | [Mute](machines.md#mute) | **Mute** |
 
 A button for a menu - **Model**, **Turbo Mode**, **Size** and the like - opens that menu

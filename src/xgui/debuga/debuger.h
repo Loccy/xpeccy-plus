@@ -68,6 +68,8 @@ class DebugWin : public QMainWindow {
 		void s_scr_upd();
 		void wannaSndWin(bool);
 		void s_snd_upd();
+		void wannaHeatWin(bool);
+		void s_heat_upd();
 		void wannaEvoWin(bool);
 		void s_evo_upd();
 		void wannaNextWin(bool);
@@ -86,6 +88,8 @@ class DebugWin : public QMainWindow {
 		void evoPicture();
 		void nextSetDetached(bool);
 		void sndToggle();
+		void heatSetDetached(bool);
+		void heatToggle();
 		void updateStyle();
 	private:
 		void machinePanels();

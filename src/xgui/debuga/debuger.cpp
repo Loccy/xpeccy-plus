@@ -762,6 +762,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	connect(ui_asm.tbRefresh, SIGNAL(released()), this, SLOT(reload()));
 
 	connect(wid_heat, &xHeatWidget::s_adr, ui_asm.dasmTable, &xDisasmTable::setAdrX);
+	connect(wid_heat, &xHeatWidget::s_detach, this, &DebugWin::heatSetDetached);
 
 // registers
 //	connect(ui.flagGroup,SIGNAL(buttonClicked(int)),this,SLOT(setFlags()));
@@ -1140,6 +1141,9 @@ void DebugWin::keyPressEvent(QKeyEvent* ev) {
 		case XCUT_SNDWIN:
 			sndToggle();
 			break;
+		case XCUT_HEATWIN:
+			heatToggle();
+			break;
 		case XCUT_OPEN_DUMP:
 			doOpenDump();
 			break;
@@ -1261,6 +1265,7 @@ void DebugWin::fillNotCPU() {
 	// those: while the debugger has the machine, it feeds them itself
 	emit s_scr_upd();
 	emit s_snd_upd();
+	emit s_heat_upd();
 	emit s_evo_upd();
 
 	setSignal(ui_misc.labDOS, comp->flgDOS);
@@ -1309,6 +1314,16 @@ void DebugWin::sndSetDetached(bool on) {
 
 void DebugWin::sndToggle() {
 	sndSetDetached(!conf.dbg.snddetach);
+}
+
+void DebugWin::heatSetDetached(bool on) {
+	conf.dbg.heatdetach = on ? 1 : 0;
+	wid_heat->setDetached(on);
+	emit wannaHeatWin(on);
+}
+
+void DebugWin::heatToggle() {
+	heatSetDetached(!conf.dbg.heatdetach);
 }
 
 void DebugWin::evoSetDetached(bool on) {

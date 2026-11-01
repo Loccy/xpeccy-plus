@@ -415,5 +415,70 @@ int debugger_check(void) {
 	}
 	check("dump by area and page", ok);
 	compDestroy(comp);
+
+	// the heat map counts layer 2 over a BRAM page on that page, not past the image
+	comp = machine();
+	{
+		int code = 0x40000 + 0x30 * 0x2000;
+		int pg10 = 0x40000 + 0x0a * 0x2000 + 0x123;
+		next_mmu_set(comp, 4, 0x30);
+		comp->mem->ramData[code] = 0x77;		// ld (hl),a
+		comp->next->nr[0x12] = 5;		// Layer 2 in bank 5 = pages 0A/0B...
+		comp->next->p123b = 1;			// ...mapped for writes over 0000-3FFF
+		comp_heat_sync(comp);
+		comp->flgHEAT = 1;
+		comp->cpu->regPC = 0x8000;
+		comp->cpu->regHL = 0x0123;
+		compExec(comp);
+		xHeatTotal p10 = comp_heat_page(comp, CELL_RAM, 0x0a);
+		xHeatTotal r0 = comp_heat_page(comp, CELL_ROM, 0);
+		xHeatTotal p30 = comp_heat_page(comp, CELL_RAM, 0x30);
+		ok = comp->heatRam.wr[pg10] == 1 && !comp->heatRam.wr[0x123] && comp->heatRam.ex[code] == 1;
+		ok &= p10.valid && p10.wr == 1 && !p10.rd && !p10.ex && r0.valid && !r0.wr;
+		ok &= p30.ex == 1 && !p30.wr && comp_heat_area(comp, CELL_RAM, 0x0a, 0x123).wr == 1;
+	}
+	check("heat of layer 2 over a BRAM page", ok);
+	compDestroy(comp);
+
+	// a HALT's M1 cycles fetch the byte after it: exec on the bus, not a data read
+	comp = machine();
+	{
+		int code = 0x40000 + 0x30 * 0x2000;
+		next_mmu_set(comp, 4, 0x30);
+		comp->mem->ramData[code] = 0x76;		// halt
+		comp_heat_sync(comp);
+		comp->flgHEAT = 1;
+		comp->cpu->regPC = 0x8000;
+		comp->cpu->flgIFF1 = 0;		// no interrupt to end it
+		for (int i = 0; i < 3; i++) compExec(comp);
+		ok = comp->heatRam.ex[code] == 1 && comp->heatRam.ex[code + 1] == 2 && !comp->heatRam.rd[code + 1];
+	}
+	check("heat of a HALT's fetches", ok);
+	compDestroy(comp);
+
+	// and divMMC's own memory, outside the Next, in a bank of its own
+	comp = compCreate();
+	compSetHardware(comp, "ZX128");
+	memSetSize(comp->mem, MEM_128K, MEM_32K);
+	div_set_model(comp->div, DIV_MMC, 16);
+	compReset(comp, RES_DEFAULT);
+	{
+		int b3 = DIV_EE_SIZE + 3 * 0x2000;
+		div_out(comp->div, 0xe3, 0x83);		// conmem, bank 3
+		comp->div->data[b3] = 0x77;		// ld (hl),a at #2000, bank 3
+		comp_heat_sync(comp);
+		comp->flgHEAT = 1;
+		comp->cpu->regPC = 0x2000;
+		comp->cpu->regHL = 0x2010;
+		compExec(comp);
+		xHeatTotal d3 = comp_heat_page(comp, CELL_DIV, 3);
+		xHeatTotal r0 = comp_heat_page(comp, CELL_ROM, 0);
+		ok = comp->heatDiv.size == DIV_EE_SIZE + 16 * 0x2000;
+		ok &= comp->heatDiv.ex[b3] == 1 && comp->heatDiv.wr[b3 + 0x10] == 1;
+		ok &= d3.valid && d3.ex == 1 && d3.wr == 1 && !r0.ex && !r0.wr;
+		ok &= comp_heat_area(comp, CELL_DIV, 3, 0x10).wr == 1 && comp_heat_area(comp, CELL_DIVROM, 0, 0).valid;
+	}
+	check("heat of divMMC memory", ok);
+	compDestroy(comp);
 	return failures ? 1 : 0;
 }

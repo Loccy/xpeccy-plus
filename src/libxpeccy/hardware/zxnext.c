@@ -781,6 +781,15 @@ int next_cell_abs(int area, int page, int ofs) {
 	return base + (page << shift) + ofs;
 }
 
+// The SRAM behind the BRAM pages 0A, 0B and 0E, as the debugger addresses it
+// (0x200000 + its offset in NX.shadow), at its place in the SRAM image
+int next_shadow_sram(int abs) {
+	int ofs = abs - 0x200000;
+	if ((ofs < 0) || (ofs >= (int)sizeof(((xNextState*)0)->shadow))) return -1;
+	int pg = (ofs < 0x4000) ? (0x0a + (ofs >> 13)) : 0x0e;
+	return NX_RAM + (pg << 13) + (ofs & 0x1fff);
+}
+
 int next_mmu_get(Computer* comp, int slot) {
 	return ((slot >= 0) && (slot < 8)) ? NX.mmu[slot] : 0xff;
 }
