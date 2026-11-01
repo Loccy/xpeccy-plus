@@ -40,7 +40,7 @@ The machine list shows them in this order, in five groups.
 | **ZXM-Phoenix** | 2 MB | Beta Disk | YM, Covox; Kempston mouse and joystick, turbo x2 |
 | **ZX Evolution (BaseConf)** | 4 MB | Beta Disk | the ZX Evolution board running BaseConf: two YM (TurboSound), Covox; NemoIDE hard disk, SD card, PC keyboard, mouse with wheel, turbo x2 and x4 |
 | **ZX Evolution (TSConf)** | 4 MB | Beta Disk | the same board running TSConf; as BaseConf |
-| **ALF TV Game** | 64 KB | - | a games console built on the 48K: no AY; cartridges, two joysticks |
+| **ALF TV Game** | 48 KB | - | a games console built on the 48K: no AY; cartridges, two joysticks |
 | **ALF TV Game 128K** | 128 KB | - | the 128K version of the console; YM |
 
 ```{index} Beta Disk, TR-DOS
