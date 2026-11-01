@@ -46,7 +46,7 @@ bool up_compare_ahead(const QByteArray& json) {
 }
 
 int up_default_channel(const upBuild& self) {
-	return self.release ? UP_RELEASES : UP_NIGHTLY;
+	return self.release ? UP_RELEASES : UP_DEV;
 }
 
 // the name without its extension: ".zip", ".dmg", ".AppImage"

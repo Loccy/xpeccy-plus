@@ -84,12 +84,20 @@ jobs:
           # remote unless it is told which one
           GH_REPO: ${{ github.repository }}
         run: |
+          # Bridge for builds made before the Windows files were renamed (2026-11):
+          # their update check looks for exactly its old name. win-x64-qt6 is the
+          # new win-x64 (Qt 6), win-x86 the new win-x86-legacy. Drop once 2026.9
+          # has been out a month. The old win-x64 (Qt 5) takes the new win-x64 as
+          # it is - Qt 6, which is right on Windows 10 and 11
+          for f in dist/*-win-x64.zip; do cp "$f" "${f%-win-x64.zip}-win-x64-qt6.zip"; done
+          for f in dist/*-win-x86-legacy.zip; do cp "$f" "${f%-win-x86-legacy.zip}-win-x86.zip"; done
           ls -lh dist
           # deleted and recreated rather than edited: the tag has to move to the
-          # commit that was just built
+          # commit that was just built. It stays "nightly" whatever the release
+          # is called: every build with the update check asks for it by that name
           gh release delete nightly --cleanup-tag --yes || true
           gh release create nightly dist/* \
             --prerelease \
             --target "$GITHUB_SHA" \
-            --title "Nightly build" \
-            --notes "Automated build from the latest commit on \`main\` (${GITHUB_SHA:0:7}, $(date -u +%Y-%m-%d)). May be unstable - see Releases for the latest stable version."
+            --title "Development build" \
+            --notes "Automated build from the latest commit on \`main\` (${GITHUB_SHA:0:7}, $(date -u +%Y-%m-%d)). May be unstable - see Releases for the latest stable version. Windows: \`win-x64\` for Windows 10 and 11, \`win-x64-legacy\` (64-bit) or \`win-x86-legacy\` (32-bit) for Windows 7 and 8.1; \`win-x64-qt6\` and \`win-x86\` are copies under the old names, so that older builds can update themselves."

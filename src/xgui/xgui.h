@@ -208,7 +208,7 @@ bool lab_char(QChar);
 // the update check (updatewin.cpp): the settings as they apply to this build, the
 // check a start makes when it is due, and Help > Check for Updates
 int upd_period();		// UPC_*
-int upd_channel();		// UP_RELEASES, UP_NIGHTLY
+int upd_channel();		// UP_RELEASES, UP_DEV
 void upd_auto(QWidget* main);
 void upd_check(QWidget* main);
 // an update before the start (finished, or undone when cut short) and after the end (put in

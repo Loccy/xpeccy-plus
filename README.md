@@ -149,7 +149,7 @@ Qt 6 has no 32-bit Windows build at all, so a 32-bit binary means Qt 5.
 
 ```
 packaging\fetch-deps.ps1
-packaging\make-dist.ps1 -Preset qt5-x64 -Zip
+packaging\make-dist.ps1 -Preset qt6-x64 -Zip
 ```
 
 The first downloads SDL2 into `build\deps`. Its version is pinned in
@@ -159,7 +159,8 @@ rewrites the manifest, which is meant to be committed on its own.
 
 The second configures, builds, and stages a ready-to-run folder under `build\dist` -
 binary, Qt and SDL runtime, `config\`, and the docs - optionally zipped. Presets are
-`qt5-x64` (default), `qt5-x86` and `qt6-x64`; useful flags are `-Clean`, `-Release`,
+`qt6-x64` (default, the `win-x64` package), `qt5-x64` and `qt5-x86` (`win-x64-legacy` and
+`win-x86-legacy`, for Windows 7 and 8.1); useful flags are `-Clean`, `-Release`,
 `-Zip` and `-Full`. Paths to the toolchains live in a table at the top of the script.
 
 Assembling that folder is CMake's job, not the script's: `cmake --install <build-dir>

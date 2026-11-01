@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <cstdio>
+#include <cstring>
 
 #include "update.h"
 
@@ -110,6 +111,78 @@ static void test_parse(const QString& dir) {
 	obj["assets"] = QJsonArray();
 	upRelease bare = up_parse(QJsonDocument(obj).toJson(), "win-x64");
 	CHECK(bare.ok && bare.asset.url.isEmpty());
+
+	// the packages as named since 2026.9 find nothing in a release from before
+	CHECK(up_parse(latest, "win-x64-legacy").asset.url.isEmpty());
+	CHECK(up_parse(latest, "win-x86-legacy").asset.url.isEmpty());
+	CHECK(up_parse(latest, "macos-arm64").asset.url.isEmpty());
+}
+
+// The nightly of 2026-10-27 with its files named the 2026.9 way, plus the copies under the
+// old names nightly.yml adds for the builds from before (win-x64-qt6, win-x86)
+static QByteArray renamed_nightly(const QByteArray& json) {
+	static const struct {const char* from; const char* to; bool copy;} ren[] = {
+		{"-win-x64.zip", "-win-x64-legacy.zip", false},
+		{"-win-x64-qt6.zip", "-win-x64.zip", false},
+		{"-win-x86.zip", "-win-x86-legacy.zip", false},
+		{"-macos-arm64-qt6.dmg", "-macos-arm64.dmg", false},
+		{"-win-x64.zip", "-win-x64-qt6.zip", true},		// of the renamed: Qt 6
+		{"-win-x86-legacy.zip", "-win-x86.zip", true},
+	};
+	QJsonObject obj = QJsonDocument::fromJson(json).object();
+	QJsonArray assets = obj["assets"].toArray();
+	for (const auto& r : ren) {
+		for (int i = 0; i < assets.size(); i++) {
+			QJsonObject a = assets[i].toObject();
+			QString name = a["name"].toString();
+			if (!name.endsWith(r.from)) continue;
+			name = name.left(name.size() - (int)strlen(r.from)) + r.to;
+			a["name"] = name;
+			QString url = a["browser_download_url"].toString();
+			a["browser_download_url"] = url.left(url.lastIndexOf('/') + 1) + QString(name).replace("+", "%2B");
+			if (r.copy) {
+				assets.append(a);
+			} else {
+				assets[i] = a;
+			}
+			break;
+		}
+	}
+	obj["assets"] = assets;
+	return QJsonDocument(obj).toJson();
+}
+
+static void test_renamed(const QString& dir) {
+	QByteArray nightly = renamed_nightly(load(dir + "/nightly-20261027.json"));
+	// the sha256 heads of the 2026-10-27 files: Qt 6 x64, Qt 5 x64, Qt 5 x86, macOS
+	static const char* qt6 = "31955ca6ac680493";
+	static const char* qt5x64 = "2f19fad5ce279015";
+	static const char* qt5x86 = "a0a65203458d9422";
+	static const struct {const char* pkg; const char* sha; const char* file;} tab[] = {
+		// win-x64 is also the old Qt 5 x64 build's name: that one takes Qt 6 now,
+		// as nightly.yml says (builds since never change Qt by an update: updatewin.cpp)
+		{"win-x64", qt6, "-win-x64.zip"},
+		{"win-x64-legacy", qt5x64, "-win-x64-legacy.zip"},
+		{"win-x86-legacy", qt5x86, "-win-x86-legacy.zip"},
+		{"macos-arm64", "db834ea914d80748", "-macos-arm64.dmg"},
+		{"linux-x86_64", "22bfdf42bd3f4e14", "-linux-x86_64.AppImage"},
+		// builds from before: Qt 6 and x86 by the copies, macOS by the page
+		{"win-x64-qt6", qt6, "-win-x64-qt6.zip"},
+		{"win-x86", qt5x86, "-win-x86.zip"},
+		{"macos-arm64-qt6", NULL, NULL},
+	};
+	for (const auto& row : tab) {
+		upRelease n = up_parse(nightly, row.pkg);
+		CHECK(n.ok && n.nightly);
+		CHECK(n.build.base == "2026.9" && n.build.date == 20261027);
+		if (!row.sha) {
+			CHECK(n.asset.url.isEmpty());
+			continue;
+		}
+		CHECK(n.asset.sha256.startsWith(row.sha));
+		CHECK(n.asset.name == QString("xpeccy-plus-2026.9-dev+20261027") + row.file);
+		CHECK(n.asset.url.endsWith(QString(n.asset.name).replace("+", "%2B")));
+	}
 }
 
 static void test_compare() {
@@ -144,7 +217,7 @@ static void test_compare() {
 	CHECK(!up_same_day(latest, rel("2026.8.1")));
 
 	CHECK(up_default_channel(rel("2026.8.2")) == UP_RELEASES);
-	CHECK(up_default_channel(night) == UP_NIGHTLY);
+	CHECK(up_default_channel(night) == UP_DEV);
 }
 
 static void test_pick() {
@@ -369,6 +442,7 @@ int main(int argc, char** argv) {
 		return 2;
 	}
 	test_parse(argv[1]);
+	test_renamed(argv[1]);
 	test_compare();
 	test_pick();
 	test_whats_new(argv[2]);

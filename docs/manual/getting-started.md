@@ -10,11 +10,11 @@ Pick the file for your system:
 
 | System | File | |
 |---|---|---|
-| Windows 10 or 11 | `xpeccy-plus-<version>-win-x64-qt6.zip` | |
-| Older Windows | `xpeccy-plus-<version>-win-x64.zip` | 64-bit |
-| | `xpeccy-plus-<version>-win-x86.zip` | 32-bit |
+| Windows 10 or 11 | `xpeccy-plus-<version>-win-x64.zip` | |
+| Windows 7 or 8.1 | `xpeccy-plus-<version>-win-x64-legacy.zip` | 64-bit |
+| | `xpeccy-plus-<version>-win-x86-legacy.zip` | 32-bit |
 | Linux | `xpeccy-plus-<version>-linux-x86_64.AppImage` | |
-| macOS | `xpeccy-plus-<version>-macos-arm64-qt6.dmg` | Apple silicon |
+| macOS | `xpeccy-plus-<version>-macos-arm64.dmg` | Apple silicon |
 
 Nothing else has to be installed. Machines, ROM images and settings come with the
 program, so it runs right away.
@@ -106,7 +106,7 @@ different settings folder, start the program with `--confdir <folder>`.
 
 ## Updates
 
-```{index} updates, Check for Updates, Update channel, nightly build, What's New, Restart Now
+```{index} updates, Check for Updates, Update channel, development build, nightly build, What's New, Restart Now
 ```
 
 Once a day Xpeccy+ asks GitHub whether a newer version is out. When one is, a window says
@@ -114,9 +114,10 @@ so and shows what is new since your version, with **Download** to get it (or **U
 see below) and **Later** to close the window until the next check. The window has two settings, saved at once:
 
 - **Check for updates** - **Every day**, **Every week** or **Never**.
-- **Update channel** - **Releases**: new versions only. **Nightly**: the nightly build too,
-  made each night from the newest code; a release newer than the last nightly build is
-  offered as well. A release starts on **Releases**, a nightly build on **Nightly**.
+- **Update channel** - **Releases**: new versions only. **Development**: the development
+  build too, made each night from the newest code; a release newer than the last
+  development build is offered as well. A release starts on **Releases**, a development
+  build on **Development**.
 
 Both are also on the [Application page](options-application.md).
 **Help > Check for Updates...** asks at once.
@@ -133,6 +134,9 @@ old one when you quit.
   you replaced, is kept; if the new version has a new one, it goes to
   `config\update-<version>` and the program tells you so.
 - An update cut short, by a power cut say, is undone at the next start.
+- A `legacy` build is never updated to the Windows 10 and 11 one, nor that one to a
+  `legacy` build: to change, download the other file. When a new version has no file named
+  like yours, the window says so and offers the release page.
 - When the program's folder cannot be written to (`Program Files`), **Download** is offered
   instead.
 - The AppImage is replaced by the new one.

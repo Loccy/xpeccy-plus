@@ -4117,7 +4117,7 @@ Right click: back to the style color</string>
                   <item row="3" column="0">
                    <widget class="QLabel" name="labUpdChannel">
                     <property name="toolTip">
-                     <string>Releases only, or nightly builds too</string>
+                     <string>Releases only, or development builds too</string>
                     </property>
                     <property name="text">
                      <string>Update channel</string>
@@ -4127,7 +4127,7 @@ Right click: back to the style color</string>
                   <item row="3" column="1">
                    <widget class="QComboBox" name="cbUpdChannel">
                     <property name="toolTip">
-                     <string>Releases only, or nightly builds too</string>
+                     <string>Releases only, or development builds too</string>
                     </property>
                     <item>
                      <property name="text">
@@ -4136,7 +4136,7 @@ Right click: back to the style color</string>
                     </item>
                     <item>
                      <property name="text">
-                      <string>Nightly</string>
+                      <string>Development</string>
                      </property>
                     </item>
                    </widget>

@@ -8,7 +8,7 @@
 - **Machine at start** - see [Machine at start](#machine-at-start).
 - **Listen port** - the network port the program listens on, for tools that control it.
 - **Check for updates**, **Update channel** - how often to look for a newer version, and
-  whether nightly builds count; see [Updates](getting-started.md#updates).
+  whether development builds count; see [Updates](getting-started.md#updates).
 - **Confirm exit** - ask before closing. **Pause when inactive** is on the
   [Emulation page](options-emulation.md) now.
 - {icon}`star` **Manage favorites...** - see [Favorites menu](favorites.md).

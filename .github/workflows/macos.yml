@@ -124,7 +124,7 @@ jobs:
             -DUSEOPENGL=1 \
             -DUSEQTNETWORK=1 \
             -DSDL1BUILD=0 \
-            -DXPACKAGE=macos-arm64-qt6
+            -DXPACKAGE=macos-arm64
 
       - name: Build
         run: cmake --build "$BUILD_DIR" -j "$(sysctl -n hw.ncpu)"

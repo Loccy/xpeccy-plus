@@ -15,6 +15,7 @@
 #include "filemachine.h"
 #include "vidrec.h"
 #include "serial.h"
+#include "update.h"
 
 #ifdef _WIN32
 	#include <windows.h>
@@ -64,7 +65,7 @@ static int rec_id(const char** tab, const std::string& nam, int def) {
 static const char* autorun_name[] = {"mount", "run", "ask", NULL};	// AR_* order
 static const char* start_name[] = {"last", "ask", "this", "unset", "resume", NULL};	// MS_* order
 static const char* upd_check_name[] = {"day", "week", "never", NULL};	// UPC_* order
-static const char* upd_channel_name[] = {"releases", "nightly", NULL};	// UP_RELEASES, UP_NIGHTLY
+static const char* upd_channel_name[] = {"releases", "development", NULL};	// UP_RELEASES, UP_DEV
 
 // before Ask it was yes/no, and yes was the default, always written out: only no was chosen
 static int autorun_of(const std::string& val) {
@@ -1397,7 +1398,7 @@ void loadConfig() {
 					if (pnam == "folder.asked") conf.fold.asked = arg.b;
 					if (pnam == "port") conf.port = arg.i & 0xffff;
 					if (pnam == "update.check") conf.upd.check = rec_id(upd_check_name, pval, UPC_UNSET);
-					if (pnam == "update.channel") conf.upd.channel = rec_id(upd_channel_name, pval, -1);
+					if (pnam == "update.channel") conf.upd.channel = (pval == "nightly") ? UP_DEV : rec_id(upd_channel_name, pval, -1);	// nightly: before 2026.9
 					if (pnam == "update.last") conf.upd.last = strtoll(pval.c_str(), NULL, 10);
 					if (pnam == "winpos") {
 						vect = splitstr(pval, ",");

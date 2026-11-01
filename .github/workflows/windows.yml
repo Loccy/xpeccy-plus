@@ -41,8 +41,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Qt 5.15.2 is the last release with official MinGW binaries, and the
-          # 32-bit build is the one upstream users are used to
+          # win-x86-legacy and win-x64-legacy: Windows 7 and 8.1, which Qt 6
+          # does not start on. Qt 5.15.2 is the last release with official
+          # MinGW binaries; the 32-bit build is the one upstream users know,
+          # the 64-bit one is faster where the system is 64-bit
           - preset: qt5-x86
             qt: '5.15.2'
             qt_arch: win32_mingw81
@@ -57,6 +59,7 @@ jobs:
             mingw_tool: tools_mingw
             mingw_variant: qt.tools.win64_mingw810
             mingw_dir: mingw810_64
+          # win-x64, the main one: Windows 10 and 11.
           # 6.6.2 on purpose, and the same MinGW that comes with it: Qt 6.7
           # replaced qwindowsvistastyle with qmodernwindowsstyle, whose windows11
           # style is the default on Windows 11 - and the bundled qss themes are
