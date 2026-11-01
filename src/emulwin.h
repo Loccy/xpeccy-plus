@@ -177,6 +177,7 @@ class MainWin : public QWidget {
 		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false, bool side = false);
 		void mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from);	// a tape or a disk, read in the background
 		QString mediaIn(int id, int drv);
+		void mediaThread(std::function<void()> work, std::function<void()> done);
 		void mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk);
 		void padGame(const QString&);		// an image opened: player 1 takes its .pad, or its own table back
 		bool openCheats(const QString&);	// a .pok, into the Cheats window

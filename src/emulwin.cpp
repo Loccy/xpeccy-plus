@@ -2100,6 +2100,16 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 	emit s_tape_upd(comp->tape);
 }
 
+// Work on a thread of its own, then done on the gui thread - unless the window has gone
+// meanwhile, as the program closes: the application outlives it.
+void MainWin::mediaThread(std::function<void()> work, std::function<void()> done) {
+	QPointer<MainWin> self(this);
+	std::thread([self, work, done]() {
+		work();
+		QMetaObject::invokeMethod(qApp, [self, done]() {if (self) done();}, Qt::QueuedConnection);
+	}).detach();
+}
+
 // what the deck or a drive holds, as its path: a side's place in the game
 QString MainWin::mediaIn(int id, int drv) {
 	Computer* comp = conf.zx;
@@ -2155,10 +2165,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, cons
 		emit s_tape_upd(conf.zx->tape);
 		if (diskWin->isVisible()) diskWin->refresh();
 	};
-	std::thread([this, job, done]() {
-		media_mount_read(job.get());
-		QMetaObject::invokeMethod(this, done, Qt::QueuedConnection);
-	}).detach();
+	mediaThread([job]() {media_mount_read(job.get());}, done);
 }
 
 // The floppy drives are there for a disk: true at once unless the divMMC has them
@@ -3982,10 +3989,7 @@ void MainWin::spareTape(Computer* comp, const QString& next, const QString& plac
 		else
 			media_mount_free(job.get());
 	};
-	std::thread([this, job, done]() {
-		media_mount_read(job.get());
-		QMetaObject::invokeMethod(this, done, Qt::QueuedConnection);
-	}).detach();
+	mediaThread([job]() {media_mount_read(job.get());}, done);
 }
 
 // Auto play asked for the next tape of the set and the machine waits: it goes in at its
