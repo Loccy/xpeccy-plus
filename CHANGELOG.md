@@ -130,6 +130,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **The ZX 48K and ALF TV Game show 48 KB of memory** on the Machine page, not 64 KB.
+
 - **A drive in the status bar opens its own tab**: a click on B: opens the Disk Manager on
   drive B, not on the tab it had last.
 

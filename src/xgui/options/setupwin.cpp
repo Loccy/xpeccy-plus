@@ -2811,8 +2811,10 @@ void SetupWin::setmszbox(int idx) {
 	ui.mszbox->clear();
 	idx = 0;
 	while (memNameTab[idx].mask > 0) {
+		// a core whose 64K is 48K of RAM, the rest ROM: shown as what it has
+		bool is48 = (memNameTab[idx].mask == MEM_64K) && (t & MEM_48K);
 		if (t & memNameTab[idx].mask)
-			ui.mszbox->addItem(memNameTab[idx].name, memNameTab[idx].size);
+			ui.mszbox->addItem(is48 ? "48 KB" : memNameTab[idx].name, memNameTab[idx].size);
 		idx++;
 	}
 	ui.mszbox->setCurrentIndex(ui.mszbox->findData(size));

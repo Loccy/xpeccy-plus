@@ -23,7 +23,7 @@ static QString scr_page_name(int page) {
 // ram for it. The core has to be asked first: a machine's own size is not
 // enough, a ZX 48K is built with 128K of ram allocated behind it.
 static bool scr_has_shadow(Computer* comp) {
-	if (comp->hw->mask && !(comp->hw->mask & ~(MEM_128K - 1))) return false;
+	if (comp->hw->mask && !(comp->hw->mask & ~(MEM_128K - 1) & ~MEM_48K)) return false;
 	return (comp->mem->ramSize >= (XSCR_PAGE_SHADOW + 1) * MEM_16K);
 }
 

@@ -135,6 +135,9 @@ typedef reg16(w,h,l) xreg16;
 #define MEM_16M	(1<<24)
 // not a size: a core that can also have three rows of 256K out of four (Profi)
 #define MEM_768K	(1<<25)
+// not a size: the 64K of this core is 48K of RAM, the rest of the address space ROM
+// (ZX 48K, ALF); a machine file says 48 for it
+#define MEM_48K	(1<<26)
 
 // Nonzero freezes the host clock the machine sees (its RTC, the power-on ram
 // pattern) at this time_t, so two runs can be compared byte for byte.

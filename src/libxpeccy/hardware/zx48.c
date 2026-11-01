@@ -86,6 +86,6 @@ int speIn(Computer* comp, int port) {
 	return hwIn(spePortMap, comp, port);
 }
 
-HardWare z48_hw_core = {HW_ZX48,"ZX48","ZX 48K",MEM_64K | MEM_16K,1.0,NULL,NULL,
+HardWare z48_hw_core = {HW_ZX48,"ZX48","ZX 48K",MEM_64K | MEM_48K | MEM_16K,1.0,NULL,NULL,
 			zx_init,speMapMem,speOut,speIn,stdMRd,stdMWr,zx_irq,zx_ack,zx48_reset,zx_sync,zx_keyp,zx_keyr,zx_vol,
 			NULL,NULL,&hwq_zx};

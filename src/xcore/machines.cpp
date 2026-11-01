@@ -1068,6 +1068,12 @@ static int mac_ram_size(int kb, int mask) {
 	return sz;
 }
 
+// what a machine file says for a size: 48 is the 64K of a core with MEM_48K
+// (64 there reads the same, rounded up like any other size)
+static int mac_ram_kb(int size, int mask) {
+	return ((size == MEM_64K) && (mask & MEM_48K)) ? 48 : (size >> 10);
+}
+
 static int mac_psg_count(Computer* comp) {
 	if (comp->ts->chipA->type == SND_NONE) return 0;
 	return (comp->ts->type == TS_ZXNEXT) ? 3 : (comp->ts->type == TS_NEDOPC) ? 2 : 1;
@@ -1380,7 +1386,7 @@ static void mac_put_all(QList<xMacLine>& out, const xMachine* mac) {
 	mac_put(out, "cpu", cpu, mac->cpu);
 	mac_put(out, "cpu.frq", int(comp->cpuFrq * 1e6), mac->cpufrq);
 	mac_put(out, "cpu.turbo", mac_turbo_str(comp->turboTab, comp->turboCount), mac->turboSteps);
-	mac_put(out, "memory", comp->mem->ramSize >> 10, mac->memory);
+	mac_put(out, "memory", mac_ram_kb(comp->mem->ramSize, comp->hw->mask), mac->memory);
 	mac_put(out, "reset", mac_word_name(resetTab, comp->resbank), mac_word_name(resetTab, mac->resbank));
 	mac_put(out, "issue", mac_word_name(earTab, comp->earback), mac_word_name(earTab, mac->earback));
 	mac_put_yn(out, "ear.rc", comp->earRC, mac->earrc);
