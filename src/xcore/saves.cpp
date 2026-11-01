@@ -22,7 +22,21 @@ static const char* save_prefix[SAVE_KINDS] = {"quick", "exit", "auto"};
 // what holds the game, GSRC_*: looked at once the media are in
 enum {GSRC_NONE, GSRC_TAPE, GSRC_DISK, GSRC_LOOK};
 
-static xGame game = {QString(), QString(), QString(), GSRC_NONE};	// image: as opened; hash: sha-1, hex
+static xGame game = {QString(), QString(), QString(), GSRC_NONE, 0, std::string()};	// image: as opened; hash: sha-1, hex
+
+// what the game is set against: a user reset or a machine switch after it ends it
+static void game_stamp() {
+	game.resets = xUserResets.load();
+	game.mac = conf.macId;
+}
+
+void game_restamp() {
+	game_stamp();
+}
+
+bool game_stale() {
+	return (game.resets != xUserResets.load()) || (game.mac != conf.macId);
+}
 
 QString saves_root() {
 	if (!conf.saves.dir.isEmpty()) return conf.saves.dir;
@@ -77,9 +91,28 @@ void game_set(const QString& image) {
 	arc_split(image, nullptr, &entry);
 	game.name = saves_clean(QFileInfo(entry.isEmpty() ? image : entry).completeBaseName());
 	game.src = GSRC_LOOK;
+	game_stamp();
 	// a folder that is there already learns this path too
 	QString dir = saves_game_dir();
 	if (!dir.isEmpty()) saves_dir(true);
+}
+
+// one file, however its path was written; a path no longer there by its text
+static bool same_image(const QString& a, const QString& b) {
+	QString ca = arc_canonical(a);
+	QString cb = arc_canonical(b);
+	if (ca.isEmpty() || cb.isEmpty()) {
+		ca = QDir::cleanPath(QDir::fromNativeSeparators(a));
+		cb = QDir::cleanPath(QDir::fromNativeSeparators(b));
+	}
+	return ca.compare(cb, Qt::CaseInsensitive) == 0;
+}
+
+// By its path: a game writing to its own disk is still that game.
+void game_follow(const QString& image) {
+	if (image.isEmpty()) return;
+	if (!game.image.isEmpty() && same_image(image, game.image)) return;
+	game_set(image);
 }
 
 void game_set_save(const QString& save) {
@@ -99,6 +132,7 @@ void game_set_save(const QString& save) {
 	game.hash = obj.value("hash").toString();
 	game.name = obj.value("name").toString();
 	game.src = GSRC_LOOK;
+	game_stamp();
 }
 
 xGame game_now() {
@@ -107,6 +141,7 @@ xGame game_now() {
 
 void game_put(const xGame& g) {
 	game = g;
+	game_stamp();
 }
 
 void game_forget() {
@@ -114,6 +149,7 @@ void game_forget() {
 	game.hash.clear();
 	game.name.clear();
 	game.src = GSRC_NONE;
+	game_stamp();
 }
 
 // the tape or the disk it was opened as has left its place
@@ -209,27 +245,8 @@ QString saves_dir(bool make) {
 	return dir;
 }
 
-QString saves_auto_dir() {
-	if (!game.hash.isEmpty() && conf.saves.perGame) return saves_game_dir();
-	QString dir = saves_machine_dir();
-	return QFileInfo(dir).isDir() ? dir : QString();
-}
-
 QString saves_session_path() {
 	return QDir(saves_root()).filePath("last-session.szx");
-}
-
-void saves_note_game(const QString& save) {
-	QFileInfo fi(save);
-	QJsonObject obj;
-	if (!game.hash.isEmpty()) {
-		obj.insert("name", game.name);
-		obj.insert("hash", game.hash);
-		obj.insert("images", QJsonArray({QDir::fromNativeSeparators(game.image)}));
-	}
-	QFile file(fi.path() + "/" + fi.completeBaseName() + ".json");
-	if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		file.write(QJsonDocument(obj).toJson());
 }
 
 QString saves_folder_image(const QString& dir) {
@@ -358,6 +375,18 @@ QList<xSaveFolder> saves_folders() {
 		return a.saves.first().time > b.saves.first().time;
 	});
 	return res;
+}
+
+QString saves_newest_auto() {
+	xSave best;
+	for (const xSaveFolder& f : saves_folders()) {
+		for (const xSave& sv : f.saves) {
+			if ((sv.kind == SAVE_QUICK) || (!best.path.isEmpty() && (sv.time <= best.time))) continue;
+			best = sv;
+			break;		// newest first: the first one is the folder's newest
+		}
+	}
+	return best.path;
 }
 
 QString saves_folder_of(const QString& image) {

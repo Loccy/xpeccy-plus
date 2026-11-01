@@ -3152,8 +3152,8 @@ void SetupWin::buildSaves() {
 		tr("The machine saved as the emulator closes"));
 	sbExitKeep = new QSpinBox;
 	sbExitKeep->setRange(1, 99);
-	savesRow(grid, sbExitKeep, tr("Exit autosaves kept"), tr("In a game's folder; else one, written over"),
-		tr("A game with quick saves keeps this many;\nany other has the one common file"));
+	savesRow(grid, sbExitKeep, tr("Exit autosaves kept"), tr("In the game's folder, or the machine's"),
+		tr("Exit autosaves each folder keeps"));
 	sbTimedMin = new QSpinBox;
 	sbTimedMin->setRange(0, 60);
 	sbTimedMin->setSpecialValueText(tr("Off"));

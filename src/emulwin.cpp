@@ -71,12 +71,6 @@
 #define	XPTITLE	XPRODUCT " (" XVERSION ")"
 #define	FPS_TICK_MS	200		// the timer the fps readout is sampled on
 
-// where the image named in the title is (drives are 0..3, the divMMC's cards 5..6)
-#define	MEDIA_TAPE	4
-#define	MEDIA_CARD	5
-#define	MEDIA_SRCS	7
-#define	MEDIA_SNAP	-1
-
 #if defined(__WIN32)
 #include <windows.h>
 #include <winuser.h>
@@ -2078,6 +2072,8 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 			media_opened(fpath, id, drv, run, pinned);
 		}
 		media_autorun(comp, run);
+		// its reset starts the game, not ends it
+		if ((err == ERR_OK) && (drv < 1)) game_restamp();
 	}
 	pause(false, PR_FILE);
 	rzxWatch();
@@ -3798,6 +3794,12 @@ void MainWin::watchMedia() {
 	QString snap = file_take_snapshot();		// whoever loaded it
 	if (!snap.isEmpty())
 		showMedia(snap, MEDIA_SNAP);
+	// a user reset or a machine switch: nothing runs until something starts,
+	// so the title names no image and saves go to the machine's folder
+	if (game_stale()) {
+		game_forget();
+		showMedia(QString(), MEDIA_SNAP);
+	}
 	game_check(comp);		// the game's tape or disk taken out: saves go elsewhere
 	// another image in a drive, or none: the name goes if it was this one,
 	// and a motor still running from the last one counts as a new start
@@ -3834,7 +3836,11 @@ void MainWin::watchMedia() {
 		int src = order[i];
 		if ((rose & (1 << src)) && !mediaRaw[src].isEmpty()) {
 			// a folder's path may end with a separator, which would leave it nameless
-			showMedia(QDir::cleanPath(QString::fromLocal8Bit(mediaRaw[src])), src);
+			QString path = QDir::cleanPath(QString::fromLocal8Bit(mediaRaw[src]));
+			showMedia(path, src);
+			// the tape or drive A starting is the program: its saves go with it.
+			// A disk in B is a save disk as often as not, a card a whole system.
+			if ((src == MEDIA_TAPE) || (src == 0)) game_follow(path);
 			break;
 		}
 	}
