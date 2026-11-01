@@ -205,6 +205,7 @@ extern long long next_log_cyc;	// ...and its cpu clock count
 void next_counters_at(Computer*, long long clk28, int* hc, int* vc, int* cvc);	// ...at that CLK_28 time
 int next_vsync_frame_at(Computer*, long long clk28);
 void next_audio(Computer*, int* l, int* r, int* env);	// the mixer's pcm_L/R (13 bits), psg0's env_vol
+void next_snap_loaded(Computer*, int vmode);	// a snapshot put the board back; vmode: NR 11's before
 int next_mmu_get(Computer*, int);
 void next_mmu_set(Computer*, int, int);
 int next_cell(int abs, int* page, int* ofs);		// an SRAM image cell's area (CELL_*), page and offset

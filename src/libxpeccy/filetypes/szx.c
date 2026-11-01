@@ -1045,7 +1045,7 @@ int szxCanSave(Computer* comp) {
 int szx_build(Computer* comp, szxBuf* out) {
 	int mid = szx_mid_of(comp);
 	memset(out, 0, sizeof(szxBuf));
-	if ((mid < 0) && !szx_ext_can_save(comp)) return (comp->hw && (comp->hw->id == HW_ZXNEXT)) ? ERR_SNAP_NEXT : ERR_SZX_HW;
+	if ((mid < 0) && !szx_ext_can_save(comp)) return ERR_SZX_HW;
 	szxBuf b;
 	szxBuf d;
 	int i;

@@ -377,6 +377,7 @@ typedef struct {
 
 // The ZX Spectrum Next's state (hardware/zxnext.c), all of it in one block the snapshot
 // takes on the Next, so a rollback takes it back. Names follow the core's (zxnext.vhd).
+// An SZX writes it member by member (fld_next, filetypes/szx_ext.c): a new one goes there too.
 typedef struct {
 	unsigned char powered;		// set at the first reset: the power-on values are in
 	unsigned char firmware;		// that reset hands over as TBBLUE.FW does (the power came on)

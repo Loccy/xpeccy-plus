@@ -2846,6 +2846,18 @@ static void nx_halt_done(Computer* comp, int adr, long long t0, long long n, int
 
 static const hwQuiet nx_quiet = {HWQ_ACK_NEXT, NULL, NULL, zx_devs_sync, NULL, 0, nx_halt, nx_halt_done};
 
+// An SZX has put xNextState back over a machine reset for it (filetypes/szx_ext.c):
+// what is worked out of the state, again. The clock comes back after this.
+void next_snap_loaded(Computer* comp, int vmode) {
+	if (NX.vmode != vmode) comp_update_timings(comp);	// the board's CLK_28 (NR 11)
+	long long idle = NX.spr.idleTo;
+	nx_layout(comp);		// the raster of the timing the state runs
+	NX.spr.idleTo = idle;		// worked out for that same raster
+	nx_map_mem(comp);
+	nxHaltLast.tick = -1;
+	comp->flgBOOT = 0;		// the firmware's hand-off is long over in the state
+}
+
 HardWare nxt_hw_core = {HW_ZXNEXT, "ZXNext", "ZX Spectrum Next", MEM_2M, 1.0, NULL, NULL,
 			nx_init, nx_map_mem, nx_out, nx_in, nx_mrd, nx_mwr, nx_irq, nx_ack, nx_reset, nx_sync,
 			nx_keyp, nx_keyr, nx_vol, NULL, nx_cont, &nx_quiet, 1, nx_power_on, nx_firmware, 1, 1,

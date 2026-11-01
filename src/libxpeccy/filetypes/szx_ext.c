@@ -404,6 +404,142 @@ static const szxField fld_tape[] = {
 	FLDEND
 };
 
+// The ZX Spectrum Next: the whole board (xNextState), part by part. Every member of
+// xNextState goes here, or a snapshot leaves it as the reset before the load set it.
+static const szxField fld_next[] = {
+	FLD(xNextState, powered),
+	FLD(xNextState, firmware),
+	FLD(xNextState, nr),
+	FLD(xNextState, timing),
+	FLD(xNextState, hz60),
+	FLD(xNextState, speed),
+	FLD(xNextState, contDis),
+	FLD(xNextState, speedPend),
+	FLD(xNextState, speedT),
+	FLD(xNextState, powerFrame),
+	FLD(xNextState, frameBase),
+	FLD(xNextState, pulseE),
+	FLD(xNextState, irqDead),
+	FLD(xNextState, dmaIntDead),
+	FLD(xNextState, refT),
+	FLD(xNextState, refC),
+	FLD(xNextState, copWake),
+	FLD(xNextState, copPc),
+	FLD(xNextState, copDout),
+	FLD(xNextState, copLast),
+	FLD(xNextState, copT),
+	FLD(xNextState, copQ),
+	FLD(xNextState, copN),
+	FLD(xNextState, dma),
+	FLD(xNextState, nrsel),
+	FLD(xNextState, mmu),
+	FLD(xNextState, p7ffd),
+	FLD(xNextState, pdffd),
+	FLD(xNextState, p1ffd),
+	FLD(xNextState, peff7),
+	FLD(xNextState, p1ffdMtr),
+	FLD(xNextState, p123b),
+	FLD(xNextState, l2ofs),
+	FLD(xNextState, pe3),
+	FLD(xNextState, dmHeld),
+	FLD(xNextState, dmNext),
+	FLD(xNextState, dmMap),
+	FLD(xNextState, dmButton),
+	FLD(xNextState, pff),
+	FLD(xNextState, pfe),
+	FLD(xNextState, pe7),
+	FLD(xNextState, spiMiso),
+	FLD(xNextState, spiOld),
+	FLD(xNextState, spiT),
+	FLD(xNextState, spiDma),
+	FLD(xNextState, ulapSel),
+	FLD(xNextState, ulapMode),
+	FLD(xNextState, resetType),
+	FLD(xNextState, configMode),
+	FLD(xNextState, vmode),
+	FLD(xNextState, lastSram),
+	FLD(xNextState, busRomcs),
+	FLD(xNextState, palPhase),
+	FLD(xNextState, pal44),
+	FLD(xNextState, clipIdx),
+	FLD(xNextState, clip),
+	FLD(xNextState, coppAdr),
+	FLD(xNextState, coppStored),
+	FLD(xNextState, coppMem),
+	FLD(xNextState, pal),
+	FLD(xNextState, eff05),
+	FLD(xNextState, eff09),
+	FLD(xNextState, holds),
+	FLD(xNextState, holdC),
+	FLD(xNextState, holdD),
+	FLD(xNextState, holdHead),
+	FLD(xNextState, cuOffset),
+	FLD(xNextState, vcLine0),
+	FLD(xNextState, cvcLine0),
+	FLD(xNextState, wvcLast),
+	FLD(xNextState, vsyncCount),
+	FLD(xNextState, pulseN),
+	FLD(xNextState, lineChk),
+	FLD(xNextState, expbusEff),
+	FLD(xNextState, irq),
+	FLD(xNextState, ctc),
+	FLD(xNextState, snd),
+	FLD(xNextState, shadow),
+	FLD(xNextState, p3fb),
+	FLD(xNextState, nrLastW),
+	FLD(xNextState, memChg0),
+	FLD(xNextState, memChg1),
+	FLD(xNextState, inVid),
+	FLD(xNextState, copLog),
+	FLD(xNextState, copLogHead),
+	FLD(xNextState, spr),
+	FLD(xNextState, v),
+	FLD(xNextState, inp),
+	FLD(xNextState, i2cScl),
+	FLD(xNextState, i2cSda),
+	FLD(xNextState, uart),
+	FLD(xNextState, uartSel),
+	FLDEND
+};
+
+// The Next's times count from when the machine was made (CLK_28 edges, T), so the
+// clock they count by comes back with them
+static const szxField fld_nclk[] = {
+	FLD(Computer, tickTotal),
+	FLD(Computer, nsBase),
+	FLD(Computer, nsBaseTick),
+	FLDEND
+};
+
+// The time short of a whole dot. Elsewhere a saved video stands settled, where that
+// is nsDrawFixed (ext_vid); the Next's runs on with what its steps leave. And whether
+// it takes the ticks as whole dots: a raster change clears that (vid_set_dot_ns)
+// until the clock's rate is worked out again, which the board does not do by itself
+static const szxField fld_vclk[] = {
+	FLD(Video, clkFixed),
+	FLD(Video, tickWhole),
+	FLDEND
+};
+
+// the Next's clock chip, its battery side too, as COMP carries an Evo's CMOS
+static const szxField fld_rtc[] = {
+	FLD(DS1307, reg),
+	FLD(DS1307, ofs),
+	FLD(DS1307, frozen),
+	FLD(DS1307, dow),
+	FLD(DS1307, halted),
+	FLD(DS1307, scl),
+	FLD(DS1307, sda),
+	FLD(DS1307, out),
+	FLD(DS1307, st),
+	FLD(DS1307, phase),
+	FLD(DS1307, bits),
+	FLD(DS1307, sr),
+	FLD(DS1307, ack),
+	FLD(DS1307, ptr),
+	FLDEND
+};
+
 // --- what goes in, and the tape and drives held back for the program ---
 
 // ids of the records
@@ -435,6 +571,10 @@ static const szxField fld_tape[] = {
 #define XR_GSCPU	BID('G','S','C','P')
 #define XR_GSRAM	BID('G','S','R','X')	// a 32K page past what the GS block holds
 #define XR_LINK	BID('L','I','N','K')	// a carried image's name: kind, drive, the name
+#define XR_NEXT	BID('N','E','X','T')	// the ZX Spectrum Next's board
+#define XR_NCLK	BID('N','C','L','K')	// ...the clock its times count by
+#define XR_RTC	BID('R','T','C',' ')	// ...and its clock chip
+#define XR_VCLK	BID('V','C','L','K')	// ...and the video clock's fraction of a dot
 
 static void ext_gs_save(szxBuf*, Computer*);
 
@@ -516,10 +656,12 @@ static int ext_own_palette(Computer* comp) {
 	return 0;
 }
 
-// the Next's state (nextregs, palettes, copper, sprites, its 2 MB layout) has no
-// record yet: a file without it would not bring the machine back
 int szx_ext_can_save(Computer* comp) {
-	return comp && comp->hw && (comp->hw->id != HW_NULL) && (comp->hw->id != HW_DUMMY) && (comp->hw->id != HW_ZXNEXT);
+	return comp && comp->hw && (comp->hw->id != HW_NULL) && (comp->hw->id != HW_DUMMY);
+}
+
+static int ext_is_next(Computer* comp) {
+	return (comp->hw->id == HW_ZXNEXT) && comp->next && comp->rtc;
 }
 
 static void ext_put_string(szxBuf* d, const char* s) {
@@ -536,6 +678,9 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 	size_t mark;
 	int i;
 	sb_put(b, szx_ext_tag, sizeof(szx_ext_tag));
+	// the Next's picture walks the counted dots with the board's state: done before
+	// any of it is taken (VID below does the same for every machine)
+	if (ext_is_next(comp)) vid_unlazy(comp->vid);
 
 	rec_begin(b, XR_MACH, &mark);
 	ext_put_string(b, comp->hw->name);
@@ -544,6 +689,13 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 
 	rec_fields(b, XR_CPU, comp->cpu, fld_cpu);
 	rec_fields(b, XR_COMP, comp, fld_comp);
+	// after COMP, which sets the turbo (and so the clock's rate) on a load; before
+	// VID, which the board's raster layout would undo
+	if (ext_is_next(comp)) {
+		rec_fields(b, XR_NEXT, comp->next, fld_next);
+		rec_fields(b, XR_NCLK, comp, fld_nclk);
+		rec_fields(b, XR_RTC, comp->rtc, fld_rtc);
+	}
 	// The pager's own map: a core rebuilds it from its ports, but not every
 	// core keeps every window in a port (TSConf's #11AF..#13AF write it alone)
 	rec_begin(b, XR_MAP, &mark);
@@ -554,6 +706,8 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 	rec_end(b, mark);
 	vid_unlazy(comp->vid);			// the dots an undrawn frame only counted, walked
 	rec_fields(b, XR_VID, comp->vid, fld_vid);
+	if (ext_is_next(comp))
+		rec_fields(b, XR_VCLK, comp->vid, fld_vclk);	// after VID, which settles it
 	if (ext_own_palette(comp))
 		rec_fields(b, XR_PAL, comp->vid, fld_vid_pal);
 	// where the ray is, as dots past the INT: the counters and pointers are
@@ -1011,6 +1165,25 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 				if (ext_own_palette(comp)) fld_get(comp->vid, fld_vid_pal, p, n);
 				break;
 			case XR_RAY: if (n >= 4) ray = (int)rd_dword(p); break;
+			case XR_NEXT:
+				if (ext_is_next(comp)) {
+					int vmode = comp->next->vmode;
+					fld_get(comp->next, fld_next, p, n);
+					next_snap_loaded(comp, vmode);
+				}
+				break;
+			// after NEXT: a change of its video timing sets the clock's rate anew
+			case XR_NCLK: if (ext_is_next(comp)) fld_get(comp, fld_nclk, p, n); break;
+			case XR_RTC: if (ext_is_next(comp)) fld_get(comp->rtc, fld_rtc, p, n); break;
+			case XR_VCLK:
+				if (ext_is_next(comp)) {
+					Video* vid = comp->vid;
+					// whole dots to a tick at this machine's rate (comp_update_timings)
+					int whole = (comp->nsPerTickFixed > 0) && !(comp->nsPerTickFixed % vid->nsPerDotFixed);
+					fld_get(vid, fld_vclk, p, n);
+					if (!whole) vid->tickWhole = 0;	// the file's only where it holds here too
+				}
+				break;
 			case XR_TS:
 				if (n > 0) {
 					EXT_TAKE(TSound, comp->ts, fld_ts, p, n - 1)
