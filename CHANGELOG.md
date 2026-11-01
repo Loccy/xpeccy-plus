@@ -355,8 +355,10 @@ before that point is upstream's history and is not repeated here.
 
 - **The PC keyboard on ZX Evo** no longer repeats keys by itself.
 
-- **PC keys that type a Spectrum pair** - `.`, `,`, Delete, the arrows - keep their shift in
-  programs that read the keyboard themselves, such as NEXTplorer.
+- **`.`, `,`, Delete and the arrows in programs that read the keyboard themselves**, such as
+  NEXTplorer. These PC keys press two Spectrum keys (`.` is Symbol Shift+M, Delete is Caps
+  Shift+0); the shift now goes down first and up last, so such a program no longer sees the
+  key without it.
 
 - **Changed disks and tapes are asked about** on exit, eject and replace, a format that
   cannot be written asks where to save, and a save that fails says so.
