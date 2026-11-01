@@ -5,8 +5,18 @@
 
 ![The Saves page](images/options-saves.png)
 
-The **Saves** page of **Options** sets where the [quick saves](files.md#quick-saves) and
-autosaves go and how many of them stay.
+The **Saves** page of **Options** sets what a [snapshot](files.md#snapshots) carries, and
+where the [quick saves](files.md#quick-saves) and autosaves go and how many of them stay.
+
+**Snapshots**
+
+- **Embed media** - a snapshot saved with **File > Save...** carries the tape and the disks,
+  as they were; off, it only links to the files. The type picked in the Save dialog sets it
+  too. Until it is set, here or in the dialog, the first snapshot saved with a tape or a disk
+  in asks.
+- **Load media** - opening a snapshot puts its tape and disks in; what it did not have is
+  left as it is. Off, the tape and the drives stay as they are. Quick saves and autosaves
+  always load with their media.
 
 **Quick saves**
 
@@ -14,7 +24,7 @@ autosaves go and how many of them stay.
   into one folder, whatever runs on it.
 - **Quick saves kept** - how many quick saves a game keeps; a new one past that deletes the
   oldest. 20 by default.
-- **Embed media in saves** - a save carries the tape and the TR-DOS disks, as they were, and
+- **Embed media** - a quick save or an autosave carries the tape and the disks, as they were, and
   brings them back. Off, a save only links to the files: smaller, but they have to stay where
   they are.
 

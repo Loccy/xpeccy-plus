@@ -3123,7 +3123,16 @@ void SetupWin::buildSaves() {
 	QWidget* page = new QWidget;
 	QVBoxLayout* lay = new QVBoxLayout(page);
 
-	QGridLayout* grid = gridSaves[0] = savesGroup(lay, ":/images/floppy.png", tr("Quick saves"));
+	QGridLayout* grid = gridSaves[3] = savesGroup(lay, ":/images/save-as.png", tr("Snapshots"));
+	cbSnapEmbed = new QCheckBox;
+	savesRow(grid, cbSnapEmbed, tr("Embed media"), tr("Off: only links to the files"),
+		tr("The tape and the disks go into a snapshot\nsaved with File > Save, as they were;\nuntil set here, the first one asks"));
+	connect(cbSnapEmbed, &QCheckBox::toggled, this, [this]() { snapTouched = true; });
+	cbSnapLoad = new QCheckBox;
+	savesRow(grid, cbSnapLoad, tr("Load media"), tr("Off: the tape and drives stay as they are"),
+		tr("Opening a snapshot puts its tape and disks in;\na quick load always does"));
+
+	grid = gridSaves[0] = savesGroup(lay, ":/images/floppy.png", tr("Quick saves"));
 	cbSavePerGame = new QCheckBox;
 	savesRow(grid, cbSavePerGame, tr("Saves per game"), tr("Each game keeps its own saves"),
 		tr("On: a folder for each game opened\nOff: one for each machine"));
@@ -3132,8 +3141,8 @@ void SetupWin::buildSaves() {
 	savesRow(grid, sbQuickKeep, tr("Quick saves kept"), tr("The oldest goes when a new one is past it"),
 		tr("Quick saves each folder keeps"));
 	cbSaveEmbed = new QCheckBox;
-	savesRow(grid, cbSaveEmbed, tr("Embed media in saves"), tr("Off: a save only links to the files"),
-		tr("The tape and the TR-DOS disks go into the save,\nas they were; it loads with the files gone"));
+	savesRow(grid, cbSaveEmbed, tr("Embed media"), tr("Off: only links to the files"),
+		tr("The tape and the disks go into a quick save\nor an autosave, as they were;\nit loads with the files gone"));
 
 	grid = gridSaves[1] = savesGroup(lay, ":/images/grp-auto.png", tr("Autosaves"));
 	cbExitSave = new QCheckBox;
@@ -3197,6 +3206,9 @@ void SetupWin::fillSaves() {
 	cbSavePerGame->setChecked(conf.saves.perGame);
 	sbQuickKeep->setValue(conf.saves.quickKeep);
 	cbSaveEmbed->setChecked(conf.saves.carry);
+	cbSnapEmbed->setChecked(conf.saves.snapMedia != SNAP_MEDIA_LINKS);
+	snapTouched = false;
+	cbSnapLoad->setChecked(conf.saves.snapLoad);
 	cbExitSave->setChecked(conf.saves.exitOn);
 	sbExitKeep->setValue(conf.saves.exitKeep);
 	sbTimedMin->setValue(conf.saves.timedOn ? conf.saves.timedMin : 0);
@@ -3210,6 +3222,9 @@ void SetupWin::applySaves() {
 	conf.saves.perGame = cbSavePerGame->isChecked() ? 1 : 0;
 	conf.saves.quickKeep = sbQuickKeep->value();
 	conf.saves.carry = cbSaveEmbed->isChecked() ? 1 : 0;
+	// left as it was, the first snapshot still asks
+	if (snapTouched) conf.saves.snapMedia = cbSnapEmbed->isChecked() ? SNAP_MEDIA_CARRY : SNAP_MEDIA_LINKS;
+	conf.saves.snapLoad = cbSnapLoad->isChecked() ? 1 : 0;
 	conf.saves.exitOn = cbExitSave->isChecked() ? 1 : 0;
 	conf.saves.exitKeep = sbExitKeep->value();
 	// off keeps the number it had, for when it is on again

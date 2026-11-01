@@ -1,10 +1,15 @@
-# SZX snapshots in Xpeccy+
+# SZX snapshots
+
+```{index} SZX; format, snapshot; SZX format
+```
 
 How Xpeccy+ reads and writes zx-state (`.szx`) files: what it takes from each standard block,
 what it adds, and where. The format is Spectaculator's, version 1.5, maintained by Jonathan
-Needle ([the specification](http://www.spectaculator.com/redirect.php?id=szx)); this page only covers what the spec leaves open and what Xpeccy+ keeps beyond it. The code is
-`src/libxpeccy/filetypes/szx.c` (the standard blocks) and `szx_ext.c` (our own data); where
-this page and the code disagree, the code is right.
+Needle ([the specification](http://www.spectaculator.com/redirect.php?id=szx)); this page only
+covers what the spec leaves open and what Xpeccy+ keeps beyond it. How to save and open a
+snapshot is in [Snapshots](files.md#snapshots). The code is `src/libxpeccy/filetypes/szx.c`
+(the standard blocks) and `szx_ext.c` (our own data); where this page and the code disagree,
+the code is right.
 
 It is written so that another emulator can read our files, write files we read, and - for the
 two machines the spec has no blocks for, TSConf and TurboSound FM - agree on a shared block.
@@ -43,7 +48,8 @@ Read means what Xpeccy+ takes from a block; written means what it puts in one.
 | `AY` | chip 0's sixteen registers and the selected register | the same |
 | `PLTT` | ULA+ state, when the machine has ULA+ | when it has ULA+ |
 | `B128` | the WD1793 registers and the system register, see below | the same |
-| `BDSK`, `DSK` | the image, linked or embedded | a link |
+| `BDSK` | the image, linked or embedded | a link, or the disk as a UDI when it is carried |
+| `DSK` | the image, linked or embedded (see below) | a link, or the `.dsk` when it is carried |
 | `+3` | nothing: the drives are the machine's | the drive count |
 | `TAPE` | the image, linked or embedded, and the block it stood at | a link and the block |
 | `COVX` | the level | the level |
@@ -83,6 +89,19 @@ What the spec leaves open, and how it is read here:
 - **Links** in `TAPE`, `BDSK` and `DSK` are written as full paths in the host's own form. On
   reading, a link that does not resolve is looked for beside the snapshot by its file name, and
   an image already in the drive is left there, so a disk written to since is not lost.
+- **An embedded `DSK`**: the spec names `ZXSTDSKF_EMBEDDED` and `ZXSTDSKF_COMPRESSED` but
+  marks them not implemented, and says only that `chData` is a file name. Xpeccy+ reads them
+  the way `TAPE` has it: with `EMBEDDED` set, `chData` is the `.dsk` file's own bytes and
+  `dwUncompressedSize` its length; with `COMPRESSED` too, the bytes are a zlib stream that
+  unpacks to that length. It writes an extended `.dsk` (`EXTENDED CPC DSK File`), packed when
+  that gains anything.
+- **Carried media**: an image written into the file (the tape as its file is, a Beta disk as
+  a UDI, a +3 disk as a `.dsk`) still goes back in under its old name, from our `LINK`
+  record. A disk that was unsaved when the file was written, or whose file is gone, comes
+  back unsaved, so the program asks to save it.
+- **Empty drives**: a drive with no `BDSK` or `DSK` block, or no `TAPE` block, keeps what
+  is in it on loading: the file says nothing about it. The user can keep the file's media
+  out altogether (**Load media** on the Saves page); a quick load always puts them in.
 
 ## Our data: the creator block's `chData`
 
@@ -158,12 +177,13 @@ taken when the file's core is the running core; on another core only the sound c
 | `SAA `, `SDRV` | SAA1099, Soundrive/Covox |
 | `DIF `, `FDC ` | the disk interface and its controller |
 | `FDCP` | the controller's command in progress: `dword plan` (-1 none), `byte` idle/seek-end bits, `byte` selected drive |
-| `FLP0`..`FLP3` | each drive: motor, head, track, position on the track |
+| `FLP0`..`FLP3` | each drive: motor, head, track, position on the track, whether its disk was unsaved |
 | `IDE `, `ATA0`, `ATA1` | the IDE interface and its two devices |
 | `SMNV` | SMUC's NVRAM |
 | `SDC ` | the SD card |
 | `GSX `, `GSCP`, `GSRX` | General Sound beyond `GS`/`GSRP`: its ports, its CPU's hidden state, RAM past the spec's pages |
 | `TAPE` | the tape's position inside the block, the level, the pause |
+| `LINK` | a carried image's old name: `byte kind` (1 tape, 2 Beta disk, 3 +3 disk), `byte drive`, the name to the end |
 
 The order of reading matters in one place: the drives and the tape are mounted after the
 snapshot is in, so `FLPn`, `DIF ` and `TAPE` wait until their images are back.

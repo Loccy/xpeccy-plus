@@ -131,7 +131,10 @@ class SetupWin : public QDialog {
 		QSpinBox* sbCleanDays;		// 0: never
 		QCheckBox* cbKeepOne;
 		QLineEdit* leSaveDir;
-		QGridLayout* gridSaves[3];	// their names lined up with Emulation's
+		QCheckBox* cbSnapEmbed;
+		QCheckBox* cbSnapLoad;
+		bool snapTouched = false;	// the box clicked: an answer, no more asking
+		QGridLayout* gridSaves[4];	// their names lined up with Emulation's
 
 		// the devices' own controls, see makeDevWidgets()
 		QCheckBox *cbTapeAuto, *cbTapeRewind, *cbTapeFast, *cbTapeFlash, *cbTapeEdge, *bdtbox, *cbAddBoot, *a80box, *b80box, *c80box, *d80box, *adsbox, *bdsbox, *cdsbox, *ddsbox, *gsrbox, *ratWheel, *cbSwapButtons;

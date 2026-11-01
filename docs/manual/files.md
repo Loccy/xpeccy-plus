@@ -153,6 +153,12 @@ what is saved: **Snapshot**, **Tape** when a tape is in, and **Disk A** to **Dis
 each drive with a disk. Type the extension of the format you want; with no extension the
 file gets `.szx`, `.tap` or `.trd`.
 
+When a tape or a disk is in, there are two snapshot types. **Snapshot with tape and disks**
+puts the images inside the `.szx`; **Snapshot** only names them. The dialog remembers the
+one you picked last. The first time, the program asks once which you want, unless you have
+picked the other type yourself; the [Saves page](options-saves.md) of **Options** changes
+the answer later.
+
 **WAV recording, export** writes the tape as sound (see
 [Export to WAV](tapes.md#export-to-wav)). It is a copy, not the tape's own file, so the
 tape still counts as changed after the export.
@@ -182,19 +188,29 @@ moment, and it runs on from there.
 **SZX** is the format to use. A `.szx` saved by Xpeccy+ keeps everything: memory, the
 processor, the sound chips, the disk controller, the tape position, and the exact point in
 the frame. It also records the machine it was taken on, and the file names of the tape and
-the disks. The images themselves are not inside: save a changed disk too.
+the disks. Saved as **Snapshot with tape and disks**, it carries the images too, as they
+were at that moment: the tape, the TR-DOS disks and the +3 disks. A tape that was recorded
+onto, or one over 4 MB (a long WAV), is only named.
 
 When an SZX is opened, its tape and disks go back in: from where they were, or from the
 snapshot's own folder. The tape is wound to the block it was at. A disk that is already
-in its drive is left as it is, so what was written to it since is not lost. Images that a
-snapshot carries inside it are written to the system's temporary folder and put in from
-there.
+in its drive is left as it is, so what was written to it since is not lost. A drive the
+snapshot had empty, or a tape it did not have, stays as it is. **Load media** on the
+[Saves page](options-saves.md) can leave all media as they are. Images that a snapshot
+carries inside it go back in under their old names.
+
+A carried disk goes back to its file only when you save it. If it had unsaved changes when
+the snapshot was taken, or its file is no longer there, it counts as changed, so the program
+asks to save it when you close it, eject the disk or put another one in. When the file is
+gone, the answer **Yes** opens the Save dialog with the old name.
 
 An SZX opens on exactly the model it names. If that model is not one of the built-in
 machines, it opens on the nearest one. When the snapshot was taken with something the
 machine does not have - other ULA timings, ULA+, an AY, a disk interface, a device that
 is not emulated - a warning lists what is missing. The machine's settings are not changed
 to match.
+
+What an SZX holds and how Xpeccy+ reads it is in [SZX snapshots](szx.md).
 
 ```{index} Z80, SNA
 ```
@@ -242,10 +258,9 @@ was taken; hold the mouse over one to see its picture, click it to load it.
 
 ![The Quick Saves menu](images/menu-quick-saves.png)
 
-A save takes the tape and the TR-DOS disks with it. Loading it puts them back as they were
+A save takes the tape and the disks with it. Loading it puts them back as they were
 when it was taken: the tape at its place, and a disk with whatever the game had written to
-it by then. So a save still loads after the image or its archive was moved or deleted. A
-+3 disk is not carried: the save names it, and it has to stay where it was.
+it by then. So a save still loads after the image or its archive was moved or deleted.
 
 **File > Undo Quick Load** (Ctrl+F9) takes back the last quick load and returns to where you
 were, the tape and the disks too. Use it again to redo the quick load.

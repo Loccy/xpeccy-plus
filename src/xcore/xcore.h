@@ -416,6 +416,13 @@ void setWatchPorts(Computer*, QStringList);
 #define	SCR_HOB		5
 #define	SCR_DISK	6
 
+// the tape and disks in a snapshot saved by hand: asked on the first one
+enum {
+	SNAP_MEDIA_ASK = 0,
+	SNAP_MEDIA_CARRY,
+	SNAP_MEDIA_LINKS
+};
+
 #define	PAL_DEFAULT_NAME	"Xpeccy+"	// the built-in palette, as the lists name it
 
 void conf_init(char* confdir = NULL);
@@ -919,7 +926,9 @@ struct xConfig {
 	// quick saves and autosaves (xcore/saves.cpp), [SAVES]
 	struct {
 		unsigned perGame:1;	// a folder per game, else one per machine
-		unsigned carry:1;	// the tape and the Beta disks go into the save, not only their names
+		unsigned carry:1;	// the tape and the disks go into the save, not only their names
+		int snapMedia;		// the same for a snapshot saved by hand: SNAP_MEDIA_*
+		int snapLoad;		// a snapshot opened as a file puts its tape and disks in
 		unsigned exitOn:1;	// an autosave on exit
 		unsigned timedOn:1;	// and every timedMin minutes of running
 		unsigned cleanOn:1;	// saves older than cleanDays go at start

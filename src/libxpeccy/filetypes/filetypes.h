@@ -383,6 +383,7 @@ int loadFDI(Computer*,const char*,int);
 
 int loadDSK(Computer*,const char*,int);
 int saveDSK(Computer*,const char*,int);
+unsigned char* dsk_build(Floppy*, size_t* len);	// the .dsk file in memory, malloc'd
 
 int loadTD0(Computer*,const char*,int);
 
