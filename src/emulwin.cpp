@@ -2058,9 +2058,13 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 	if (!fpath.isEmpty() && (pinned || media_machine(comp, fpath, id, drv, run, &mac))) {
 		if (!mac.empty()) setMachine(mac);
 		QByteArray loc = fpath.toLocal8Bit();
+		bool medium = file_is_medium(comp, fpath, id);
 		// the pause does not wait for the cycle, and a snapshot resets the machine
 		emu_lock();
-		x_state_replaced();		// a run arms again below
+		if (medium)
+			x_media_replaced();		// a run resets the machine below, and that replaces it
+		else
+			x_state_replaced();
 		int err = load_file(comp, loc.data(), id, drv);
 		emu_unlock();
 		if (err == ERR_OK) {

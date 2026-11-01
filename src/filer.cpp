@@ -1552,6 +1552,13 @@ bool file_is_pok(const QString& path) {
 	return path.endsWith(".pok", Qt::CaseInsensitive);
 }
 
+// a tape or a disk, or a file into the disk in a drive: what it opens into leaves the
+// machine's state as it is
+bool file_is_medium(Computer* comp, const QString& path, int id) {
+	xFileTypeInfo* inf = file_type_of(comp, id, path);
+	return inf && (inf->ch || (as_kind_of(inf->id) == AS_TAPE) || (inf->id == FL_HOBETA));
+}
+
 static xMediaOpen media_last = {QString(), FG_ALL, 0, 0, false};
 
 void media_opened(const QString& path, int id, int drv, int run, bool pinned) {

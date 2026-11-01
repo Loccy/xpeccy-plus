@@ -86,6 +86,15 @@ void x_state_replaced() {
 	cheats_forget();
 }
 
+// Another tape or disk, the machine as it was: its sound goes on and the pokes stay
+// in the memory they are in. Run-ahead's frames were made with the old medium, and
+// autostart would go on typing at the old one's loader.
+void x_media_replaced() {
+	x_input_bump();
+	autostart_cancel();
+	fastload_forget();
+}
+
 QString gethexword(int num) {
 	QString res = formbufword(num & 0xffff);
 	return res.rightJustified(4, '0');
