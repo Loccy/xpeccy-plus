@@ -16,6 +16,11 @@ typedef int (*fatSector)(void* ctx, unsigned int lba, unsigned char* buf);
 // not there or the volume is not one this reads.
 int fat_read_file(fatSector rd, void* ctx, const char* path, unsigned char* buf, int max);
 
+// A print of the volume's directory tree as a reader sees it: every entry of every
+// directory, long names too, the last access date left out (a read may move it). Files
+// added, gone, grown or written change it. 0 when it is no volume this reads.
+unsigned long long fat_dir_print(fatSector rd, void* ctx);
+
 #ifdef __cplusplus
 }
 #endif

@@ -149,6 +149,10 @@ int sdc_has_file(SDCard* sdc, const char* path) {
 	return sdc->image && (fat_read_file(sdc_fat_sector, sdc, path, &b, 1) >= 0);
 }
 
+unsigned long long sdc_dir_print(SDCard* sdc) {
+	return sdc->image ? fat_dir_print(sdc_fat_sector, sdc) : 0;
+}
+
 // 0 when the sector was refused: a folder that would not take it
 int sdcWrSector(SDCard* sdc) {
 //	printf("SDC write sector %i\n",sdc->addr);

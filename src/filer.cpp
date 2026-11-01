@@ -889,6 +889,48 @@ static bool szx_holds(Computer* comp, const szxMedia* m, const QString& link) {
 	return same;
 }
 
+// The Next's SD card the snapshot ran from: in, as the file names it, with the folder of a
+// program from elsewhere put back on it under its name; then whether the card still reads
+// as it did. NextZXOS keeps what it read of the card in memory - open files, where they
+// are - so on another card, or one written since, the program may read the wrong things.
+// Told, not refused: the user may know better.
+static bool szxCardChanged = false;
+
+static void szx_card_mount(Computer* comp, bool load) {
+	const szxCard* c = szx_card();
+	szxCardChanged = false;
+	if (!c->on || !comp->hw || (comp->hw->id != HW_ZXNEXT)) return;
+	QString path = QString::fromLocal8Bit(c->path);
+	auto same = [comp, &path]() {
+		return comp->sdc->image && (QFileInfo(QString::fromLocal8Bit(comp->sdc->image)).canonicalFilePath() == QFileInfo(path).canonicalFilePath());
+	};
+	if (load && !same()) {
+		if (QFileInfo::exists(path)) {
+			xm_next_put_card(path);
+			xlog(XLG_FILE, XLL_INFO, "szx: SD card %s", c->path);
+		} else {
+			xlog(XLG_FILE, XLL_WARN, "szx: SD card %s not found", c->path);
+		}
+	}
+	// the folder a program from elsewhere ran in, put on the card again (one at a time,
+	// as opening one does)
+	if (load && same() && comp->sdc->vfat && c->pins) {
+		QString host = QString::fromUtf8(c->pin[0].host);
+		QString name = QString::fromUtf8(c->pin[0].name);
+		vFat* vf = comp->sdc->vfat;
+		int node = vf_child(vf, 0, c->pin[0].name);
+		bool there = (node >= 0) && vf->node[node].pinned && vf->node[node].hroot
+			&& (QFileInfo(QString::fromUtf8(vf->node[node].hroot)).canonicalFilePath() == QFileInfo(host).canonicalFilePath());
+		if (!there && !QFileInfo(host).isDir()) {
+			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s not found", c->pin[0].host);
+		} else if (!there && !sdc_mount_over(comp->sdc, host, name)) {
+			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s could not go on the card", c->pin[0].host);
+		}
+	}
+	szxCardChanged = c->print && (sdc_dir_print(comp->sdc) != c->print);
+	if (szxCardChanged) xlog(XLG_FILE, XLL_WARN, "szx: the SD card is not as it was when the snapshot was saved");
+}
+
 // The tape and the disks an .szx links to or carries. A link that does not
 // resolve is looked for beside the snapshot, as Spectaculator writes plain names
 // too; a carried image is written out to a temporary file first, and goes in
@@ -1008,6 +1050,9 @@ static void szx_mount(Computer* comp, const QString& snap) {
 	szx_ext_media(comp, carried, load);
 	for (int i = 0; i < 4; i++)
 		if (gone & (1 << i)) comp->dif->flp[i]->changed = 1;
+	szx_card_mount(comp, load);
+	if (szxCardChanged && szx_exact)	// a quick load: a word on the screen, no box to stop the game
+		comp->msg = (char*)" the SD card has changed since this save ";
 }
 
 // What the snapshot was taken with and this machine does not have. Nothing of
@@ -1028,15 +1073,22 @@ static void szx_warn() {
 		{0, NULL}
 	};
 	int notes = szx_notes();
-	if (!notes || !conf.running) return;
-	QString text = QObject::tr("The snapshot was taken with something this machine does not have:");
-	text += "\n";
-	for (int i = 0; tab[i].text; i++) {
-		if (notes & tab[i].note)
-			text += QString("\n- ") + tab[i].text;
+	if ((!notes && !szxCardChanged) || !conf.running) return;
+	QString text;
+	if (notes) {
+		text = QObject::tr("The snapshot was taken with something this machine does not have:");
+		text += "\n";
+		for (int i = 0; tab[i].text; i++) {
+			if (notes & tab[i].note)
+				text += QString("\n- ") + tab[i].text;
+		}
+		text += "\n\n";
+		text += QObject::tr("It may not run as it did. The machine's settings are left as they are.");
 	}
-	text += "\n\n";
-	text += QObject::tr("It may not run as it did. The machine's settings are left as they are.");
+	if (szxCardChanged) {
+		if (!text.isEmpty()) text += "\n\n";
+		text += QObject::tr("The SD card is not as it was when the snapshot was saved. What the program had open on it may read wrong.");
+	}
 	QMessageBox mbx(QMessageBox::Warning, "SZX snapshot", text, QMessageBox::Ok);
 	mbx.exec();
 }

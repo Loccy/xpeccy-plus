@@ -576,6 +576,7 @@ static const szxField fld_rtc[] = {
 #define XR_RTC	BID('R','T','C',' ')	// ...and its clock chip
 #define XR_VCLK	BID('V','C','L','K')	// ...and the video clock's fraction of a dot
 #define XR_ESP	BID('E','S','P',' ')	// ...and its ESP-01, the program's (szx_esp_save)
+#define XR_SDCD	BID('S','D','C','D')	// ...and the card it runs from (szx_card)
 
 static void ext_gs_save(szxBuf*, Computer*);
 
@@ -669,6 +670,67 @@ static void ext_put_string(szxBuf* d, const char* s) {
 	sb_put(d, s, strlen(s) + 1);
 }
 
+// The Next's card: the path, a folder or not, the print of its directories, and the
+// folders of programs from elsewhere put on it (a pinned node of the root: its name and
+// its host folder). NextZXOS keeps what it read of the card in memory, so the card
+// matters to the state; it is far too big to go in the file.
+static szxCard szxCardLast;
+
+const szxCard* szx_card(void) {
+	return &szxCardLast;
+}
+
+static void ext_card_save(szxBuf* b, Computer* comp) {
+	SDCard* sdc = comp->sdc;
+	size_t mark;
+	int i;
+	if (!sdc || !sdc->image) return;
+	unsigned long long print = sdc_dir_print(sdc);
+	rec_begin(b, XR_SDCD, &mark);
+	sb_byte(b, sdc->vfat ? 1 : 0);
+	sb_dword(b, (unsigned)(print & 0xffffffffu));
+	sb_dword(b, (unsigned)(print >> 32));
+	ext_put_string(b, sdc->image);
+	int pins = 0;
+	vFat* vf = sdc->vfat;
+	for (i = vf ? vf->node[0].child : -1; i >= 0; i = vf->node[i].next)
+		if (vf->node[i].pinned && vf->node[i].hroot && !vf->node[i].dead && (pins < SZX_PINS)) pins++;
+	sb_byte(b, pins);
+	for (i = vf ? vf->node[0].child : -1; (i >= 0) && pins; i = vf->node[i].next) {
+		if (!vf->node[i].pinned || !vf->node[i].hroot || vf->node[i].dead) continue;
+		ext_put_string(b, vf->node[i].name);
+		ext_put_string(b, vf->node[i].hroot);
+		pins--;
+	}
+	rec_end(b, mark);
+}
+
+// a string of the record at *pos into dst, cut to its room; 0 when the record ends first
+static int ext_get_string(const unsigned char* p, size_t n, size_t* pos, char* dst, size_t room) {
+	size_t a = strnlen((const char*)p + *pos, n - *pos);
+	if (*pos + a >= n) return 0;
+	snprintf(dst, room, "%s", (const char*)p + *pos);
+	*pos += a + 1;
+	return 1;
+}
+
+static void ext_card_load(const unsigned char* p, size_t n) {
+	szxCard* c = &szxCardLast;
+	size_t pos = 9;
+	memset(c, 0, sizeof(*c));
+	if (n < 10) return;
+	c->folder = p[0] & 1;
+	c->print = rd_dword(p + 1) | ((unsigned long long)rd_dword(p + 5) << 32);
+	if (!ext_get_string(p, n, &pos, c->path, sizeof(c->path)) || (pos >= n)) return;
+	int pins = p[pos++];
+	for (int i = 0; (i < pins) && (i < SZX_PINS); i++) {
+		if (!ext_get_string(p, n, &pos, c->pin[i].name, sizeof(c->pin[i].name))) break;
+		if (!ext_get_string(p, n, &pos, c->pin[i].host, sizeof(c->pin[i].host))) break;
+		c->pins = i + 1;
+	}
+	c->on = 1;
+}
+
 static const char* szx_mac_id = "";
 
 void szx_set_machine(const char* id) {
@@ -696,6 +758,7 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		rec_fields(b, XR_NEXT, comp->next, fld_next);
 		rec_fields(b, XR_NCLK, comp, fld_nclk);
 		rec_fields(b, XR_RTC, comp->rtc, fld_rtc);
+		ext_card_save(b, comp);
 	}
 	// The pager's own map: a core rebuilds it from its ports, but not every
 	// core keeps every window in a port (TSConf's #11AF..#13AF write it alone)
@@ -1152,6 +1215,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 	free(ext_held);
 	ext_held = NULL;
 	ext_held_len = 0;
+	memset(&szxCardLast, 0, sizeof(szxCardLast));
 	// The ports, the flags and the video mean what they mean on one core only:
 	// a 128K snapshot of ours run on a Pentagon takes the sound chips and no more.
 	ext_mach(ext, len, core, sizeof(core), mac, sizeof(mac));
@@ -1186,6 +1250,9 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 			// after NEXT: a change of its video timing sets the clock's rate anew
 			case XR_NCLK: if (ext_is_next(comp)) fld_get(comp, fld_nclk, p, n); break;
 			case XR_RTC: if (ext_is_next(comp)) fld_get(comp->rtc, fld_rtc, p, n); break;
+			case XR_SDCD:
+				if (ext_is_next(comp)) ext_card_load(p, n);
+				break;
 			case XR_ESP:
 				if (ext_is_next(comp) && szx_esp_load) szx_esp_load(comp, p, n);
 				esp = 1;

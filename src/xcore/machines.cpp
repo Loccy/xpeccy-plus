@@ -1278,6 +1278,21 @@ void xm_next_card(bool force) {
 	nextIn = own.toLocal8Bit().constData();
 }
 
+// A card a snapshot of the Next names goes in as opening it would: the Next's own card as
+// its own (the user's set aside), any other into the slot. Nothing is restarted: the
+// snapshot is the machine's state, read from that card.
+void xm_next_put_card(const QString& path) {
+	Computer* comp = conf.zx;
+	if (!comp->hw || (comp->hw->id != HW_ZXNEXT)) return;
+	QString own = xm_next_own();
+	if (!own.isEmpty() && (QFileInfo(own).canonicalFilePath() == QFileInfo(path).canonicalFilePath())) {
+		xm_next_card(true);
+		return;
+	}
+	xm_next_card_back();
+	sdc_mount(comp->sdc, path);
+}
+
 bool xm_next_wants_card() {
 	bool want = nextWants;
 	nextWants = false;
