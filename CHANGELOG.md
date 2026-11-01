@@ -138,6 +138,13 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **Another tape or disk goes in without a stall**: a side picked from a set's list, Open
+  Tape or a drive's Open no longer stops the picture and the sound for a few frames, and
+  auto play reads the next tape of a set ahead.
+
+- **Another side picked from its list is the same game**: its quick saves, gamepad bindings
+  and cheat file stay.
+
 - **The ZX 48K and ALF TV Game show 48 KB of memory** on the Machine page, not 64 KB.
 
 - **A drive in the status bar opens its own tab**: a click on B: opens the Disk Manager on
