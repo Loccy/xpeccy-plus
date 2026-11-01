@@ -12,9 +12,15 @@ before that point is upstream's history and is not repeated here.
 ### Added
 
 - **Quick saves per game**: F5 keeps the last 20 saves of each game, with its tape and
-  TR-DOS disks as they were; F9 loads the newest, Shift+F9 opens Save History to pick another
+  disks as they were; F9 loads the newest, Shift+F9 opens Save History to pick another
   or clear old ones, and Undo Quick Load moves to Ctrl+F9. The program saves the machine on
   exit for File > Resume Last Session, and can every few minutes too. *(requested by Volutar)*
+
+- **Snapshots with their media**: File > Save can put the tape and the disks, +3 ones too,
+  inside an SZX; the Save dialog offers it as a type and remembers the pick, and the first
+  time asks. Opening one puts its tape and disks in, unless Options > Saves says not to;
+  a disk brought back unsaved, or without its file, asks to be saved.
+  *(requested by Volutar)*
 
 - **Pause in menus**: the machine waits while a menu of the window is open - the menu
   bar, the right-click menu, a toolbar list - and goes on when it closes. On by default;
