@@ -76,7 +76,7 @@ enum {
 	ERR_NEX_HW,		// a .nex on a machine that is not a ZX Spectrum Next
 	ERR_NEX_CARD,		// a .nex with no folder in the SD card slot to boot NextZXOS from
 	ERR_NEX_NAME,		// a .nex whose name cannot be typed
-	ERR_SNAP_NEXT		// a snapshot of the Next: no format here keeps its state yet
+	ERR_SNAP_NEXT		// a snapshot of the Next in .sna or .z80: only .szx keeps its state
 };
 
 // spg

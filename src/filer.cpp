@@ -581,7 +581,7 @@ static xFilerError err_tab[] = {
 	{ERR_NEX_HW, "NEX and SNX files need the ZX Spectrum Next"},
 	{ERR_NEX_CARD, "NEX and SNX files start from NextZXOS: put the System/Next folder in the SD card slot"},
 	{ERR_NEX_NAME, "The file's name cannot be typed in NextZXOS"},
-	{ERR_SNAP_NEXT, "Snapshots of the ZX Spectrum Next cannot be saved yet"},
+	{ERR_SNAP_NEXT, "The ZX Spectrum Next's state saves only as .szx"},
 	{ERR_OK, ""}
 };
 
