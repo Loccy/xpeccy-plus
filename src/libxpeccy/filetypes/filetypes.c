@@ -140,8 +140,7 @@ void fputi(int val, FILE* file) {
 }
 
 // load boot PATH to floppy FLP, if there is TRDOS disk
-void loadBoot(Computer* comp, const char* path, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+void boot_read(Floppy* flp, const char* path) {
 	if (diskGetType(flp) != DISK_TYPE_TRD) return;
 	TRFile cat[128];
 	int catSize = diskGetTRCatalog(flp, cat);
@@ -151,8 +150,12 @@ void loadBoot(Computer* comp, const char* path, int drv) {
 			gotBoot = 1;
 	}
 	if (gotBoot) return;
-	loadHobeta(comp, path, drv);
+	hobeta_read(flp, path);
 	flp->changed = 0;
+}
+
+void loadBoot(Computer* comp, const char* path, int drv) {
+	boot_read(comp->dif->flp[drv & 3], path);
 }
 
 void diskClear(Floppy* flp) {

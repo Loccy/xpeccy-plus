@@ -16,8 +16,7 @@ typedef struct {
 
 #pragma pack(pop)
 
-int loadSCL(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+int scl_read(Floppy* flp, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 	int err = ERR_OK;
@@ -77,6 +76,10 @@ int loadSCL(Computer* comp, const char* name, int drv) {
 	}
 	fclose(file);
 	return err;
+}
+
+int loadSCL(Computer* comp, const char* name, int drv) {
+	return scl_read(comp->dif->flp[drv & 3], name);
 }
 
 int saveSCL(Computer* comp, const char* name, int drv) {

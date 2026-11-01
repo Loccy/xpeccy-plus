@@ -82,8 +82,7 @@ void getUDIBitField(Floppy* flp, unsigned char tr, unsigned char* buf) {
 	free(fieldBuf);
 }
 
-int loadUDI(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+int udi_read(Floppy* flp, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 	int err = ERR_OK;
@@ -109,6 +108,10 @@ int loadUDI(Computer* comp, const char* name, int drv) {
 	}
 	fclose(file);
 	return err;
+}
+
+int loadUDI(Computer* comp, const char* name, int drv) {
+	return udi_read(comp->dif->flp[drv & 3], name);
 }
 
 // The disk as a UDI file, in memory: every track as it is, so a protected disk

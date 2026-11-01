@@ -220,8 +220,7 @@ static void wav_make_tape(Tape* tap, int* plen, int cnt) {
 	free(buf);
 }
 
-int loadWAV(Computer* comp, const char* name, int drv) {
-	Tape* tap = comp->tape;
+int wav_read(Tape* tap, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 	wavFile wf;
@@ -288,6 +287,10 @@ int loadWAV(Computer* comp, const char* name, int drv) {
 	fclose(file);
 	tape_set_path(tap, name);
 	return ERR_OK;
+}
+
+int loadWAV(Computer* comp, const char* name, int drv) {
+	return wav_read(comp->tape, name);
 }
 
 // --- export ---

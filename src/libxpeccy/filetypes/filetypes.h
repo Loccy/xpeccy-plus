@@ -219,6 +219,7 @@ void fputwLE(FILE*, unsigned short);
 void putint(unsigned char*, unsigned int);
 void cutSpaces(char*);
 void loadBoot(Computer*, const char*, int);
+void boot_read(Floppy*, const char*);
 
 unsigned short swap16(unsigned short);
 unsigned int swap32(unsigned int);
@@ -344,16 +345,20 @@ int sna_hardware_of(size_t);
 int loadSPG(Computer*,const char*, int);
 
 int load_ima(Computer*, const char*, int);
+int ima_read(Floppy*, const char*);
 
 // tape
 
 int loadTAP(Computer*,const char*, int);
+int tap_read(Tape*, const char*);
 int saveTAP(Computer*,const char*, int);
 TapeBlock tapDataToBlock(char*,int,int*);
 
 int loadTZX(Computer*,const char*, int);
+int tzx_read(Tape*, const char*);
 
 int loadWAV(Computer*, const char*, int);
+int wav_read(Tape*, const char*);
 int saveWAV(Computer*, const char*, int);
 int saveWAVopt(Computer*, const char*, wavExport*);
 wavExport wav_export_default(void);
@@ -367,27 +372,34 @@ int loadRaw(Computer*,const char*, int);
 int saveRawFile(Floppy*,int,const char*);
 
 int loadHobeta(Computer*,const char*,int);
+int hobeta_read(Floppy*, const char*);
 int saveHobetaFile(Floppy*,int,const char*);
 int saveHobeta(TRFile,char*,const char*);
 
 int loadSCL(Computer*,const char*,int);
+int scl_read(Floppy*, const char*);
 int saveSCL(Computer*,const char*,int);
 
 int loadTRD(Computer*,const char*,int);
+int trd_read(Floppy*, const char*);
 int saveTRD(Computer*,const char*,int);
 
 int loadUDI(Computer*,const char*,int);
+int udi_read(Floppy*, const char*);
 int saveUDI(Computer*,const char*,int);
 // a disk as a UDI file in memory (malloc), every track as it is
 unsigned char* udi_build(Floppy*, size_t* len);
 
 int loadFDI(Computer*,const char*,int);
+int fdi_read(Floppy*, const char*);
 
 int loadDSK(Computer*,const char*,int);
+int dsk_read(Floppy*, const char*);
 int saveDSK(Computer*,const char*,int);
 unsigned char* dsk_build(Floppy*, size_t* len);	// the .dsk file in memory, malloc'd
 
 int loadTD0(Computer*,const char*,int);
+int td0_read(Floppy*, const char*);
 
 // cartridge
 

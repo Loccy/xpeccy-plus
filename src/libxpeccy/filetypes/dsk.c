@@ -37,8 +37,7 @@ typedef struct {
 static const char edsksgn[] =	"EXTENDED";
 static const char dsksgn[] =	"MV - CPC";
 
-int loadDSK(Computer* comp, const char *name, int drv) {
-	Floppy* flp = comp->dif->flp[drv & 3];
+int dsk_read(Floppy* flp, const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return ERR_CANT_OPEN;
 	int err = ERR_OK;
@@ -125,6 +124,10 @@ int loadDSK(Computer* comp, const char *name, int drv) {
 	}
 	fclose(file);
 	return err;
+}
+
+int loadDSK(Computer* comp, const char *name, int drv) {
+	return dsk_read(comp->dif->flp[drv & 3], name);
 }
 
 // the image built in memory, grown as it goes
