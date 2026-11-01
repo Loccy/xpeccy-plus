@@ -62,7 +62,8 @@ changes the manual. Until a release has a manual, the top sends the reader to `d
 numbers on them are explained in the text. Each is made by `python tools/manual.py shots`
 from its description in `shots/<name>.json` (Windows; see `tools/manual_shots.py`).
 Some show a game that may be downloaded (Exolon and Cybernoid from Spectrum Computing, Fire
-'n Ice too, Uwol from the TS-Labs catalogue): the repository does not carry those, so `shots`
+'n Ice too, Uwol from the TS-Labs catalogue, the ZX EMU Flickering Test from its GitHub
+release): the repository does not carry those, so `shots`
 downloads them once into `build/manual-files` with curl and checks their sha256. A shot runs
 with the master volume at 0, as the hidden desktop hides the window but not the sound.
 The ZX Spectrum Next's `next-menu` and `dbg-next-regs` need a build with System/Next beside

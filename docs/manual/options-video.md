@@ -112,7 +112,8 @@ in the **Anti-flicker** group of **Options > Video**:
 The **Anti-flicker** action switches the intensity in turn between 50%, 100% and off,
 and the picture shows which one. Its key is set on the **Hotkeys** page of **Options**.
 
-Anti-flicker is not applied in fast mode.
+Anti-flicker is not applied in fast mode. What the modes look for, and where anti-flicker is better left off, is in
+[Anti-flicker](antiflicker.md) of Under the Hood.
 
 ## Screenshots
 

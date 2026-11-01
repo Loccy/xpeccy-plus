@@ -1,0 +1,43 @@
+{
+  "config": {
+    "GENERAL": {
+      "machine": "zx128"
+    },
+    "VIDEO": {
+      "noflick": "50",
+      "noflick.mode": "3"
+    }
+  },
+  "files": {
+    "flickering_test.tap": {
+      "url": "https://github.com/dotkoval/flickering_test/releases/download/1.0/flickering_test.tap",
+      "sha256": "13b97bd1adf5e931037bc4f2ab1d154f685e3b423fd1f159f6174a3c2946fa2d"
+    }
+  },
+  "prepare": [
+    "-m",
+    "zx128",
+    "{media}/flickering_test.tap",
+    "--bench",
+    "1500",
+    "--bench-save",
+    "{media}/flickering_test.szx"
+  ],
+  "args": [
+    "-s",
+    "2",
+    "{media}/flickering_test.szx"
+  ],
+  "steps": [
+    [
+      "wait",
+      3000
+    ]
+  ],
+  "crop": [
+    40,
+    470,
+    580,
+    80
+  ]
+}
