@@ -83,7 +83,7 @@ before that point is upstream's history and is not repeated here.
   fullscreen. Hold the pointer at the top edge of the window and both come down over the
   picture; a thin strip there shows at once that the pointer is in place. The right-click
   menu can bring the menu bar back too. Here and in fullscreen the bars stay a moment
-  after the pointer leaves them. *(thanks to lovebeam and Volutar)*
+  after the pointer leaves them. *(thanks to Volutar)*
 
 - **The mellow palette**: softer colors, each kept near the classic one, easier on the eyes.
   Pick it in View > ZX Palette. *(thanks to Volutar)*
