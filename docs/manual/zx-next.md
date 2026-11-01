@@ -132,8 +132,22 @@ card slot**. A file name with letters that cannot be typed in NextZXOS is replac
 short name on the card; where even that fails, the message is **The file's name cannot be
 typed in NextZXOS**.
 
-Snapshots of the Next cannot be saved yet, so neither can **Quick Save**, and RZX
-recording does not work on it. **Rewind** does.
+## Snapshots
+
+```{index} ZX Spectrum Next; snapshots, SZX; ZX Spectrum Next
+```
+
+**File > Save...** saves the whole Next as an `.szx` snapshot: its memory, the nextregs, copper,
+palettes, sprites, layers, DMA, the clock chip and the ESP-01. **Quick Save**, the autosaves,
+**Resume Last Session** and RZX recording work on it as on other machines (see
+[Quick saves](files.md#quick-saves) and [RZX](capture.md#rzx)). Other programs cannot open
+these files: the SZX format has no ZX Spectrum Next.
+
+The SD card is not in the snapshot - it is far too big - but NextZXOS keeps in memory what it
+read from the card. So the snapshot names the card, and the folder of a program opened from
+elsewhere, and loading it puts them back. When the card's files have changed since the save, a
+message says so: what the program had open on the card may read wrong. The ESP-01's network
+connections are not in the snapshot either: after loading, the program finds them closed.
 
 ## Keyboard and joysticks
 
@@ -224,7 +238,6 @@ panel is there too; **CMOS**, **FDC** and **FDD** are not.
 ```{index} ZX Spectrum Next; not emulated
 ```
 
-- saving snapshots, Quick Save and RZX recording;
 - the second SD card slot, the Raspberry Pi accelerator and the FPGA flash;
 - devices on the expansion bus;
 - the board's function keys and its DRIVE button;
