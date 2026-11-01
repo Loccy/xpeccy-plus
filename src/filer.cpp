@@ -104,26 +104,51 @@ static QString carriedTapeName;
 static QString carriedTapeExt;
 static QByteArray carriedTape;
 
-// the tape's file as it is, to carry in a save: one recorded onto since is not
-// that file any more, and a wav of minutes is no thing to copy into every save
-static QByteArray carry_tape(Computer* comp, QString* ext) {
+// The tape's file as it is can be carried in a save: one recorded onto since is
+// not that file any more, and a wav of minutes is no thing to copy into every
+// save. local: the file to read, empty when the bytes are in memory already.
+static bool tape_carriable(Computer* comp, QString* local) {
 	Tape* tape = comp->tape;
-	if (!tape->path || !tape->blkCount || tape->changed) return QByteArray();
+	local->clear();
+	if (!tape->path || !tape->blkCount || tape->changed) return false;
 	QString path = QString::fromLocal8Bit(tape->path);
-	if (!carriedTape.isEmpty() && (path == carriedTapeName)) {
+	if (!carriedTape.isEmpty() && (path == carriedTapeName)) return true;
+	QString err;
+	*local = arc_local(path, &err);
+	QFileInfo inf(*local);
+	return !local->isEmpty() && inf.isFile() && (inf.size() <= (4 << 20));
+}
+
+static QByteArray carry_tape(Computer* comp, QString* ext) {
+	QString local;
+	if (!tape_carriable(comp, &local)) return QByteArray();
+	if (local.isEmpty()) {
 		*ext = carriedTapeExt;
 		return carriedTape;
 	}
-	QString err;
-	QFile file(arc_local(path, &err));
-	if ((file.size() > (4 << 20)) || !file.open(QIODevice::ReadOnly)) return QByteArray();
+	QFile file(local);
+	if (!file.open(QIODevice::ReadOnly)) return QByteArray();
 	QString entry;
+	QString path = QString::fromLocal8Bit(comp->tape->path);
 	*ext = QFileInfo(arc_split(path, nullptr, &entry) ? entry : path).suffix().toLower();
 	return file.readAll();
 }
 
+// what an .szx saved now would carry, in words: "tape and disks", "" for nothing
+static QString carry_words(Computer* comp) {
+	QString local;
+	bool tape = tape_carriable(comp, &local);
+	int disks = 0;
+	int drives = !comp->dif ? 0 : (comp->dif->type == DIF_BDI) ? 4 : (comp->dif->type == DIF_P3DOS) ? 2 : 0;
+	for (int i = 0; i < drives; i++)
+		if (comp->dif->flp[i]->insert && comp->dif->flp[i]->path) disks++;
+	QString d = (disks > 1) ? "disks" : "disk";
+	if (tape && disks) return "tape and " + d;
+	return tape ? QString("tape") : disks ? d : QString();
+}
+
 // the file in memory, with the images the machine has in linked by name; carry:
-// the tape and the Beta disks inside it too, the disks as the drives hold them
+// the tape and the disks inside it too, the disks as the drives hold them
 static int build_szx(Computer* comp, szxBuf* b, bool carry = false) {
 	QByteArray tape;
 	QByteArray disk[4];
@@ -149,10 +174,11 @@ static int build_szx(Computer* comp, szxBuf* b, bool carry = false) {
 			tc.size = tbytes.size();
 			strncpy(tc.ext, ext.toLatin1().constData(), sizeof(tc.ext) - 1);
 		}
-		for (int i = 0; (i < 4) && comp->dif && (comp->dif->type == DIF_BDI); i++) {
+		int plus3 = comp->dif && (comp->dif->type == DIF_P3DOS);
+		for (int i = 0; (i < 4) && comp->dif && ((comp->dif->type == DIF_BDI) || (plus3 && (i < 2))); i++) {
 			if (!dptr[i]) continue;
-			dc[i].data = udi_build(comp->dif->flp[i], &dc[i].size);
-			strcpy(dc[i].ext, "udi");
+			dc[i].data = plus3 ? dsk_build(comp->dif->flp[i], &dc[i].size) : udi_build(comp->dif->flp[i], &dc[i].size);
+			strcpy(dc[i].ext, plus3 ? "dsk" : "udi");
 		}
 	}
 	szx_set_carry(&tc, dc);
@@ -166,9 +192,12 @@ static int build_szx(Computer* comp, szxBuf* b, bool carry = false) {
 	return res;
 }
 
+// whether a snapshot saved through the table carries its media: save_file decides
+static bool saveCarry = false;
+
 static int save_szx(Computer* comp, const char* name, int drv) {
 	szxBuf b;
-	int res = build_szx(comp, &b);
+	int res = build_szx(comp, &b, saveCarry);
 	if (res == ERR_OK)
 		res = szx_write(&b, name);
 	return res;
@@ -850,9 +879,10 @@ static bool szx_holds(Computer* comp, const szxMedia* m, const QString& link) {
 		return comp->tape->path && (raw == comp->tape->path) && !comp->tape->changed;
 	Floppy* flp = comp->dif->flp[m->drive & 3];
 	if (!flp->insert || !flp->path || (raw != flp->path)) return false;
-	if (strcmp(m->ext, "udi")) return true;		// someone else's: by name only
+	int dsk = !strcmp(m->ext, "dsk") && (m->kind == SZX_MED_PLUS3);
+	if (strcmp(m->ext, "udi") && !dsk) return true;		// someone else's: by name only
 	size_t len = 0;
-	unsigned char* now = udi_build(flp, &len);
+	unsigned char* now = dsk ? dsk_build(flp, &len) : udi_build(flp, &len);
 	bool same = now && (len == m->size) && !memcmp(now, m->data, len);
 	free(now);
 	return same;
@@ -862,9 +892,13 @@ static bool szx_holds(Computer* comp, const szxMedia* m, const QString& link) {
 // resolve is looked for beside the snapshot, as Spectaculator writes plain names
 // too; a carried image is written out to a temporary file first, and goes in
 // under the name it had when the file says it. See szx_exact for what is left in.
+// A carried disk is unsaved if it was when saved, or if its file is gone: the
+// question on exit is where it gets back to a file.
 static void szx_mount(Computer* comp, const QString& snap) {
 	const szxMedia* med;
 	int count = szx_media(&med);
+	int carried = 0;	// drives whose disk came out of the snapshot
+	int gone = 0;		// ...and has no file left under its name
 	for (int i = 0; i < count; i++) {
 		const szxMedia* m = &med[i];
 		QString path;		// the file read
@@ -951,6 +985,10 @@ static void szx_mount(Computer* comp, const QString& snap) {
 				if (inf->load(comp, local.toLocal8Bit().data(), drv) != ERR_OK) continue;
 				if (local != as) media_rename(comp, local, as);
 				disk_boot(comp, drv, inf->id);		// as opening it does
+				if (fresh) {
+					carried |= 1 << drv;
+					if (!name.isEmpty() && !arc_exists(name)) gone |= 1 << drv;
+				}
 			}
 			flp->protect = m->protect ? 1 : 0;
 			flp->trk = m->cylinder;
@@ -959,7 +997,9 @@ static void szx_mount(Computer* comp, const QString& snap) {
 		xlog(XLG_FILE, XLL_INFO, "szx: %s %s%s", (m->kind == SZX_MED_TAPE) ? "tape" : "disk",
 			asRaw.constData(), fresh ? " (carried)" : "");
 	}
-	szx_ext_media(comp);
+	szx_ext_media(comp, carried);
+	for (int i = 0; i < 4; i++)
+		if (gone & (1 << i)) comp->dif->flp[i]->changed = 1;
 }
 
 // What the snapshot was taken with and this machine does not have. Nothing of
@@ -1396,10 +1436,40 @@ static int snap_align(Computer* comp) {
 	return done;
 }
 
+// Whether a snapshot saved by hand carries its media: 1 yes, 0 no, -1 cancelled.
+// The Save dialog's line picked says it and is remembered; on the first save the
+// line left as it was is asked about, once. No dialog (the command line): the
+// setting, embedded until answered.
+static int snap_carry(const QString& words, const QString& picked, const QString& carryLine, const QString& preLine) {
+	int& mode = conf.saves.snapMedia;
+	if (carryLine.isEmpty()) return mode != SNAP_MEDIA_LINKS;
+	if ((mode == SNAP_MEDIA_ASK) && (picked == preLine)) {
+		QMessageBox box(QMessageBox::Question, "Save Snapshot", QString("<b>Put the %0 into the snapshot?</b>").arg(words),
+			QMessageBox::NoButton, fileDlgParent);
+		box.setInformativeText("Inside, it loads whole even if the files are moved or changed. "
+			"Linked, it is smaller but needs the files where they are.\n\n"
+			"Asked once: the file type in the Save dialog changes it.");
+		QPushButton* embed = box.addButton("Embed", QMessageBox::YesRole);
+		QPushButton* link = box.addButton("Link Only", QMessageBox::NoRole);
+		box.addButton(QMessageBox::Cancel);
+		box.setDefaultButton(embed);
+		box.exec();
+		if (box.clickedButton() == embed) mode = SNAP_MEDIA_CARRY;
+		else if (box.clickedButton() == link) mode = SNAP_MEDIA_LINKS;
+		else return -1;
+	} else {
+		mode = (picked == carryLine) ? SNAP_MEDIA_CARRY : SNAP_MEDIA_LINKS;
+	}
+	return mode == SNAP_MEDIA_CARRY;
+}
+
 int save_file(Computer* comp, const char* name, int id, int drv, int live, const QString& suggest) {
 	QString path = QString::fromLocal8Bit(name);
 	QString flt;
 	QString ext;
+	QString words;		// what an .szx can carry; the dialog's lines for it
+	QString carryLine;
+	QString preLine;
 	xFileTypeInfo* inf = NULL;
 	xFileTypeInfo* tin;
 	xFileGroupInfo* grp;
@@ -1418,14 +1488,29 @@ int save_file(Computer* comp, const char* name, int id, int drv, int live, const
 				flt = file_get_type_filter(id, 1);
 		}
 		if (!flt.isEmpty()) {
+			// the snapshot line twice when there is media to carry: with it, or linked
+			QStringList lines = flt.split(";;");
+			QString group = file_find_group(FG_SNAPSHOT)->name;
+			int snap = lines.size() - 1;
+			while ((snap >= 0) && !lines[snap].startsWith(group + " (")) snap--;
+			words = (snap >= 0) ? carry_words(comp) : QString();
+			if (!words.isEmpty()) {
+				carryLine = QString("%0 with %1 (*.szx)").arg(group, words);
+				lines.insert(snap, carryLine);
+				flt = lines.join(";;");
+				preLine = (conf.saves.snapMedia == SNAP_MEDIA_LINKS) ? lines[snap + 1] : carryLine;
+			}
 			QFileDialog* filer = file_dialog();
 			filer->setWindowTitle("Save File");
 			filer->setNameFilter(flt);
+			if (!preLine.isEmpty()) filer->selectNameFilter(preLine);
 			filer->setAcceptMode(QFileDialog::AcceptSave);
 			if (suggest.isEmpty()) {
 				filer->setDirectory(conf.lastDir.c_str());
 			} else {
-				filer->setDirectory(QFileInfo(suggest).absolutePath());
+				// a folder gone with the file: the last one used
+				QString dir = QFileInfo(suggest).absolutePath();
+				filer->setDirectory(QDir(dir).exists() ? dir : QString(conf.lastDir.c_str()));
 				filer->selectFile(QFileInfo(suggest).fileName());
 			}
 			filer->setHistory(QStringList());
@@ -1484,7 +1569,11 @@ int save_file(Computer* comp, const char* name, int id, int drv, int live, const
 				if (!aligned)
 					comp->msg = (char*)" SNA: no frame position, use SZX ";
 			}
+			int carry = (inf->id == FL_SZX) ? snap_carry(words, flt, carryLine, preLine) : 0;
+			if (carry < 0) return ERR_CANCEL;	// nothing to tell
+			saveCarry = (carry > 0);
 			err = inf->save(comp, path.toLocal8Bit().data(), drv);
+			saveCarry = false;
 		} else {
 			err = ERR_CANT_SAVE;
 		}
@@ -1504,9 +1593,14 @@ static bool file_can_save(Computer* comp, const char* path) {
 	return inf && inf->save && !ft_export(inf);
 }
 
-// an image from an archive is offered beside the archive, under the entry's name
+// an image from an archive is offered beside the archive, under the entry's name;
+// one whose file is gone (moved since a snapshot brought it back) under its name
 int save_back(Computer* comp, const char* path, int id, int drv) {
-	if (file_can_save(comp, path)) return save_file(comp, path, id, drv);
+	if (file_can_save(comp, path)) {
+		QString file = QString::fromLocal8Bit(path);
+		if (QFileInfo(file).isFile()) return save_file(comp, path, id, drv);
+		return save_file(comp, "", id, drv, 0, file);
+	}
 	QString img = path ? QString::fromLocal8Bit(path) : QString();
 	return save_file(comp, "", id, drv, 0, arc_split(img) ? arc_beside(img, QString()) : QString());
 }

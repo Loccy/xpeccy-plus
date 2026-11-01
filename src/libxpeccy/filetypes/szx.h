@@ -38,7 +38,8 @@ void szx_media_clear(void);
 void szx_media_link(int kind, int drive, const unsigned char* src, size_t n);
 
 // An image to carry in the file being saved instead of only naming it: the
-// tape's file as it is, a Beta disk as the drive holds it (ext: its type).
+// tape's file as it is, a disk as the drive holds it (ext: its type; a +3
+// disk is always a .dsk, the only image its block can be read as).
 // The link set with szx_set_links stays, in our own record. Kept until the
 // next call; the bytes are the caller's, read by szx_build.
 typedef struct {
@@ -58,8 +59,9 @@ int szx_ext_hardware(const unsigned char* file, size_t len);	// SNAP_HW_* of a f
 int szx_ext_load(Computer*, const unsigned char* ext, size_t len);
 int szx_ext_can_save(Computer*);		// a machine the spec cannot name, but we can
 // what the tape and the drives were doing, once the program has put the media
-// of szx_media() back in
-void szx_ext_media(Computer*);
+// of szx_media() back in; carried: a bit per drive whose disk came out of the
+// file, which takes the saved one's "changed" too
+void szx_ext_media(Computer*, int carried);
 // the id of the running machine, written into the file with it
 void szx_set_machine(const char* id);
 

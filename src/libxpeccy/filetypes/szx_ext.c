@@ -634,7 +634,7 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 	}
 	// what the carried images were called, for putting them back under their names
 	for (i = 0; i < 5; i++) {
-		int kind = i ? SZX_MED_BETA : SZX_MED_TAPE;
+		int kind = !i ? SZX_MED_TAPE : (comp->dif && (comp->dif->type == DIF_P3DOS)) ? SZX_MED_PLUS3 : SZX_MED_BETA;
 		const char* link = szx_carried_link(kind, i - 1);
 		if (!link) continue;
 		rec_begin(b, XR_LINK, &mark);
@@ -914,9 +914,12 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 		fdc->flp = fdc->flop[comp->dif->sys & 3];
 }
 
-static void ext_flp(Floppy* flp, const unsigned char* p, size_t n) {
+// carried: the disk in it came out of the file, so it is unsaved where the
+// one saved was
+static void ext_flp(Floppy* flp, const unsigned char* p, size_t n, int carried) {
 	Floppy* t = (Floppy*)ext_take_head(flp, offsetof(Floppy, path), fld_flp, p, n);
 	if (!t) return;
+	if (carried) flp->changed = t->changed;
 	flp->motor = t->motor;
 	flp->virt = t->virt;
 	flp->door = t->door;
@@ -1112,7 +1115,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 
 // What the tape and the drives were doing, once the program has put the media
 // back. A medium that did not come back keeps what loading it set.
-void szx_ext_media(Computer* comp) {
+void szx_ext_media(Computer* comp, int carried) {
 	size_t pos = 0;
 	unsigned id;
 	const unsigned char* p;
@@ -1161,7 +1164,7 @@ void szx_ext_media(Computer* comp) {
 			comp->dif->doors = tmp_.doors;
 		} else if ((idx = xr_slot(id, XR_FLP, 4)) >= 0) {
 			if (comp->dif && (comp->dif->type != DIF_NONE))
-				ext_flp(comp->dif->flp[idx], p, n);
+				ext_flp(comp->dif->flp[idx], p, n, (carried >> idx) & 1);
 		}
 	}
 	free(ext_held);

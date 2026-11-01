@@ -127,10 +127,35 @@ int loadDSK(Computer* comp, const char *name, int drv) {
 	return err;
 }
 
-long dsk_save_track(Floppy* flp, int trk, int side, FILE* file) {
+// the image built in memory, grown as it goes
+typedef struct {
+	unsigned char* data;
+	size_t len;
+	size_t cap;
+	int fail;
+} dskBuf;
+
+static void db_put(dskBuf* b, const void* src, size_t n) {
+	if (b->fail) return;
+	if (b->len + n > b->cap) {
+		size_t cap = b->cap ? b->cap : 0x10000;
+		while (cap < b->len + n) cap <<= 1;
+		unsigned char* nd = (unsigned char*)realloc(b->data, cap);
+		if (!nd) {
+			b->fail = 1;
+			return;
+		}
+		b->data = nd;
+		b->cap = cap;
+	}
+	memcpy(b->data + b->len, src, n);
+	b->len += n;
+}
+
+static size_t dsk_save_track(Floppy* flp, int trk, int side, dskBuf* b) {
 	TrackInfBlock tinf;
 	Sector sdata[29];
-	long fpos = ftell(file);
+	size_t fpos = b->len;
 	int sec = 0;
 	int pos = 0;
 	int i, dsz, dps;
@@ -181,75 +206,89 @@ long dsk_save_track(Floppy* flp, int trk, int side, FILE* file) {
 		pos += 8;
 	}
 	// save track info block
-	fwrite("Track-Info\r\n", 12, 1, file);
-	fwrite(&tinf, sizeof(TrackInfBlock), 1, file);
+	db_put(b, "Track-Info\r\n", 12);
+	db_put(b, &tinf, sizeof(TrackInfBlock));
 	// save sectors data
 	for (i = 0; i < sec; i++) {
 		dsz = (128 << sdata[i].sz);
 		if (dsz > 0x1800)
 			dsz = 0x1800;
-		fwrite(sdata[i].data, dsz, 1, file);
+		db_put(b, sdata[i].data, dsz);
 	}
-	return ftell(file) - fpos;
+	return b->len - fpos;
 }
 
 static const char sign[] = "EXTENDED CPC DSK File\r\nDisk-Info\r\nXpeccy        ";
 
-int saveDSK(Computer* comp, const char* name, int drv) {
-	int err = ERR_OK;
-	FILE* file = fopen(name, "wb");
-	if (file) {
-		Floppy* flp = comp->dif->flp[drv & 3];
-		unsigned char buf[256];
-		memset(buf, 0, 0x100);
-		memcpy(buf, sign, 0x22 + 0x0e);
-		// 30 = track count, will be updated later
-		// 31: 1 | 2 sides
-		// 32,33 = 0 @ extend format
-		// 34+N = size of track N (from Track-Info to Track-Info)
-		// fwrite(buf, 256, 1, file);		// signature + disk info : buf will be saved later
-		fseek(file, 256, SEEK_SET);
-		int cpos = 0x34;
-		long isize;
-		int ds = 0;
-		int tcount = 0;
-		for (int i = 0; i < 86; i++) {
-			isize = dsk_save_track(flp, i, 0, file);
+unsigned char* dsk_build(Floppy* flp, size_t* len) {
+	dskBuf b;
+	unsigned char buf[256];
+	memset(&b, 0, sizeof(b));
+	memset(buf, 0, 0x100);
+	memcpy(buf, sign, 0x22 + 0x0e);
+	// 30 = track count, will be updated later
+	// 31: 1 | 2 sides
+	// 32,33 = 0 @ extend format
+	// 34+N = size of track N (from Track-Info to Track-Info)
+	db_put(&b, buf, 256);		// signature + disk info: filled in at the end
+	int cpos = 0x34;
+	size_t isize;
+	int ds = 0;
+	int tcount = 0;
+	for (int i = 0; i < 86; i++) {
+		isize = dsk_save_track(flp, i, 0, &b);
+		buf[cpos] = (isize >> 8) & 0xff;
+		cpos++;
+		if (isize > 0)
+			tcount = i + 1;
+		if (flp->doubleSide) {
+			isize = dsk_save_track(flp, i, 1, &b);
+			if (isize > 0)
+				ds = 1;
 			buf[cpos] = (isize >> 8) & 0xff;
 			cpos++;
 			if (isize > 0)
 				tcount = i + 1;
-			if (flp->doubleSide) {
-				isize = dsk_save_track(flp, i, 1, file);
-				if (isize > 0)
-					ds = 1;
-				buf[cpos] = (isize >> 8) & 0xff;
-				cpos++;
-				if (isize > 0)
-					tcount = i + 1;
-			}
 		}
-		buf[0x30] = (tcount < 43) ? 42 : 84; // = tcount & 0xff;
-		buf[0x31] = ds ? 2 : 1;
-		if (!ds) {
-			cpos = 0x36;		// 0x34 doesn't changed
-			tcount = 0x35;
-			while(cpos < 256) {
-				buf[tcount] = buf[cpos];
-				buf[cpos] = 0;
-				tcount++;
-				cpos += 2;
-			}
+	}
+	buf[0x30] = (tcount < 43) ? 42 : 84; // = tcount & 0xff;
+	buf[0x31] = ds ? 2 : 1;
+	if (!ds) {
+		cpos = 0x36;		// 0x34 doesn't changed
+		tcount = 0x35;
+		while(cpos < 256) {
+			buf[tcount] = buf[cpos];
+			buf[cpos] = 0;
+			tcount++;
+			cpos += 2;
 		}
-		// save disk info block
-		fseek(file, 0, SEEK_SET);
-		fwrite(buf, 256, 1, file);
+	}
+	if (b.fail) {
+		free(b.data);
+		return NULL;
+	}
+	memcpy(b.data, buf, 256);
+	*len = b.len;
+	return b.data;
+}
+
+int saveDSK(Computer* comp, const char* name, int drv) {
+	Floppy* flp = comp->dif->flp[drv & 3];
+	size_t len = 0;
+	unsigned char* img = dsk_build(flp, &len);
+	if (!img) return ERR_CANT_OPEN;
+	FILE* file = fopen(name, "wb");
+	int err = ERR_CANT_OPEN;
+	if (file) {
+		if (fwrite(img, 1, len, file) == len)
+			err = ERR_OK;
 		fclose(file);
+	}
+	free(img);
+	if (err == ERR_OK) {
 		// update name
 		flp_set_path(flp, name);
 		flp->changed = 0;
-	} else {
-		err = ERR_CANT_OPEN;
 	}
 	return err;
 }

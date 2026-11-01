@@ -503,12 +503,30 @@ static void szx_rd_bdsk(Computer* comp, szxLoad* ld, const unsigned char* p, siz
 static void szx_rd_dsk(Computer* comp, szxLoad* ld, const unsigned char* p, size_t n) {
 	if (n < 7) return;
 	int flags = rd_word(p);
-	if (flags & (SZ3_EMBEDDED | SZ3_COMPRESSED)) {
-		xlog(XLG_FILE, XLL_WARN, "szx: embedded +3 disk images are not in the spec, skipped");
+	szxMedia* m = szx_media_add(SZX_MED_PLUS3, p[2] & 1);
+	if (!m) return;
+	if (!(flags & SZ3_EMBEDDED)) {
+		szx_media_name(m, p + 7, n - 7);
 		return;
 	}
-	szxMedia* m = szx_media_add(SZX_MED_PLUS3, p[2] & 1);
-	if (m) szx_media_name(m, p + 7, n - 7);
+	// The spec names the flags but leaves them "not implemented": read as the
+	// TAPE block has it, the .dsk file's bytes, dwUncompressedSize long
+	size_t usize = rd_dword(p + 3);
+	if (flags & SZ3_COMPRESSED) {
+		m->data = szx_inflate_new(p + 7, n - 7, usize);
+		m->size = m->data ? usize : 0;
+	} else if (usize <= n - 7) {
+		m->data = (unsigned char*)malloc(usize ? usize : 1);
+		if (m->data) memcpy(m->data, p + 7, usize);
+		m->size = m->data ? usize : 0;
+	}
+	if (m->data && ((m->size < 8) || (memcmp(m->data, "EXTENDED", 8) && memcmp(m->data, "MV - CPC", 8)))) {
+		xlog(XLG_FILE, XLL_WARN, "szx: the embedded +3 disk is no .dsk, skipped");
+		free(m->data);
+		m->data = NULL;
+		m->size = 0;
+	}
+	if (m->data) strcpy(m->ext, "dsk");
 }
 
 static void szx_rd_tape(Computer* comp, szxLoad* ld, const unsigned char* p, size_t n) {
@@ -836,7 +854,7 @@ void szx_set_carry(const szxCarry* tape, const szxCarry* disks) {
 const char* szx_carried_link(int kind, int drive) {
 	if (kind == SZX_MED_TAPE)
 		return (szx_carry_tape.data && szx_tape_path) ? szx_tape_path : NULL;
-	if ((kind == SZX_MED_BETA) && (drive >= 0) && (drive < 4))
+	if (((kind == SZX_MED_BETA) || (kind == SZX_MED_PLUS3)) && (drive >= 0) && (drive < 4))
 		return (szx_carry_disk[drive].data && szx_disk_path[drive]) ? szx_disk_path[drive] : NULL;
 	return NULL;
 }
@@ -968,11 +986,20 @@ static void szx_wr_plus3(szxBuf* b, szxBuf* d, Computer* comp) {
 	sb_block(b, BID('+','3',0,0), d);
 	for (i = 0; i < 2; i++) {
 		const char* path = szx_disk_path[i];
+		const szxCarry* c = &szx_carry_disk[i];
 		if (!comp->dif->flp[i]->insert || !path || !*path) continue;
-		sb_word(d, 0);
-		sb_byte(d, i);
-		sb_dword(d, (unsigned)strlen(path) + 1);
-		sb_put(d, path, strlen(path) + 1);
+		if (c->data) {
+			// the .dsk itself, packed by szx_write; the name goes in our LINK record
+			sb_word(d, SZ3_EMBEDDED);
+			sb_byte(d, i);
+			sb_dword(d, (unsigned)c->size);
+			sb_put(d, c->data, c->size);
+		} else {
+			sb_word(d, 0);
+			sb_byte(d, i);
+			sb_dword(d, (unsigned)strlen(path) + 1);
+			sb_put(d, path, strlen(path) + 1);
+		}
 		sb_block(b, BID('D','S','K',0), d);
 	}
 }
@@ -1123,6 +1150,12 @@ int szx_write(szxBuf* b, const char* name) {
 			sb_put(&d, p, 7);
 			if (sb_deflate(&d, p + 7, n - 7))
 				d.data[0] |= SZD_COMPRESSED;
+			sb_block(&o, id, &d);
+		} else if ((id == BID('D','S','K',0)) && (n > 7) && (rd_word(p) & SZ3_EMBEDDED)) {
+			// dwUncompressedSize stays the image's length
+			sb_put(&d, p, 7);
+			if (sb_deflate(&d, p + 7, n - 7))
+				d.data[0] |= SZ3_COMPRESSED;
 			sb_block(&o, id, &d);
 		} else if (head && (n > head)) {
 			sb_put(&d, p, head);
