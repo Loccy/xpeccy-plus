@@ -15,6 +15,8 @@ settings. The right-click menu over the picture has the same windows under **Too
   [Watcher](debugger-watcher.md).
 - {icon}`rulers` **Screen** and {icon}`note` **Sound Chips** - two panels of the Debugger in
   windows of their own, described below.
+- {icon}`memory` **Heat Map** - the Debugger's heat map in a window of its own; see
+  [Heat Map window](debugger-heatmap.md#heat-map-window).
 - {icon}`other` **Options...** - the settings; see [Options](options.md). On macOS it is
   **Settings...** in the application menu.
 

@@ -264,6 +264,7 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 | Debugger | F10, Ctrl+Pause | Esc |
 | Screen | - | Alt+S |
 | Sound Chips | - | Alt+A |
+| Heat Map | - | - |
 | Options | Ctrl+, | F1 |
 | Hotkey List | - | - |
 
@@ -273,7 +274,8 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 ```
 
 These work in the **Debugger** window. **Options**, **Open**, **Save**, **Reset**,
-**Virtual Keyboard**, **Screen** and **Sound Chips** from the tables above work there too.
+**Virtual Keyboard**, **Screen**, **Sound Chips** and **Heat Map** from the tables above work
+there too.
 
 | Action | Modern | Classic |
 |---|---|---|
