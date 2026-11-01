@@ -265,7 +265,8 @@ saves go to the folder of the machine instead.
 A reset, a hard reset or a switch to another machine ends the game: until a tape or a disk
 starts again, the saves go to the folder of the machine, and the window title names no image.
 The reset that starts an image you open is part of the start. Loading a save brings back the
-game it was taken in, so the quick saves after it go to that game's folder.
+game it was taken in, so the quick saves after it go to that game's folder. How the game is found and
+what a save carries is in [What a quick save keeps](quick-saves-inside.md).
 
 **File > Quick Load** (F9) puts back the game's newest quick save, on the machine it was
 taken on. **File > Quick Saves** lists the game's saves, newest first, with the time each
