@@ -1,10 +1,15 @@
-# SZX snapshots in Xpeccy+
+# SZX snapshots
+
+```{index} SZX; format, snapshot; SZX format
+```
 
 How Xpeccy+ reads and writes zx-state (`.szx`) files: what it takes from each standard block,
 what it adds, and where. The format is Spectaculator's, version 1.5, maintained by Jonathan
-Needle ([the specification](http://www.spectaculator.com/redirect.php?id=szx)); this page only covers what the spec leaves open and what Xpeccy+ keeps beyond it. The code is
-`src/libxpeccy/filetypes/szx.c` (the standard blocks) and `szx_ext.c` (our own data); where
-this page and the code disagree, the code is right.
+Needle ([the specification](http://www.spectaculator.com/redirect.php?id=szx)); this page only
+covers what the spec leaves open and what Xpeccy+ keeps beyond it. How to save and open a
+snapshot is in [Snapshots](files.md#snapshots). The code is `src/libxpeccy/filetypes/szx.c`
+(the standard blocks) and `szx_ext.c` (our own data); where this page and the code disagree,
+the code is right.
 
 It is written so that another emulator can read our files, write files we read, and - for the
 two machines the spec has no blocks for, TSConf and TurboSound FM - agree on a shared block.
@@ -89,11 +94,14 @@ What the spec leaves open, and how it is read here:
   the way `TAPE` has it: with `EMBEDDED` set, `chData` is the `.dsk` file's own bytes and
   `dwUncompressedSize` its length; with `COMPRESSED` too, the bytes are a zlib stream that
   unpacks to that length. It writes an extended `.dsk` (`EXTENDED CPC DSK File`), packed when
-  that gains anything. Fuse skips the block whatever it holds.
+  that gains anything.
 - **Carried media**: an image written into the file (the tape as its file is, a Beta disk as
   a UDI, a +3 disk as a `.dsk`) still goes back in under its old name, from our `LINK`
   record. A disk that was unsaved when the file was written, or whose file is gone, comes
   back unsaved, so the program asks to save it.
+- **Empty drives**: a drive with no `BDSK` or `DSK` block, or no `TAPE` block, keeps what
+  is in it on loading: the file says nothing about it. The user can keep the file's media
+  out altogether (**Load media** on the Saves page); a quick load always puts them in.
 
 ## Our data: the creator block's `chData`
 
