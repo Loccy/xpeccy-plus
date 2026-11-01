@@ -14,6 +14,8 @@
 #include <QList>
 #include <QString>
 
+#include <string>
+
 #include "../libxpeccy/spectrum.h"
 
 enum {
@@ -31,9 +33,12 @@ typedef struct {
 	qint64 size;		// bytes, the picture's too
 } xSave;
 
-// The game: what the user opened into drive A, as a tape or as a snapshot.
-// The bytes as opened are hashed here (an entry's for an archive path).
+// The game: what runs - opened into drive A, as a tape or as a snapshot, or
+// started from the tape or drive A since. A user reset or a machine switch
+// ends it. The bytes as opened are hashed here (an entry's for an archive path).
 void game_set(const QString& image);
+// the tape or drive A started with this image: the game, unless it is already
+void game_follow(const QString& image);
 // the game of a save, as its folder's json has it (or the json beside it):
 // that save is going in
 void game_set_save(const QString& save);
@@ -44,11 +49,17 @@ typedef struct {
 	QString hash;
 	QString name;
 	int src;
+	int resets;		// xUserResets as it was set
+	std::string mac;	// ...and the machine
 } xGame;
 xGame game_now();
 void game_put(const xGame&);
 // forgets it once the tape or the disk it was opened as is out
 void game_check(Computer*);
+// a user reset or another machine since it was set: what ran has ended
+bool game_stale();
+// the reset an open makes to start its image is part of the start
+void game_restamp();
 QString game_image();			// empty: none
 QString game_name();			// what the folder and the menus call it
 
@@ -60,12 +71,10 @@ QString saves_root();
 QString saves_dir(bool make);
 // the game's own folder, empty when it has none yet (no save taken)
 QString saves_game_dir();
-// where an autosave goes: the folder the quick saves are in, when there is one
-// already; empty: the one common file, saves_session_path()
-QString saves_auto_dir();
+// the common last-session file older versions wrote: still listed and loaded
 QString saves_session_path();
-// the game, beside a save outside the game's folder (the common one)
-void saves_note_game(const QString& save);
+// the newest autosave (on exit or timed) of any folder, empty when none
+QString saves_newest_auto();
 // a folder's saves, newest first; kind -1 for all
 QList<xSave> saves_list(const QString& dir, int kind = -1);
 // the name of a new save of that kind in dir, by the time now

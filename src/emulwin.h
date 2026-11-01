@@ -120,6 +120,12 @@ typedef struct {
 	#endif
 #endif
 
+// where the image named in the title is (drives are 0..3, the divMMC's cards 5..6)
+#define	MEDIA_TAPE	4
+#define	MEDIA_CARD	5
+#define	MEDIA_SRCS	7
+#define	MEDIA_SNAP	-1
+
 class MainWin;
 
 #if defined(USEOPENGL) && !BLOCKGL

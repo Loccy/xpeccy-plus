@@ -12,9 +12,12 @@ before that point is upstream's history and is not repeated here.
 ### Added
 
 - **Quick saves per game**: F5 keeps the last 20 saves of each game, with its tape and
-  disks as they were; F9 loads the newest, Shift+F9 opens Save History to pick another
-  or clear old ones, and Undo Quick Load moves to Ctrl+F9. The program saves the machine on
-  exit for File > Resume Last Session, and can every few minutes too. *(requested by Volutar)*
+  disks as they were. The game is the one that runs - opened, or started from the tape or
+  drive A, as a disk from TR-DOS - and a reset or another machine ends it; loading a save
+  brings its game back. F9 loads the newest, Shift+F9 opens Save History to pick another,
+  delete a game or clear old ones, and Undo Quick Load moves to Ctrl+F9. The program saves
+  the machine on exit into the game's folder, for File > Resume Last Session, and can every
+  few minutes too. *(requested by Volutar)*
 
 - **Snapshots with their media**: File > Save can put the tape and the disks, +3 ones too,
   inside an SZX; the Save dialog offers it as a type and remembers the pick, and the first

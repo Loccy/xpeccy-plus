@@ -30,8 +30,8 @@ starts with:
 - **The last one chosen** - the last machine you picked yourself. A machine that a file
   switched to does not count.
 - **Ask** - the **Start Machine** window asks every time.
-- **Resume last session** - the last one chosen, and then where you left off: the autosave
-  taken when the program closed (see [Autosaves](files.md#autosaves)).
+- **Resume last session** - the last one chosen, and then where you left off: the newest
+  autosave, taken when the program closed (see [Autosaves](files.md#autosaves)).
 - one of the machines - always that one.
 
 At the first start you are asked

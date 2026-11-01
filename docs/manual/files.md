@@ -244,12 +244,18 @@ and `.sna` snapshots too, through NextZXOS, from its SD card: see
 ```{index} Quick Save, Quick Load, Undo Quick Load, Quick Saves, snapshot; quick save
 ```
 
-**File > Quick Save** (F5) saves the machine as it is now into the folder of the game: the
-image you opened last into drive A, as a tape or as a snapshot. A disk in drive B does not
+**File > Quick Save** (F5) saves the machine as it is now into the folder of the game that
+runs: the image you opened last into drive A, as a tape or as a snapshot, or the tape or the
+disk in drive A that started since - a disk run from TR-DOS, say. A disk in drive B does not
 count. Each game keeps the last 20 quick saves; a new one past that number deletes the
 oldest. The game is known by its contents, so the same game opened from an archive, as a
 plain file or from another folder shares its saves. When no game is open, or the game's tape
 or disk has been taken out, the saves go to the folder of the machine instead.
+
+A reset, a hard reset or a switch to another machine ends the game: until a tape or a disk
+starts again, the saves go to the folder of the machine, and the window title names no image.
+The reset that starts an image you open is part of the start. Loading a save brings back the
+game it was taken in, so the quick saves after it go to that game's folder.
 
 **File > Quick Load** (F9) puts back the game's newest quick save, on the machine it was
 taken on. **File > Quick Saves** lists the game's saves, newest first, with the time each
@@ -277,9 +283,9 @@ When the program closes, it saves the machine. **File > Resume Last Session** pu
 back: the machine, the game and its media. To start where you left off every time, choose
 **Resume last session** in **Machine at start** on the [Application page](options-application.md).
 
-The autosave on exit goes into the game's folder when the game has one - that is, after its
-first quick save - and the folder keeps the last few of them. Otherwise there is one autosave,
-written over each time. The [Saves page](options-saves.md) of **Options** can also save
+The autosave on exit goes where a quick save would: into the folder of the game that runs, or
+of the machine after a reset. Each folder keeps the last few of them, and **Resume Last
+Session** loads the newest. The [Saves page](options-saves.md) of **Options** can also save
 every few minutes of play, and sets how many saves of each kind a game keeps.
 
 ### Save History
@@ -297,9 +303,12 @@ its newest save picked: Enter loads it.
 **Old** and **Old MB** columns show what it would delete. With **Keep at least one save** on,
 each game keeps its newest save however old it is.
 
-Click a game to see its saves below, with a picture of the selected one. **Load** loads it
-(a double click does too), **Delete** deletes the selected saves, and **Show in Folder**
-opens the game's folder. A game whose last save goes disappears from the list.
+Click a game to see its saves below - each with its type: **Quick**, **On exit** or
+**Auto** - and a picture of the selected one. **Load** loads it (a double click does too),
+**Delete** deletes the selected saves, and **Show in Folder** opens the game's folder.
+**Delete Game** deletes every save of the game picked, and its folder. The Delete key does
+the same in each list, and a right click offers it. Both ask first. A game whose last save
+goes disappears from the list.
 
 ## RZX recordings
 

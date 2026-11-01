@@ -66,7 +66,9 @@ bool MainWin::loadState(const QString& path) {
 	szx_machine_of(path.toLocal8Bit().constData(), id, sizeof(id));
 	quick_keep_undo(conf.zx);
 	if (*id && (conf.macId != id) && xm_find(id)) setMachine(id);
-	return quick_load(conf.zx, path) != 0;
+	if (!quick_load(conf.zx, path)) return false;
+	if (game_image().isEmpty()) showMedia(QString(), MEDIA_SNAP);	// a machine's save: no game runs
+	return true;
 }
 
 void MainWin::quickSave() {
@@ -98,21 +100,18 @@ void MainWin::quickUndo() {
 	setMessage(done ? " quick load undone " : " nothing to undo ");
 }
 
-// An autosave, on exit or every few minutes: into the game's folder when it
-// has one, else the one common file written over each time; the config says
-// which is the last session
+// An autosave, on exit or every few minutes: into the folder of the game, or
+// of the machine, as a quick save goes; the config says which is the last
+// session
 void MainWin::autoSave(int kind) {
 	if (!szxCanSave(conf.zx)) return;
 	QImage pic = save_picture();
-	QString dir = saves_auto_dir();
-	QString path = dir.isEmpty() ? saves_session_path() : saves_new_path(dir, kind);
-	QDir().mkpath(QFileInfo(path).path());
+	QString dir = saves_dir(true);
+	if (dir.isEmpty()) return;
+	QString path = saves_new_path(dir, kind);
 	if (quick_save(conf.zx, path) != 2) return;
 	if (!pic.isNull()) pic.save(QFileInfo(path).path() + "/" + QFileInfo(path).completeBaseName() + ".png", "PNG");
-	if (dir.isEmpty())
-		saves_note_game(path);
-	else
-		saves_trim(dir, kind, save_keep(kind));
+	saves_trim(dir, kind, save_keep(kind));
 	conf.saves.last = path;
 }
 
@@ -134,8 +133,10 @@ void MainWin::timedSave(int ms) {
 	autoSave(SAVE_TIMED);
 }
 
+// the last autosave; that one deleted, the newest left of any game
 bool MainWin::resumeLast() {
 	QString path = conf.saves.last;
+	if (path.isEmpty() || !QFileInfo::exists(path)) path = saves_newest_auto();
 	bool done = !path.isEmpty() && QFileInfo::exists(path) && loadState(path);
 	setMessage(done ? " last session resumed " : " no last session to resume ");
 	return done;
