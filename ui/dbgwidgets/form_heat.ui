@@ -53,7 +53,7 @@
         </size>
        </property>
        <property name="toolTip">
-        <string>16K page</string>
+        <string>Page</string>
        </property>
        <property name="frame">
         <bool>true</bool>
@@ -90,6 +90,16 @@
       </spacer>
      </item>
      <item>
+      <widget class="QCheckBox" name="cbHeatUntouched">
+       <property name="toolTip">
+        <string>List the pages nothing touched too</string>
+       </property>
+       <property name="text">
+        <string>Untouched</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QCheckBox" name="cbHeatOn">
        <property name="toolTip">
         <string>Collect read/write/exec usage counters per memory cell</string>
@@ -118,6 +128,20 @@
        <property name="icon">
         <iconset resource="../../xpeccy.qrc">
          <normaloff>:/images/save-as.png</normaloff>:/images/save-as.png</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="tbHeatDetach">
+       <property name="toolTip">
+        <string>Show in its own window</string>
+       </property>
+       <property name="icon">
+        <iconset resource="../../xpeccy.qrc">
+         <normaloff>:/images/display.png</normaloff>:/images/display.png</iconset>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
        </property>
       </widget>
      </item>

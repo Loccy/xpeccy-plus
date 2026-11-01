@@ -223,6 +223,7 @@ class MainWin : public QWidget {
 		void s_watch_show();
 		void s_scr_show();
 		void s_snd_show();
+		void s_heat_show();
 		void s_keywin_rall(Keyboard*);
 		void s_keywin_upd(Keyboard*);
 		void s_keywin_watch(Keyboard*);		// the 50 Hz tick: repaint if the keys moved

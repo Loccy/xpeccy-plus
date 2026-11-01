@@ -2516,6 +2516,7 @@ void MainWin::initUserMenu() {
 	watchAct = dbgMenu->addAction(QIcon(":/images/objective.png"),"Watcher", this, SIGNAL(s_watch_show()));
 	dbgMenu->addAction(QIcon(":/images/rulers.png"),"Screen", this, SIGNAL(s_scr_show()));
 	dbgMenu->addAction(QIcon(":/images/note.png"),"Sound Chips", this, SIGNAL(s_snd_show()));
+	dbgMenu->addAction(QIcon(":/images/memory.png"),"Heat Map", this, SIGNAL(s_heat_show()));
 	connect(dbgMenu->menuAction(), &QAction::triggered, this, &MainWin::doDebug);
 	cheatWin = new xCheatWin(this);
 	addSatellite(cheatWin);
@@ -3276,6 +3277,7 @@ void MainWin::initMachineMenus() {
 		m->addAction(watchAct);
 		m->addAction(cutById.value(XCUT_SCRWIN));
 		m->addAction(cutById.value(XCUT_SNDWIN));
+		m->addAction(cutById.value(XCUT_HEATWIN));
 	}
 	// Options at the menu bar's Tools foot, where people look for it; the right-click
 	// menu has its own item. On macOS it goes to the app menu as Settings, with Cmd+,

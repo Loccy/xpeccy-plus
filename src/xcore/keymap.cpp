@@ -460,6 +460,7 @@ static xShortcut short_tab[] = {
 	{SCG_MAIN, XCUT_RZXWIN, "key.rzxwin", "RZX Player", {}},
 	{SCG_MAIN | SCG_DEBUGA, XCUT_SCRWIN, "key.scrwin", "Screen", {}},
 	{SCG_MAIN | SCG_DEBUGA, XCUT_SNDWIN, "key.sndwin", "Sound Chips", {}},
+	{SCG_MAIN | SCG_DEBUGA, XCUT_HEATWIN, "key.heatwin", "Heat Map", {}},
 	{SCG_MAIN, XCUT_MUTE, "key.mute", "Mute", {}},
 	{SCG_MAIN, XCUT_TAPLAY, "key.tape.play", "Tape Play/Stop", {}},
 	{SCG_MAIN, XCUT_TAPREC, "key.tape.rec", "Tape Record/Stop", {}},

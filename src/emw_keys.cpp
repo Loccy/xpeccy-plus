@@ -260,6 +260,9 @@ void MainWin::xkey_press(int xkey, bool cmd) {
 			case XCUT_SNDWIN:
 				emit s_snd_show();
 				break;
+			case XCUT_HEATWIN:
+				emit s_heat_show();
+				break;
 			case XCUT_MUTE:
 				conf.snd.mute ^= 1;
 				setMessage(conf.snd.mute ? " sound off " : " sound on ");

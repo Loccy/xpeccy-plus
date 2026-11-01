@@ -490,6 +490,7 @@ enum {
 	XCUT_RZXWIN,
 	XCUT_SCRWIN,
 	XCUT_SNDWIN,
+	XCUT_HEATWIN,
 	XCUT_PADWIN,
 	XCUT_CHEATS,
 	XCUT_MUTE,
@@ -1077,6 +1078,7 @@ struct xConfig {
 		unsigned scrgrid:1;	// screen panel: dim every other cell
 		unsigned scrdetach:1;	// screen panel: shown in a window of its own
 		unsigned snddetach:1;	// sound panel: shown in a window of its own
+		unsigned heatdetach:1;	// heat map panel: shown in a window of its own
 		unsigned sndfm:1;	// sound panel: the FM page of the chip, not the PSG one
 		unsigned sndfit:1;	// sound panel: the scope centres and scales itself
 		unsigned sndlog:1;	// sound panel: the scope draws on a log curve
@@ -1103,6 +1105,8 @@ struct xConfig {
 		QSize scrsiz;
 		QPoint sndpos;		// sound window, the same way
 		QSize sndsiz;
+		QPoint heatpos;		// heat map window, the same way
+		QSize heatsiz;
 		QPoint evopos;		// ZX Evolution window, the same way
 		QSize evosiz;
 		QPoint nxpos;		// ZX Next window, the same way

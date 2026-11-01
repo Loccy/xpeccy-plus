@@ -37,6 +37,7 @@
 #include "xgui/debuga/debuger.h"
 #include "xgui/scrwin.h"
 #include "xgui/sndwin.h"
+#include "xgui/heatwin.h"
 #include "xgui/evowin.h"
 #include "xgui/options/setupwin.h"
 #include "filer.h"
@@ -621,9 +622,10 @@ int main(int ac,char** av) {
 	keyWindow keyw(&mwin);
 	xScrWin scrw(&mwin);
 	xSndWin sndw(&mwin);
+	xHeatWin heatw(&mwin);
 	xEvoWin evow(EVO_PANEL, &mwin);
 	xEvoWin nextw(NEXT_PANEL, &mwin);
-	for (QWidget* win : std::initializer_list<QWidget*>{&tapw, &wutw, &scrw, &sndw, &evow, &nextw})
+	for (QWidget* win : std::initializer_list<QWidget*>{&tapw, &wutw, &scrw, &sndw, &heatw, &evow, &nextw})
 		mwin.addSatellite(win);
 	mwin.addSatellite(&rzxw, true);		// a recording takes no input: Delete, Home, End go on too
 
@@ -705,6 +707,14 @@ int main(int ac,char** av) {
 	app.connect(&mwin, SIGNAL(s_snd_show()), &dbgw, SLOT(sndToggle()));
 	app.connect(&optw, SIGNAL(s_apply()), &sndw, SLOT(updateStyle()));
 	dbgw.sndSetDetached(conf.dbg.snddetach);
+
+	app.connect(&dbgw, SIGNAL(wannaHeatWin(bool)), &heatw, SLOT(setDetached(bool)));
+	app.connect(&heatw, SIGNAL(s_detach(bool)), &dbgw, SLOT(heatSetDetached(bool)));
+	app.connect(&app, SIGNAL(s_frame()), &heatw, SLOT(upd()));
+	app.connect(&dbgw, SIGNAL(s_heat_upd()), &heatw, SLOT(upd()));
+	app.connect(&mwin, SIGNAL(s_heat_show()), &dbgw, SLOT(heatToggle()));
+	app.connect(&optw, SIGNAL(s_apply()), &heatw, SLOT(updateStyle()));
+	dbgw.heatSetDetached(conf.dbg.heatdetach);
 
 	app.connect(&dbgw, SIGNAL(wannaEvoWin(bool)), &evow, SLOT(setDetached(bool)));
 	app.connect(&evow, SIGNAL(s_detach(bool)), &dbgw, SLOT(evoSetDetached(bool)));
