@@ -149,6 +149,49 @@ static int fat_find(fatVol* v, unsigned int dir, const char* name, int alen, fat
 	return 0;
 }
 
+#define FAT_PRINT_DEPTH		32
+#define FAT_PRINT_SECTORS	0x40000		// a bound on the sectors walked, for a broken volume
+
+static unsigned long long fat_mix(unsigned long long h, const unsigned char* p, int n) {
+	for (int i = 0; i < n; i++) {
+		h ^= p[i];
+		h *= 0x100000001b3ULL;
+	}
+	return h;
+}
+
+static void fat_print_dir(fatVol* v, unsigned int clust, int depth, unsigned long long* h, unsigned int* left, unsigned char* s) {
+	unsigned char d[512];
+	for (unsigned int n = 0; *left; n++) {
+		unsigned int lba = fat_sector(v, clust, n, s);
+		if (!lba || !v->rd(v->ctx, lba, d)) return;
+		(*left)--;
+		for (int k = 0; k < 512; k += 32) {
+			const unsigned char* e = d + k;
+			if (!e[0]) return;
+			*h = fat_mix(*h, e, 18);		// 18-19: the last access date
+			*h = fat_mix(*h, e + 20, 12);
+			if ((e[0] == 0xe5) || ((e[11] & 0x3f) == 0x0f) || !(e[11] & 0x10) || (e[0] == '.')) continue;
+			unsigned int sub = le16(e + 26) | (v->fat32 ? (le16(e + 20) << 16) : 0);
+			if ((sub >= 2) && (sub - 2 < v->clusters) && (depth < FAT_PRINT_DEPTH))
+				fat_print_dir(v, sub, depth + 1, h, left, s);
+		}
+	}
+}
+
+unsigned long long fat_dir_print(fatSector rd, void* ctx) {
+	unsigned char s[512];
+	fatVol v;
+	memset(&v, 0, sizeof(v));
+	v.rd = rd;
+	v.ctx = ctx;
+	if (!fat_open(&v, s)) return 0;
+	unsigned long long h = 0xcbf29ce484222325ULL;
+	unsigned int left = FAT_PRINT_SECTORS;
+	fat_print_dir(&v, v.rootClust, 0, &h, &left, s);
+	return h ? h : 1;
+}
+
 int fat_read_file(fatSector rd, void* ctx, const char* path, unsigned char* buf, int max) {
 	unsigned char s[512];
 	fatVol v;

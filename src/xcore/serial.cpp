@@ -265,14 +265,21 @@ static bool ser_is_open(serPort* p) {return p->fd >= 0;}
 
 // == both ==
 
+// the ESP's when one is in its socket: a snapshot loaded before the first frame puts one there
+// ahead of ser_port_frame
 static void ser_host_tx(Computer* comp, int i, int b, long long start) {
-	if ((i == 0) && serEsp) {
+	if ((i == 0) && next_esp_fitted) {
 		esp_byte(comp, b, start);
 		return;
 	}
 	if ((i < 0) || (i > 1) || !ser_is_open(&ser[i])) return;
 	if (ser[i].txq.size() < SER_TXQ_MAX) ser[i].txq.push_back((unsigned char)b);
 }
+
+// the guest's bytes are taken from the start, not from the first frame on
+static struct serHooks {
+	serHooks() {next_uart_host_tx = ser_host_tx;}
+} serHooksSet;
 
 static void ser_reset_state(serPort* p) {
 	p->baud = 0;
@@ -314,6 +321,7 @@ static void ser_port_frame(Computer* comp, int i) {
 		esp_detach(comp);
 		serEsp = false;
 	}
+	if (i == 0) esp_forget_snapshot();	// a snapshot's module: none plugged in to take it
 	if (p->name != want) ser_drop(comp, i, NULL);
 	if (want.empty()) {
 		p->failed.clear();
@@ -402,7 +410,6 @@ void serial_frame(Computer* comp) {
 #endif
 		ser_reset_state(&ser[0]);
 		ser_reset_state(&ser[1]);
-		next_uart_host_tx = ser_host_tx;
 		hooked = true;
 	}
 	bool next = comp && comp->hw && (comp->hw->id == HW_ZXNEXT);

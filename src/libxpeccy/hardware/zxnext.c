@@ -15,6 +15,7 @@
 #include "zxnext.h"
 #include "zx_step.h"
 #include "../fatfile.h"
+#include "../filetypes/filetypes.h"
 #include "../xlog.h"
 #include "../cpu/Z80/z80.h"
 
@@ -977,7 +978,7 @@ void next_irq_ack(Computer* comp) {
 		long long u = nx_irq_quiet_until(comp, s);
 		if (u > s) NX.irqDead = ts + (u - s) / nx_tick28(comp);
 	}
-	comp->cpu->flgACK = act && !comp->rzx.play;
+	comp->cpu->flgACK = act;		// a recording played too: the Next takes its INTs itself (rzx_play_step)
 	if (act)
 		comp->cpu->intrq |= Z80_INT;
 	else
@@ -1064,6 +1065,9 @@ static void nx_irq(Computer* comp, int t) {
 			break;
 		case IRQ_NMI:
 			nx_nmi_raise(comp, 1, 0);	// the NMI key: the M1 button (F9), the Multiface's
+			break;
+		case IRQ_RZX_INT:		// a recording's frame ends (a seek): the Next raises its INTs itself
+			rzx_frame_end(comp);
 			break;
 		case IRQ_VID_HBLANK:
 			nx_hblank(comp);
@@ -2845,6 +2849,18 @@ static void nx_halt_done(Computer* comp, int adr, long long t0, long long n, int
 }
 
 static const hwQuiet nx_quiet = {HWQ_ACK_NEXT, NULL, NULL, zx_devs_sync, NULL, 0, nx_halt, nx_halt_done};
+
+// An SZX has put xNextState back over a machine reset for it (filetypes/szx_ext.c):
+// what is worked out of the state, again. The clock comes back after this.
+void next_snap_loaded(Computer* comp, int vmode) {
+	if (NX.vmode != vmode) comp_update_timings(comp);	// the board's CLK_28 (NR 11)
+	long long idle = NX.spr.idleTo;
+	nx_layout(comp);		// the raster of the timing the state runs
+	NX.spr.idleTo = idle;		// worked out for that same raster
+	nx_map_mem(comp);
+	nxHaltLast.tick = -1;
+	comp->flgBOOT = 0;		// a reset's, not the state's: NCLK says whether one is due
+}
 
 HardWare nxt_hw_core = {HW_ZXNEXT, "ZXNext", "ZX Spectrum Next", MEM_2M, 1.0, NULL, NULL,
 			nx_init, nx_map_mem, nx_out, nx_in, nx_mrd, nx_mwr, nx_irq, nx_ack, nx_reset, nx_sync,

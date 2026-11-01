@@ -4,6 +4,7 @@
 #include <zlib.h>
 
 #include "filetypes.h"
+#include "../cpu/Z80/z80.h"
 
 #pragma pack (push, 1)
 
@@ -50,6 +51,7 @@ void rzx_reread(Computer* comp) {
 static void rzx_frame_in(Computer* comp) {
 	FILE* file = comp->rzx.file;
 	comp->rzx.frm.fetches = fgetw(file);
+	comp->rzx.frm.all = comp->rzx.frm.fetches;
 	int size = fgetw(file);
 	if (size != 0xffff) {
 		comp->rzx.frm.size = size;
@@ -136,6 +138,45 @@ void rzxGetFrame(Computer* comp) {
 			}
 		}
 	}
+}
+
+// A frame ends: the next one's data in, past any snapshot at the end of this one; a frame
+// of no fetches runs nothing
+void rzx_frame_end(Computer* comp) {
+	comp->rzx.playT = 0;
+	do {
+		comp->rzx.fCurrent++;
+		comp->rzx.fCount--;
+		rzxGetFrame(comp);
+	} while (comp->rzx.play && (comp->rzx.frm.fetches == 0));
+}
+
+// The end of a frame as the recorder made it, for a Next recording: the frame's fetches and
+// INs are used up there, or the machine went another way than it did
+static void rzx_native_end(Computer* comp) {
+	comp->rzx.playT = 0;
+	if ((comp->rzx.frm.fetches == comp->rzx.frm.all) && !comp->rzx.frm.pos) return;	// no frame: the recorder wrote none
+	if (comp->rzx.frm.fetches || (comp->rzx.frm.pos < comp->rzx.frm.size)) {
+		xlog(XLG_CORE, XLL_WARN, "rzx: frame %i ends with %i fetches and %i INs left: not as recorded",
+			comp->rzx.fCurrent, comp->rzx.frm.fetches, comp->rzx.frm.size - comp->rzx.frm.pos);
+		rzxStop(comp);
+		comp->rzx.overio = 1;
+		return;
+	}
+	rzx_frame_end(comp);
+}
+
+// A recording of the Next, only ever one of ours: the machine runs as it did and takes its
+// interrupts from its own controller - a vector, a line or a CTC no file could raise for it -
+// and only the INs come from the file. A frame ends where rzx_rec_step() ended it: an INT
+// taken, or a frame of T with interrupts off.
+void rzx_play_step(Computer* comp, int t) {
+	CPU* cpu = comp->cpu;
+	if (cpu->flgINTOK) rzx_native_end(comp);
+	if (!comp->rzx.play) return;
+	comp->rzx.playT += t;
+	if (!cpu->flgIFF1 && !cpu->flgNOINT && (comp->rzx.playT >= comp_frame_ticks(comp)))
+		rzx_native_end(comp);
 }
 
 int inflateToFile(char* buf, int len, FILE* file) {

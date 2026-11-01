@@ -94,6 +94,7 @@ int sdc_protected(SDCard*);
 void sdcSetLock(SDCard*,int);
 int sdc_read_lba(SDCard*, unsigned int lba, unsigned char* buf);	// a sector outside any transfer: 1 if the card has it
 int sdc_has_file(SDCard*, const char* path);	// a FAT volume on the card holds this file ("dir/name.ext")
+unsigned long long sdc_dir_print(SDCard*);	// its directories as the guest reads them (fat_dir_print), 0 none
 
 void sdcOpenFile(SDCard*);
 void sdcCloseFile(SDCard*);

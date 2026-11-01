@@ -5,9 +5,36 @@
 // What it answers is NONOS AT 1.7.6's (SDK 3.0.6), byte for byte; the lab's at176-ch3/4/5.md
 // say where each reply comes from.
 
+#include <map>
 #include <string>
 
 struct Computer;
+
+// == a snapshot ==
+
+// The module's state in a snapshot of the Next (the ESP record of an SZX): each part names
+// its values once, and the same calls write them out or take them back. A value the record
+// lacks, or holds at another size, is left as it is. The network side is not in it: a load
+// finds every socket closed, and the parts go on from there as when the far end went.
+class espSnap {
+	public:
+		explicit espSnap(bool load) : loading(load) {}
+		const bool loading;
+		std::string out;			// written: the key, 0, a 32-bit length, the bytes
+		void read(const unsigned char* p, size_t n);
+		void raw(const std::string& key, void* p, size_t n);
+		void v(const std::string& key, std::string& s);
+		template <class T> void v(const std::string& key, T& x) {raw(key, &x, sizeof(T));}
+	private:
+		std::map<std::string, std::string> got;	// read, by key; written: the keys so far
+};
+
+void esp_basic_snap(espSnap& s);
+void esp_wifi_snap(espSnap& s);
+void esp_tcp_snap(Computer* comp, espSnap& s);	// a load: the server listens again
+// the input hook as a number for the record (esp_take_input): 0 none, else esp_tcp's own
+int esp_tcp_hook_id(void (*hook)(Computer*, int, long long));
+void (*esp_tcp_hook_of(int id))(Computer*, int, long long);
 
 // == a command ==
 

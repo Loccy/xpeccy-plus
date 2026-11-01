@@ -34,6 +34,23 @@ typedef struct {
 
 int szx_media(const szxMedia** list);
 void szx_media_clear(void);
+
+// The Next's SD card as the last loaded file names it: the program mounts it, puts the
+// folders a program from elsewhere stood in back on it, and compares the print
+// (sdc_dir_print) - the card is never in the file.
+#define SZX_PINS	4
+typedef struct {
+	int on;			// the file names a card
+	int folder;		// ...a folder, not an image
+	unsigned long long print;	// its directories when saved, 0 unknown
+	char path[1024];
+	int pins;
+	struct {
+		char name[256];		// the folder's name in the card's root, UTF-8
+		char host[1024];	// ...and where it is on the host, UTF-8
+	} pin[SZX_PINS];
+} szxCard;
+const szxCard* szx_card(void);
 // a carried image's name as it was on the host, from our own record
 void szx_media_link(int kind, int drive, const unsigned char* src, size_t n);
 
@@ -83,6 +100,11 @@ int szx_notes(void);		// SZN_* of the last load
 
 typedef struct szxBuf szxBuf;
 void szx_ext_save(szxBuf*, Computer*);
+// The Next's ESP-01, which the program runs outside the machine (xcore/esp.cpp): save adds
+// its record's bytes, none when no module is fitted; load takes them back, or n = 0 from a
+// file without the module. NULL: no such part.
+extern void (*szx_esp_save)(Computer*, szxBuf*);
+extern void (*szx_esp_load)(Computer*, const unsigned char*, size_t);
 
 // the Z80's registers from F to IM, laid out alike in Z80R and GS (szx.c);
 // swapaf: A before F

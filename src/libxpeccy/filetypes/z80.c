@@ -398,6 +398,7 @@ static void z80_write_page(FILE* file, unsigned char* src, int num) {
 }
 
 int saveZ80(Computer* comp, const char* name, int drv) {
+	if (comp->hw->id == HW_ZXNEXT) return ERR_SNAP_NEXT;	// a 128K's state is not the Next's
 	int snap = z80_snap_hw(comp->hw->id);
 	if ((snap == SNAP_HW_128K) && (comp->snapModel == SNAP_HW_PLUS2))
 		snap = SNAP_HW_PLUS2;		// the same core, the definition tells them apart

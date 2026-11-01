@@ -423,8 +423,16 @@ void nx_uart_feed(Computer* comp, int i, const unsigned char* b, int n) {
 	nx_uart_feed_at(comp, i, b, n, 0);
 }
 
-// the same, the first of them starting no sooner than CLK_28 edge e
+// the same, the first of them starting no sooner than CLK_28 edge e. An RZX being made holds
+// what the CPU reads, not what comes in on a line (the ESP-01's replies, a host port's
+// bytes): they will not come again when it plays - said once a recording
 void nx_uart_feed_at(Computer* comp, int i, const unsigned char* b, int n, long long e) {
+	static unsigned told = 0;	// the recording it was said for
+	if (n && rzx_recording && (told != rzx_recording)) {
+		told = rzx_recording;
+		comp->msg = (char*)" UART input: this RZX will not replay it ";
+		xlog(XLG_HW, XLL_WARN, "rzx: bytes from outside reached UART %i while recording: the recording will not play back the same", i);
+	}
 	nxUart* u = &UART[i];
 	if (!u->hqN && (e > u->feedAt)) u->feedAt = e;
 	for (int k = 0; (k < n) && (u->hqN < (int)sizeof(u->hq)); k++) {

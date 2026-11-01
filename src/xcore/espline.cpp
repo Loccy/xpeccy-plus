@@ -1,10 +1,27 @@
 #include "espline.h"
+#include "esp_int.h"
 
 void xEspLine::reset() {
 	tr.clear();
 	known = 0;
 	inFrame = false;
 	hunt = 0;
+}
+
+void xEspLine::snap(espSnap& s) {
+	size_t n = tr.size();
+	s.v("line.n", n);
+	if (s.loading) tr.assign(n, Edge{0, 1});
+	for (size_t i = 0; i < tr.size(); i++) {
+		s.v("line.edge" + std::to_string(i), tr[i].t);
+		s.v("line.level" + std::to_string(i), tr[i].lv);
+	}
+	s.v("line.known", known);
+	s.v("line.bit", bit);
+	s.v("line.frame", frame);
+	s.v("line.inFrame", inFrame);
+	s.v("line.t0", t0);
+	s.v("line.hunt", hunt);
 }
 
 void xEspLine::setRate(double bitEdges, int fr) {

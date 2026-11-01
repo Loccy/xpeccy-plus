@@ -11,6 +11,11 @@ before that point is upstream's history and is not repeated here.
 
 ### Added
 
+- **ZX Spectrum Next snapshots**: File > Save writes the whole Next as an SZX, with its
+  ESP-01, so quick saves, autosaves, Resume Last Session and RZX recording work on it too.
+  The SD card stays out of the file: loading puts the same card back and says so when its
+  files have changed since.
+
 - **Quick saves per game**: F5 keeps the last 20 saves of each game, with its tape and
   disks as they were. The game is the one that runs - opened, or started from the tape or
   drive A, as a disk from TR-DOS - and a reset or another machine ends it; loading a save

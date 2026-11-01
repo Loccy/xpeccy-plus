@@ -142,8 +142,8 @@ one: a field that changed size is skipped, not misread. An unknown record is ski
 
 **What a field holds is Xpeccy+'s own memory layout** - the C structure the emulator runs on,
 not a description of the hardware. That is fine for a snapshot that has to put the machine
-back exactly, and useless to anyone else. Only `MACH`, `MAP`, `RAY`, `TS`, `FDCP` and `FM n`
-have a layout of their own, written down here (`TS  ` is fields with one byte after them); the
+back exactly, and useless to anyone else. Only `MACH`, `MAP`, `RAY`, `TS`, `FDCP`, `FM n`
+and `SDCD` have a layout of their own, written down here (`TS  ` is fields with one byte after them); the
 rest are opaque.
 
 ### Which machine: `MACH` and id `0x80`
@@ -184,6 +184,9 @@ taken when the file's core is the running core; on another core only the sound c
 | `GSX `, `GSCP`, `GSRX` | General Sound beyond `GS`/`GSRP`: its ports, its CPU's hidden state, RAM past the spec's pages |
 | `TAPE` | the tape's position inside the block, the level, the pause |
 | `LINK` | a carried image's old name: `byte kind` (1 tape, 2 Beta disk, 3 +3 disk), `byte drive`, the name to the end |
+| `NEXT`, `NCLK`, `RTC `, `VCLK` | the ZX Spectrum Next: see below |
+| `SDCD` | the Next's SD card, named, not carried: see below |
+| `ESP ` | the Next's ESP-01 module: see below |
 
 The order of reading matters in one place: the drives and the tape are mounted after the
 snapshot is in, so `FLPn`, `DIF ` and `TAPE` wait until their images are back.
@@ -206,6 +209,46 @@ TSConf is a ZX Evolution configuration, so its files carry machine id `0x80` and
 
 `RAY ` puts the raster back to the dot, which matters here: TSConf moves its INT anywhere in
 the frame, and a T is a different number of dots at each of its three speeds.
+
+## ZX Spectrum Next
+
+A Next file carries machine id `0x80` and `MACH` names `ZXNext` / `zxnext`. The memory is the
+board's 2 MB SRAM in `RAMP` blocks, pages 0 to 127: the ROMs the firmware loaded from the card,
+the divMMC and Multiface memory and the RAM banks, all where the board keeps them. The rest is
+in records of our own, all opaque:
+
+- `NEXT` - the board, part by part: the nextregs, the memory map and the ports, the copper
+  and its program, the palettes, the sprites and their patterns, the layers and the picture
+  the mixer is drawing, the DMA, the interrupt controller, the CTC, the AY and the DACs, the
+  divMMC paging, the keyboard maps, both UARTs, and the SRAM behind the three banks the CPU
+  sees as fast memory.
+- `NCLK` - the Next's times count from when the machine was made, in its 28 MHz clock, so the
+  clock comes back with them; and whether the firmware's start is still to come (a recording
+  begun at power-on).
+- `RTC ` - the DS1307 clock chip, its battery side too.
+- `VCLK` - the video clock's fraction of a dot.
+- `SDCD` - the SD card: a card is far too big to carry, but NextZXOS keeps what it read of it
+  in memory. The record names the card (an image or a folder), the folder a program opened
+  from elsewhere was put on it as, and a print of the card's directories as the Next reads
+  them. A load puts the card back in and that folder back on it, and says so when the
+  directories have changed since.
+
+```
+  byte  flags             b0: a folder, not an image
+  qword print             of every directory entry, the last access date left out; 0 none
+  char  path[]            zero terminated
+  byte  folders           how many follow (one at a time is put on a card)
+  for each:
+    char  name[]          its name in the card's root, UTF-8, zero terminated
+    char  host[]          where it is on the computer, UTF-8, zero terminated
+```
+
+- `ESP ` - the ESP-01 module, which runs outside the machine: its UART, boot, the command
+  being received, the replies waiting to go out, the Wi-Fi and TCP settings and what its links
+  hold. Empty when no module is fitted. The network side is not in it: a load finds the
+  connections closed, and the module goes on as when the far end drops them.
+
+`RAY ` puts the raster back to the dot, as for TSConf: the Next runs at four speeds.
 
 ## TurboSound FM
 

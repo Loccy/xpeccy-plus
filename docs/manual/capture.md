@@ -150,3 +150,11 @@ asked for the file to record into, with the same file offered.
 
 **Finalize File...** removes the bookmarks from a recording saved earlier, without playing
 it.
+
+```{index} ZX Spectrum Next; RZX
+```
+
+A recording of the ZX Spectrum Next plays only in Xpeccy+. It holds what the Next reads, not
+what comes in on its serial lines: when the ESP-01 answers, or a computer's serial port sends
+bytes, while you record, the message **UART input: this RZX will not replay it** says that the
+recording will not play back the same from there.

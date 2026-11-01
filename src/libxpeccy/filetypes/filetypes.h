@@ -76,7 +76,7 @@ enum {
 	ERR_NEX_HW,		// a .nex on a machine that is not a ZX Spectrum Next
 	ERR_NEX_CARD,		// a .nex with no folder in the SD card slot to boot NextZXOS from
 	ERR_NEX_NAME,		// a .nex whose name cannot be typed
-	ERR_SNAP_NEXT		// a snapshot of the Next: no format here keeps its state yet
+	ERR_SNAP_NEXT		// a snapshot of the Next in .sna or .z80: only .szx keeps its state
 };
 
 // spg
@@ -228,6 +228,8 @@ unsigned int swap32(unsigned int);
 int loadRZX(Computer*, const char*, int);
 int rzxGetHardware(const char*);
 void rzxGetFrame(Computer*);
+void rzx_frame_end(Computer*);		// the frame played ends: the next one in
+void rzx_play_step(Computer*, int t);	// after an exec, a Next recording: its own frame ends
 
 // one block of a recording as the file has it
 typedef struct {

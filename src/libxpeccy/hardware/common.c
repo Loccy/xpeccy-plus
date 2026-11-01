@@ -99,11 +99,7 @@ void zx_irq(Computer* comp, int t) {
 			// EI delay in T, and the frame boundary starts the count again.
 			// A snapshot recorded at the frame's end is loaded first, and the
 			// INT is the loaded machine's; a frame of no fetches runs nothing.
-			do {
-				comp->rzx.fCurrent++;
-				comp->rzx.fCount--;
-				rzxGetFrame(comp);
-			} while (comp->rzx.play && (comp->rzx.frm.fetches == 0));
+			rzx_frame_end(comp);
 			if (comp->rzx.noint) {		// a join made between two INTs
 				comp->rzx.noint = 0;
 				break;

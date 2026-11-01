@@ -724,12 +724,18 @@ int iord(int port, void* ptr) {
 	}
 // play rzx
 	int res = 0xff;
+	int logged = -1;	// a Next recording's byte: the device is read all the same, for what
+				// a read does to it (the SD card's next SPI transfer), as recorded
 	if (comp->rzx.play) {
 		if (comp->rzx.frm.pos < comp->rzx.frm.size) {
 			res = comp->rzx.frm.data[comp->rzx.frm.pos];
 			comp->rzx.frm.pos++;
-			if (inview.on) iview_in(&inview, comp, port, res);
-			return res;
+			if (comp->hw->id == HW_ZXNEXT) {
+				logged = res;
+			} else {
+				if (inview.on) iview_in(&inview, comp, port, res);
+				return res;
+			}
 		} else {
 			rzxStop(comp);
 			xlog(XLG_CORE, XLL_DEBUG, "overIO frame %i pc=%04X port=%04X size=%i fetch-left %i",
@@ -750,6 +756,7 @@ int iord(int port, void* ptr) {
 
 	vid_settle(comp->vid);		// some port handlers read the ray (Scorpion, Profi)
 	res = comp->hw->in ? comp->hw->in(comp, port) : 0xff;
+	if (logged >= 0) res = logged;
 	if (comp->flgCOND) {
 		comp->brkev.in = port;
 		comp->brkev.val = res & 0xff;
@@ -1439,7 +1446,9 @@ int compExec(Computer* comp) {
 		rzx_rec_pre(comp);
 // exec cpu opcode OR handle interrupt. get T states back
 	res2 = cpu_exec(comp->cpu);
-	if (comp->rzx.play) {
+	if (comp->rzx.play && (comp->hw->id == HW_ZXNEXT)) {
+		rzx_play_step(comp, res2);	// the Next takes its own interrupts
+	} else if (comp->rzx.play) {
 		if (comp->rzx.frm.fetches == 0) {
 			vid_unlazy(comp->vid);
 			if (comp->hw->irq)

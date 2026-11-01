@@ -7,9 +7,12 @@
 #include <deque>
 #include <vector>
 
+class espSnap;
+
 class xEspLine {
 	public:
 		void reset();
+		void snap(espSnap& s);			// in a snapshot of the module (esp_int.h)
 		void setRate(double bitEdges, int frame);	// the ESP's bit in CLK_28 edges, its frame
 		// a byte the guest sends: its start bit at edge s, a bit of guestBit edges, its frame
 		void put(int byte, long long s, long guestBit, int guestFrame);

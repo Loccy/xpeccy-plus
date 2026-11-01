@@ -16,7 +16,7 @@ and disks have pages of their own under the **Media** menu:
 
 | Kind | Files | Open | Save |
 |---|---|---|---|
-| Snapshot | `.szx` | yes | yes, every machine but the ZX Spectrum Next |
+| Snapshot | `.szx` | yes | yes |
 | | `.z80` | yes | 48K, 128K, +2, +2A, +3, Pentagon, Scorpion |
 | | `.sna` | yes | yes, every machine but the ZX Spectrum Next |
 | | `.spg` (ZX Evolution TSConf) | yes | no |
@@ -239,7 +239,9 @@ that machine.
 
 **NEX** programs and **SNX** snapshots need the ZX Spectrum Next. It starts them, and `.z80`
 and `.sna` snapshots too, through NextZXOS, from its SD card: see
-[Starting programs](zx-next.md#starting-programs). A snapshot of the Next cannot be saved yet.
+[Starting programs](zx-next.md#starting-programs). The Next's own state saves as `.szx`: a
+`.sna` or `.z80` has no room for it, and a `.nex` holds a program, not a running machine. See
+[Snapshots](zx-next.md#snapshots).
 
 ## Quick saves
 
@@ -273,8 +275,8 @@ it by then. So a save still loads after the image or its archive was moved or de
 **File > Undo Quick Load** (Ctrl+F9) takes back the last quick load and returns to where you
 were, the tape and the disks too. Use it again to redo the quick load.
 
-A ZX Spectrum Next cannot be saved to a file yet: its quick save is kept in memory until
-the program closes.
+A save of the ZX Spectrum Next does not take its SD card with it, only its name: see
+[Snapshots](zx-next.md#snapshots).
 
 ### Autosaves
 

@@ -19,6 +19,7 @@
 #include "espline.h"
 #include "espnet.h"
 #include "../libxpeccy/spectrum.h"
+#include "../libxpeccy/filetypes/szx.h"
 #include "../libxpeccy/hardware/hardware.h"
 #include "../libxpeccy/xlog.h"
 
@@ -454,10 +455,154 @@ static void esp_input(Computer* comp, int c, long long end) {
 	E.prev = -1;
 }
 
+// == a snapshot ==
+
+void espSnap::read(const unsigned char* p, size_t n) {
+	size_t i = 0;
+	while (i < n) {
+		size_t k = i;
+		while ((k < n) && p[k]) k++;
+		if (k + 5 > n) break;
+		std::string key((const char*)p + i, k - i);
+		size_t len = p[k + 1] | (p[k + 2] << 8) | (p[k + 3] << 16) | ((size_t)p[k + 4] << 24);
+		i = k + 5;
+		if (len > n - i) break;
+		got[key] = std::string((const char*)p + i, len);
+		i += len;
+	}
+}
+
+void espSnap::raw(const std::string& key, void* p, size_t n) {
+	if (!loading) {
+		if (!got.emplace(key, std::string()).second)	// one key twice: the load would take the last
+			xlog(XLG_NET, XLL_WARN, "esp: snapshot key %s twice", key.c_str());
+		out += key;
+		out += '\0';
+		for (int b = 0; b < 4; b++) out += (char)((n >> (b * 8)) & 0xff);
+		out.append((const char*)p, n);
+		return;
+	}
+	auto it = got.find(key);
+	if ((it != got.end()) && (it->second.size() == n)) memcpy(p, it->second.data(), n);
+}
+
+void espSnap::v(const std::string& key, std::string& s) {
+	if (!loading) {
+		raw(key, (void*)s.data(), s.size());
+		return;
+	}
+	auto it = got.find(key);
+	if (it != got.end()) s = it->second;
+}
+
+// the module itself: its UART, boot, receiver, what waits to go out and the pins
+static void esp_main_snap(espSnap& s) {
+	s.v("st", E.st);
+	s.v("baud", E.baud);
+	s.v("frame", E.frame);
+	s.v("echo", E.echo);
+	s.v("bootStage", E.bootStage);
+	s.v("bootAt", E.bootAt);
+	E.line.snap(s);
+	s.v("rx", E.rx);
+	s.v("prev", E.prev);
+	s.v("buf", E.buf);
+	s.v("rstAt", E.rstAt);
+	s.v("held", E.held);
+	int hook = esp_tcp_hook_id(E.hook);
+	s.v("hook", hook);
+	if (s.loading) E.hook = esp_tcp_hook_of(hook);
+	size_t n = E.out.size();
+	s.v("out", n);
+	if (s.loading) E.out.assign(n, espMsg());
+	for (size_t i = 0; i < E.out.size(); i++) {
+		std::string k = "out" + std::to_string(i) + ".";
+		s.v(k + "b", E.out[i].b);
+		s.v(k + "baud", E.out[i].baud);
+		s.v(k + "frame", E.out[i].frame);
+		s.v(k + "at", E.out[i].at);
+	}
+	s.v("outBytes", E.outBytes);
+	s.v("farBaud", E.farBaud);
+	s.v("farFrame", E.farFrame);
+	s.v("replyAt", E.replyAt);
+	s.v("rst0", E.rst0);
+	s.v("ioOut", E.ioOut);
+	s.v("ioLevel", E.ioLevel);
+}
+
+// A load before the module is plugged in (the program's start, a machine switched to the
+// Next): the file's module is put in at once, so the guest's bytes in the frame before
+// esp_attach reach it, and esp_attach keeps it - unless no module is wanted
+static bool espFresh = false;
+
+static void esp_snap_apply(Computer* comp, const unsigned char* p, size_t n) {
+	esp_tcp_down();				// the host's sockets: the record has none of them
+	espSnap s(true);
+	s.read(p, n);
+	esp_main_snap(s);
+	esp_basic_snap(s);
+	esp_wifi_snap(s);
+	esp_tcp_snap(comp, s);
+	pins_update();
+	xlog(XLG_NET, XLL_INFO, "esp: state from the snapshot, %i at %li", E.st, E.baud);
+}
+
+static void esp_szx_save(Computer* comp, szxBuf* b) {
+	if (E.st == ESP_OFF) return;		// none fitted: an empty record
+	espSnap s(false);
+	esp_main_snap(s);
+	esp_basic_snap(s);
+	esp_wifi_snap(s);
+	esp_tcp_snap(comp, s);
+	sb_put(b, s.out.data(), s.out.size());
+}
+
+// A file without the module, or with an empty record, has none to put back: one plugged in
+// boots as on power-on, at the moment loaded
+static void esp_szx_load(Computer* comp, const unsigned char* p, size_t n) {
+	if (!p || !n) {
+		if (espFresh) {
+			esp_detach(comp);
+			espFresh = false;
+		}
+		if (E.st == ESP_OFF) return;	// esp_attach boots it
+		E.out.clear();
+		E.outBytes = 0;
+		E.line.reset();
+		esp_boot(comp, nx_uart_sync(comp));
+		return;
+	}
+	if (E.st == ESP_OFF) {
+		espFresh = true;
+		next_esp_fitted = 1;
+	}
+	esp_snap_apply(comp, p, n);
+}
+
+// the core's snapshots reach the module from the start: a load can come before it is plugged in
+static struct espSzxHooks {
+	espSzxHooks() {
+		szx_esp_save = esp_szx_save;
+		szx_esp_load = esp_szx_load;
+	}
+} espSzxHooksSet;
+
+void esp_forget_snapshot() {
+	if (!espFresh) return;
+	espFresh = false;
+	esp_detach(NULL);
+}
+
 // == the outside ==
 
 void esp_attach(Computer* comp) {
 	if (!E.loaded) fl_load();
+	if (espFresh) {			// a snapshot's, put in by the load: it goes on
+		espFresh = false;
+		xlog(XLG_NET, XLL_INFO, "esp: on UART 0, from the snapshot");
+		return;
+	}
 	E.line.reset();
 	E.out.clear();
 	E.outBytes = 0;
