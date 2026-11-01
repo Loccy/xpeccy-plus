@@ -38,8 +38,8 @@ between its color and a brighter one all the time it moves, a drive's each time 
 steps to another track.
 
 Hold the mouse over the tape or a drive to see which file is in it. A click opens the
-**Tape Player** or the **Disk Manager**; a right-click opens a short menu of the same
-commands - play, rewind, open, eject.
+**Tape Player**, or the **Disk Manager** on that drive's page; a right-click opens a short
+menu of the same commands - play, rewind, open, eject.
 
 ![The status bar with a divMMC on](images/status-bar-divmmc.png)
 

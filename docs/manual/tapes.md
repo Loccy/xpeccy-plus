@@ -31,7 +31,8 @@ on the tape in the status bar. The hotkey is F6 (Modern).
 
 At the top:
 
-- the name of the tape file;
+- the name of the tape file; its arrow lists the other sides of the tape beside it, to put
+  one in (see [The other sides beside an image](files.md#the-other-sides-beside-an-image));
 - {icon}`fileopen` **Open a tape image** - puts a tape in, mounted;
 - {icon}`floppy` **Save the tape to a file** - see [Saving a tape](#saving-a-tape);
 - {icon}`wav` **Export the tape as a WAV recording** - see [Export to WAV](#export-to-wav);
