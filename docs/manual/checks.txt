@@ -29,3 +29,9 @@ en labels
 en span
 en bench
 en xbrk
+en GigaScreen
+en contention
+en floating bus
+en input lag
+en edge detection
+en FAT32
