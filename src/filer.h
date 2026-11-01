@@ -145,6 +145,7 @@ void media_set_current(const QString& path);
 // the machine that file should be opened on, before it is (xcore/filemachine.h):
 // *mac comes back empty to keep the running one, false means do not open it
 bool media_machine(Computer*, const QString& path, int id, int drv, int run, std::string* mac);
+bool media_machine_known(Computer*, const QString& path, int id, int drv, int run);	// ...without asking
 // a tape, or a disk going into drive A: there is a choice between running it and mounting it
 bool media_runnable(Computer*, const QString& path, int id, int drv);
 bool media_to_drive(Computer*, const QString& path, int id);	// a disk image, or a file put on one

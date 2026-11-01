@@ -781,12 +781,18 @@ static bool media_ask_machine(const QString& path, const std::vector<std::string
 // back empty to keep the running one. Only what is about to run gets a say - a
 // snapshot always, a tape or a disk only when it is started, and a disk only
 // from drive A, the one that boots. false: the user backed out of the question.
-bool media_machine(Computer* comp, const QString& path, int id, int drv, int run, std::string* mac) {
-	mac->clear();
+// a tape or a disk that is not started stays on the running machine: nothing to look at
+bool media_machine_known(Computer* comp, const QString& path, int id, int drv, int run) {
 	xFileTypeInfo* inf = file_type_of(comp, id, path);
 	if (!inf) return true;
 	int kind = as_kind_of(inf->id);		// AS_NONE: a snapshot, or nothing that runs
-	if ((kind != AS_NONE) && (!run || !as_runnable(kind, drv))) return true;
+	return (kind != AS_NONE) && (!run || !as_runnable(kind, drv));
+}
+
+bool media_machine(Computer* comp, const QString& path, int id, int drv, int run, std::string* mac) {
+	mac->clear();
+	if (media_machine_known(comp, path, id, drv, run)) return true;
+	xFileTypeInfo* inf = file_type_of(comp, id, path);
 	QString err;
 	QString local = arc_local(path, &err);		// its bytes say which machine
 	if (local.isEmpty()) return true;			// opening it says why not

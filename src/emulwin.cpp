@@ -2044,7 +2044,8 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 	QString fpath = path.isEmpty() ? file_ask_open(comp, &id, &drv) : path;
 	// an archive: the image in it, picked when it holds several
 	if (arc_bare(fpath) && (id != FG_RAW)) {
-		hold();
+		QString err;
+		if (media_candidates(comp, fpath, id, drv, &err).size() != 1) hold();	// a list, or why not
 		fpath = media_from_archive(comp, fpath, id, drv, true);
 	}
 	// cheats only fill their window: nothing is reset, replaced or started
@@ -2070,7 +2071,8 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		if (!drivesBack()) fpath.clear();
 	}
 	std::string mac;
-	if (!fpath.isEmpty() && !pinned) hold();		// the machine the file wants may be asked
+	// the machine the file wants may be asked
+	if (!fpath.isEmpty() && !pinned && !media_machine_known(comp, fpath, id, drv, run)) hold();
 	if (!fpath.isEmpty() && (pinned || media_machine(comp, fpath, id, drv, run, &mac))) {
 		if (!mac.empty()) setMachine(mac);
 		if ((run == AR_MOUNT) && mac.empty() && media_mount_can(comp, fpath, id, drv)) {
