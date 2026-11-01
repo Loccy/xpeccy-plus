@@ -108,6 +108,20 @@ class xSlider : public QSlider {
 		void paintEvent(QPaintEvent*);
 };
 
+// The image in a drive or the deck as a drop-down: the box shows its path, and its
+// list is a menu that fill makes as it opens - the other images of its set, as the
+// drive and tape menus have them. With nothing in it, the menu says empty.
+class QMenu;
+class xPathBox : public QComboBox {
+	public:
+		xPathBox(QWidget* p = NULL);
+		void setPath(const QString&);
+		std::function<void(QMenu*)> fill;
+		QString empty = "Nothing else beside it";
+	protected:
+		void showPopup();
+};
+
 // A menu's list where one is picked: its exclusive group, found by name, made
 // the first time. It is the menu's, so it outlives clear() and takes the items
 // of the next fill; a menu may hold several, by different names.
@@ -320,6 +334,8 @@ class TapeWin : public QDialog {
 		void updList(Tape*);
 		void upd(Tape*);
 		void show();
+	public:
+		std::function<void(QMenu*)> others;	// the other sides of the tape, put in a menu
 	signals:
 		void wannaOpen();
 		void wannaEject();

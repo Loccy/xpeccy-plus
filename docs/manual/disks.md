@@ -29,6 +29,9 @@ the name means the disk has been changed and not saved yet. Each submenu has:
 
 - **Open...** - put a disk image into this drive. It is only mounted: nothing starts, and
   the machine stays the same.
+- the other disks of the set, under **Open...** - the disks beside this drive's one, or for
+  an empty drive the disks beside drive A's; pick one to put it in (see
+  [The other sides beside an image](files.md#the-other-sides-beside-an-image)).
 - **New** - put an empty disk into this drive. On a Beta Disk machine you are asked
   **Format for TR-DOS?**: {icon}`ok-apply` **Yes** gives an empty TR-DOS disk ready for
   files, {icon}`cancel` **No** gives an unformatted one, for a program that formats it
@@ -116,12 +119,13 @@ drives are opened again at the next start.
 ![The Disk Manager](images/disk-manager.png)
 
 **Media > Disk Manager** (also {icon}`fdd_disk` on the toolbar, and a click on a drive
-{icon}`diskGreen` light in the status bar) shows what is in the drives and on the disks. In
-the picture drive A holds Fire 'n Ice (n-Discovery, 2003).
+{icon}`diskGreen` light in the status bar, which opens that drive's tab) shows what is in
+the drives and on the disks. In the picture drive A holds Fire 'n Ice (n-Discovery, 2003).
 
 - **Tabs** - one for each drive, named after the disk's own TR-DOS label or the file name.
   **Fast disk access** beside them is the same switch as in the **Media** menu.
-- **The line under the tabs** - the file in the drive, then buttons to {icon}`fileopen` open
+- **The line under the tabs** - the file in the drive, whose arrow lists the other disks of
+  its set, then buttons to {icon}`fileopen` open
   a disk image, {icon}`doc-new` insert a new disk, {icon}`floppy` save the changes to the
   disk's own file, {icon}`save-as` save the disk to a new file, and {icon}`tape-eject` eject,
   and the **Write protect** box.

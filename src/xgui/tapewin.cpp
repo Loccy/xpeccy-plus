@@ -10,6 +10,9 @@ TapeWin::TapeWin(QWidget *par):QDialog(par) {
 	setWindowFlags(Qt::Tool);
 	setProperty("xCenterOnce", true);
 	ui.stopBut->setEnabled(false);
+	// the path's list: the other sides beside the tape, as the tape menu has them
+	ui.tpath->empty = "No other sides beside it";
+	ui.tpath->fill = [this](QMenu* m) {if (others) others(m);};
 	// which drive Copy to disk writes to: the window has no disk page to take
 	// the answer from, so the button asks
 	QMenu* menu = new QMenu(this);
@@ -72,7 +75,7 @@ void TapeWin::upd(Tape* tape) {
 	const char* path = tape->path ? tape->path : "";
 	if (tapeRaw != path) {
 		tapeRaw = path;
-		ui.tpath->setText(QString::fromLocal8Bit(path));
+		ui.tpath->setPath(QString::fromLocal8Bit(path));
 	}
 	if (tapeChanged != tape->changed) {
 		tapeChanged = tape->changed;

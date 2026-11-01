@@ -106,6 +106,31 @@ for in that folder too, named after the image.
 An encrypted archive, a ZIP64 one, one split into parts, or an image that unpacks to more
 than 256 MB is not opened; a message says why.
 
+### The other sides beside an image
+
+```{index} side, multi-part tape, multi-disk program
+```
+
+A game on two sides, or on several tapes or disks, usually comes as several files in one
+folder. While a tape or a disk is in, the tape menu and the drive's menu list the other files
+of its set under **Open...**, the one that is in marked: pick another to put it in. More than
+eight go into a submenu named after the folder. The same list drops down from the file's
+name at the top of the **Tape Player** and of each drive's page in the **Disk Manager**.
+
+The drives share a set: an empty drive B, or one whose disk has no set of its own, lists the
+set of the disk in drive A, so the program's second disk goes into B with one click. A disk
+that is in another drive is shown with that drive's letter and cannot be picked. While the
+tape plays, its other sides cannot be picked either, as it cannot be ejected.
+
+The set is found by the names: files named the same but for the side or the part, as
+`Game (Side A).tzx` and `Game (Side B).tzx`, `Game - Side 1.tzx`, `game_a.tap` and
+`game_b.tap`, `Game (Tape 1 of 2).tzx`, `Game - Disk 2.trd`. A number alone does not make a
+part: `Dizzy 2` and `Dizzy 3` are two games. Notes in square brackets, as `[a]` or
+`[SpeedLock 4]`, may differ from side to side, and a `.tap` side goes with a `.tzx` one when
+there is no other. An archive beside it counts when it holds one image of that kind, as
+`Game (Side B).tzx.zip`. A tape or disk from an archive holding several lists that archive's
+images instead, as above.
+
 ### The file dialog
 
 ```{index} file dialog

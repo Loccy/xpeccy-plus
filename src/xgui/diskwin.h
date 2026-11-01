@@ -33,14 +33,15 @@ enum {
 class xDiskWin : public QDialog {
 	public:
 		xDiskWin(QWidget* = NULL);
-		void showWindow();
+		void showWindow(int drv = -1);	// on that drive's tab
 		void refresh();
 		std::function<void()> tapeChanged;	// files went onto the tape
 		std::function<void(int, int)> diskOp;	// DW_* on a drive, done by the main window
+		std::function<void(QMenu*, int)> others;	// the other disks of a drive's set, put in a menu
 	private:
 		QTabBar* tabs;
 		QCheckBox* fast;
-		QLineEdit* path;
+		xPathBox* path;
 		QToolButton* btnOpen;
 		QToolButton* btnNew;
 		QToolButton* btnSave;

@@ -28,6 +28,12 @@ before that point is upstream's history and is not repeated here.
   several images in it, a list asks which. The drive and tape menus offer the archive's
   other sides and disks. *(requested by Volutar)*
 
+- **Other sides beside an image**: the tape and drive menus also list the other sides,
+  tapes or disks of a set lying in the same folder, found by their names - Side A and
+  Side B, Tape 1 of 2, game_a and game_b - and one-image archives beside it. The file name
+  in the Tape Player and the Disk Manager drops the same list down. An empty drive B offers
+  the disks of drive A's set. *(requested by Volutar)*
+
 - **Dumps of any memory page**: the Debugger's Save dump and Load dump take a source - the
   CPU's 64K as before, or a RAM, ROM, divMMC or Multiface page, paged in or not, and the
   pages after it. *(requested by AlexZor)*
@@ -104,6 +110,9 @@ before that point is upstream's history and is not repeated here.
   a page in your browser carries a box with an arrow.
 
 ### Fixed
+
+- **A drive in the status bar opens its own tab**: a click on B: opens the Disk Manager on
+  drive B, not on the tab it had last.
 
 - **The breakpoint log writes F and F' as two digits**, as it writes A, not four.
 

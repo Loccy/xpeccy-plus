@@ -427,6 +427,31 @@ void xHexSpin::wheelEvent(QWheelEvent* ev) {
 	ev->accept();
 }
 
+// xPathBox
+
+xPathBox::xPathBox(QWidget* p):QComboBox(p) {
+	// as wide as the layout makes it, whatever the path: a long one is cut short
+	setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	setMinimumContentsLength(16);
+	addItem(QString());
+}
+
+void xPathBox::setPath(const QString& path) {
+	setItemText(0, path);
+}
+
+// the menu in place of the box's own list, under it and at least as wide
+void xPathBox::showPopup() {
+	QMenu menu(this);
+	if (fill) fill(&menu);
+	bool any = false;
+	for (QAction* act : menu.actions())
+		if (!act->isSeparator()) any = true;
+	if (!any) menu.addAction(empty)->setEnabled(false);
+	menu.setMinimumWidth(width());
+	menu.exec(mapToGlobal(QPoint(0, height())));
+}
+
 // xSlider
 
 xSlider::xSlider(QWidget* p):QSlider(p) {}

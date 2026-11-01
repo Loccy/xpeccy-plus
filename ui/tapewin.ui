@@ -25,12 +25,9 @@
        <item>
         <layout class="QHBoxLayout" name="layPath">
          <item>
-          <widget class="QLineEdit" name="tpath">
+          <widget class="xPathBox" name="tpath">
            <property name="toolTip">
-            <string>The tape image in the machine</string>
-           </property>
-           <property name="readOnly">
-            <bool>true</bool>
+            <string>The tape image in the machine, and the other sides beside it</string>
            </property>
           </widget>
          </item>
@@ -512,6 +509,11 @@ Off: the tape stops at the end</string>
    <class>xTapeCatTable</class>
    <extends>QTableView</extends>
    <header>stdlib.h</header>
+  </customwidget>
+  <customwidget>
+   <class>xPathBox</class>
+   <extends>QComboBox</extends>
+   <header location="global">stdlib.h</header>
   </customwidget>
   <customwidget>
    <class>xSlider</class>
