@@ -993,6 +993,62 @@ const espCmd esp_wifi_cmds[] = {
 
 // == the hooks ==
 
+void esp_wifi_snap(espSnap& s) {
+	s.v("w.mode", W.mode);
+	s.v("w.autoconn", W.autoconn);
+	s.v("w.ssid", W.ssid);
+	s.v("w.pass", W.pass);
+	s.v("w.pci", W.pci);
+	s.v("w.assoc", W.assoc);
+	s.v("w.joined", W.joined);
+	s.v("w.discFlag", W.discFlag);
+	s.v("w.dhcpSta", W.dhcpSta);
+	s.v("w.dhcpAp", W.dhcpAp);
+	s.v("w.ip", W.ip);
+	s.v("w.gw", W.gw);
+	s.v("w.mask", W.mask);
+	s.v("w.staMac", W.staMac);
+	s.v("w.apMac", W.apMac);
+	s.v("w.hostname", W.hostname);
+	s.v("w.jph", W.jph);
+	s.v("w.jcmd", W.jcmd);
+	s.v("w.jt0", W.jt0);
+	s.v("w.jConn", W.jConn);
+	s.v("w.jIp", W.jIp);
+	s.v("w.jOk", W.jOk);
+	s.v("w.jDisc", W.jDisc);
+	s.v("w.jFail", W.jFail);
+	s.v("w.jDiscDue", W.jDiscDue);
+	s.v("w.scanning", W.scanning);
+	s.v("w.scanAt", W.scanAt);
+	s.v("w.scanSsid", W.scanSsid);
+	s.v("w.scanMac", W.scanMac);
+	s.v("w.scanCh", W.scanCh);
+	s.v("w.lapSort", W.lapSort);
+	s.v("w.lapMask", W.lapMask);
+	s.v("w.apSsid", W.apSsid);
+	s.v("w.apPass", W.apPass);
+	s.v("w.apCh", W.apCh);
+	s.v("w.apEcn", W.apEcn);
+	s.v("w.apMax", W.apMax);
+	s.v("w.apHidden", W.apHidden);
+	s.v("w.apIp", W.apIp);
+	s.v("w.apGw", W.apGw);
+	s.v("w.apMask", W.apMask);
+	s.v("w.dhcpsSet", W.dhcpsSet);
+	s.v("w.dhcpsLease", W.dhcpsLease);
+	s.v("w.dhcpsStart", W.dhcpsStart);
+	s.v("w.dhcpsEnd", W.dhcpsEnd);
+	s.v("w.ccPolicy", W.ccPolicy);
+	s.v("w.ccStart", W.ccStart);
+	s.v("w.ccCount", W.ccCount);
+	s.v("w.ccCode", W.ccCode);
+	s.v("w.smart", W.smart);
+	s.v("w.wps", W.wps);
+	s.v("w.wpsAt", W.wpsAt);
+	s.v("w.mdns", W.mdns);
+}
+
 void esp_wifi_boot(Computer* comp) {
 	(void)comp;
 	W.mode = (int)esp_fl_num("cwmode", 1);

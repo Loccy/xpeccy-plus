@@ -575,6 +575,7 @@ static const szxField fld_rtc[] = {
 #define XR_NCLK	BID('N','C','L','K')	// ...the clock its times count by
 #define XR_RTC	BID('R','T','C',' ')	// ...and its clock chip
 #define XR_VCLK	BID('V','C','L','K')	// ...and the video clock's fraction of a dot
+#define XR_ESP	BID('E','S','P',' ')	// ...and its ESP-01, the program's (szx_esp_save)
 
 static void ext_gs_save(szxBuf*, Computer*);
 
@@ -797,7 +798,16 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		sb_put(b, link, strlen(link));
 		rec_end(b, mark);
 	}
+	// the ESP-01 last: its times are the board's, put back by NCLK before it is read
+	if (ext_is_next(comp) && szx_esp_save) {
+		rec_begin(b, XR_ESP, &mark);
+		szx_esp_save(comp, b);
+		rec_end(b, mark);
+	}
 }
+
+void (*szx_esp_save)(Computer*, szxBuf*) = NULL;
+void (*szx_esp_load)(Computer*, const unsigned char*, size_t) = NULL;
 
 // --- reading ---
 
@@ -1136,6 +1146,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 	const unsigned char* p;
 	size_t n;
 	int ray = -1;
+	int esp = 0;
 	char core[64];
 	char mac[256];
 	free(ext_held);
@@ -1175,6 +1186,10 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 			// after NEXT: a change of its video timing sets the clock's rate anew
 			case XR_NCLK: if (ext_is_next(comp)) fld_get(comp, fld_nclk, p, n); break;
 			case XR_RTC: if (ext_is_next(comp)) fld_get(comp->rtc, fld_rtc, p, n); break;
+			case XR_ESP:
+				if (ext_is_next(comp) && szx_esp_load) szx_esp_load(comp, p, n);
+				esp = 1;
+				break;
 			case XR_VCLK:
 				if (ext_is_next(comp)) {
 					Video* vid = comp->vid;
@@ -1269,6 +1284,8 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 				break;
 		}
 	}
+	// a Next file with no ESP record: none was fitted, or the file is older than the record
+	if (same && !esp && ext_is_next(comp) && szx_esp_load) szx_esp_load(comp, NULL, 0);
 	ext_held = same ? (unsigned char*)malloc(len ? len : 1) : NULL;
 	if (ext_held) {
 		memcpy(ext_held, ext, len);

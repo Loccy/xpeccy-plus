@@ -83,6 +83,11 @@ int szx_notes(void);		// SZN_* of the last load
 
 typedef struct szxBuf szxBuf;
 void szx_ext_save(szxBuf*, Computer*);
+// The Next's ESP-01, which the program runs outside the machine (xcore/esp.cpp): save adds
+// its record's bytes, none when no module is fitted; load takes them back, or n = 0 from a
+// file without the module. NULL: no such part.
+extern void (*szx_esp_save)(Computer*, szxBuf*);
+extern void (*szx_esp_load)(Computer*, const unsigned char*, size_t);
 
 // the Z80's registers from F to IM, laid out alike in Z80R and GS (szx.c);
 // swapaf: A before F

@@ -1416,6 +1416,94 @@ void esp_tcp_wifi_lost(Computer* comp) {
 	}
 }
 
+// == a snapshot ==
+
+int esp_tcp_hook_id(void (*hook)(Computer*, int, long long)) {
+	return (hook == wait_hook) ? 1 : (hook == send_hook) ? 2 : (hook == pass_hook) ? 3 : 0;
+}
+
+void (*esp_tcp_hook_of(int id))(Computer*, int, long long) {
+	return (id == 1) ? wait_hook : (id == 2) ? send_hook : (id == 3) ? pass_hook : nullptr;
+}
+
+// Everything but the sockets, the listener and the lookups under way: a load finds them
+// closed, and the frame goes on as when the far end went - a link prints its CLOSED,
+// passthrough calls again, a connect, a lookup or a ping under way fails
+void esp_tcp_snap(Computer* comp, espSnap& s) {
+	for (int i = 0; i < TCP_LINKS; i++) {
+		tcpLink& l = T.link[i];
+		std::string k = "t.link" + std::to_string(i) + ".";
+		s.v(k + "used", l.used);
+		s.v(k + "starting", l.starting);
+		s.v(k + "silent", l.silent);
+		s.v(k + "counted", l.counted);
+		s.v(k + "failNow", l.failNow);
+		s.v(k + "kind", l.kind);
+		s.v(k + "server", l.server);
+		s.v(k + "host", l.host);
+		s.v(k + "port", l.port);
+		s.v(k + "lport", l.lport);
+		s.v(k + "udpMode", l.udpMode);
+		s.v(k + "keep", l.keep);
+		s.v(k + "abort", l.abort);
+		s.v(k + "rx", l.rx);
+		s.v(k + "rxSeen", l.rxSeen);
+		s.v(k + "peerGone", l.peerGone);
+		s.v(k + "tx", l.tx);
+		s.v(k + "sendOk", l.sendOk);
+		s.v(k + "mode8", l.mode8);
+		s.v(k + "lastAct", l.lastAct);
+		s.v(k + "deadline", l.deadline);
+		s.v(k + "retryAt", l.retryAt);
+	}
+	s.v("t.mux", T.mux);
+	s.v("t.cipmode", T.cipmode);
+	s.v("t.dinfo", T.dinfo);
+	s.v("t.recvmode", T.recvmode);
+	s.v("t.sslSize", T.sslSize);
+	s.v("t.sslConf", T.sslConf);
+	s.v("t.maxConn", T.maxConn);
+	s.v("t.sto", T.sto);
+	s.v("t.status", T.status);
+	s.v("t.count", T.count);
+	s.v("t.server", T.server);
+	s.v("t.serverPort", T.serverPort);
+	s.v("t.pend", T.pend);
+	s.v("t.pendLink", T.pendLink);
+	s.v("t.sendLink", T.sendLink);
+	s.v("t.sendKind", T.sendKind);
+	s.v("t.sendLen", T.sendLen);
+	s.v("t.sendPort", T.sendPort);
+	s.v("t.sendBuf", T.sendBuf);
+	s.v("t.sendEsc", T.sendEsc);
+	s.v("t.waitLast", T.waitLast);
+	s.v("t.rstAt", T.rstAt);
+	s.v("t.inPass", T.inPass);
+	s.v("t.passTx", T.passTx);
+	s.v("t.plus", T.plus);
+	s.v("t.passLast", T.passLast);
+	s.v("t.dns0", T.dns[0]);
+	s.v("t.dns1", T.dns[1]);
+	s.v("t.dnsUser", T.dnsUser);
+	s.v("t.ntp0", T.ntp[0]);
+	s.v("t.ntp1", T.ntp[1]);
+	s.v("t.ntp2", T.ntp[2]);
+	s.v("t.tz", T.tz);
+	s.v("t.ntpSrv", T.ntpSrv);
+	s.v("t.ntpStart", T.ntpStart);
+	s.v("t.ntpNext", T.ntpNext);
+	s.v("t.synced", T.synced);
+	s.v("t.unixAt", T.unixAt);
+	s.v("t.hostAt", T.hostAt);
+	if (!s.loading) return;
+	T.ntpBusy = false;			// its socket is gone: the next try asks again
+	T.ntpSent = false;
+	if (T.server && !T.listen.open(T.serverPort, esp_lan())) {
+		xlog(XLG_NET, XLL_WARN, "esp: the snapshot's server cannot listen on port %i again", T.serverPort);
+	}
+	(void)comp;
+}
+
 // == the table ==
 
 const espCmd esp_tcp_cmds[] = {

@@ -385,6 +385,16 @@ static void sysgpioread_set(espCmdCall& c) {
 
 // == the hooks ==
 
+void esp_basic_snap(espSnap& s) {
+	s.v("b.sleepType", B.sleepType);
+	s.v("b.stop", B.stop);
+	s.v("b.flow", B.flow);
+	s.v("b.func", B.func);
+	s.v("b.pull", B.pull);
+	s.v("b.gpioOut", B.gpioOut);
+	s.v("b.gpioLatch", B.gpioLatch);
+}
+
 void esp_basic_boot(Computer* comp) {
 	(void)comp;
 	B.sleepType = 2;
