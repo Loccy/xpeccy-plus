@@ -60,6 +60,8 @@ void game_check(Computer*);
 bool game_stale();
 // the reset an open makes to start its image is part of the start
 void game_restamp();
+// the game's tape gave way to the next one of its set (Rewind at end): still the game
+void game_tape_next(const QString& from, const QString& to);
 QString game_image();			// empty: none
 QString game_name();			// what the folder and the menus call it
 

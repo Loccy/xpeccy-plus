@@ -644,6 +644,7 @@ int main(int ac,char** av) {
 
 	app.connect(&ethread, SIGNAL(dbgRequest()), &mwin, SLOT(doDebug()));	// same shit?
 	app.connect(&ethread, SIGNAL(tapeSignal(int,int)), &mwin,SLOT(tapStateChanged(int,int)));
+	app.connect(&ethread, SIGNAL(s_tape_next()), &mwin, SLOT(tapeNext()));
 	app.connect(&mwin, SIGNAL(s_emulwin_close()), &ethread, SLOT(stop()));
 
 	app.connect(&dbgw, SIGNAL(closed()), &mwin, SLOT(dbgReturn()));

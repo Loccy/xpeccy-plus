@@ -214,8 +214,9 @@ void xThread::tap_catch_load(Computer* comp, int atStart, int base, int dir) {
 	if (tap->userStop) return;
 	// A load asks for a tape that has run out: "Rewind at end" winds it back here
 	// too, not only under the Play button - to the block asked for, its flag (A')
-	// and its length. Nothing to rewind for if neither of the automatics is on -
-	// Play does it.
+	// and its length, or on to the next tape of its set when the block is not on
+	// this one. Nothing to rewind for if neither of the automatics is on - Play
+	// does it.
 	if (atStart && (tape_flash() || conf.tape.autostart))
 		tap_rewind_for(tap, comp->cpu->regAa & 0xff, comp->cpu->regDE);
 	// A tape stopped past its block's pilot holds no pilot the rom can find
@@ -919,6 +920,13 @@ void xThread::emuCycle(Computer* comp) {
 
 			vrec_frame(comp);
 			if (frame_hand_over()) emit s_frame();
+			// Auto play asked for the next tape of a set: the machine waits for the
+			// gui to put it in, at any speed, so a loader hears a frame of the run-out
+			// tape at most
+			if (comp->tape->wantNext && !(conf.emu.pause & PR_TAPE)) {
+				conf.emu.pause |= PR_TAPE;
+				emit s_tape_next();
+			}
 			// a machine slower than real time never pays its sound debt off: let
 			// whoever waits for the lock in at a frame end, or the window hangs
 			if (emuWaiters.load(std::memory_order_relaxed)) conf.snd.fill = 0;

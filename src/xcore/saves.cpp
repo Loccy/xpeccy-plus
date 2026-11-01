@@ -152,6 +152,14 @@ void game_forget() {
 	game_stamp();
 }
 
+// The tape in its place is the game's own next side: the image moves on, the hash, the
+// name and the stamp stay, so game_follow finds it the same game when it starts
+void game_tape_next(const QString& from, const QString& to) {
+	if (game.image.isEmpty() || !same_image(from, game.image)) return;
+	game.image = to;
+	game.src = GSRC_TAPE;
+}
+
 // the tape or the disk it was opened as has left its place
 void game_check(Computer* comp) {
 	if (game.src == GSRC_LOOK) {

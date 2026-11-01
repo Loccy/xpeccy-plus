@@ -27,6 +27,7 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QSet>
 #include <QSplitter>
@@ -1167,6 +1168,20 @@ static QStringList folder_names(const QString& dir, const QString& prefix) {
 	return res;
 }
 
+static QString sib_value_of(const QString& name) {
+	return QString::fromStdString(sib_value(name.toUtf8().constData()));
+}
+
+// A set in its order: by the place each name marks (Side A, B; the game, then its
+// levels), the names in natural order within one
+static void sib_sort(QList<xSibling>* set) {
+	std::stable_sort(set->begin(), set->end(), [](const xSibling& a, const xSibling& b) {
+		const QString va = sib_value_of(a.name), vb = sib_value_of(b.name);
+		if (va != vb) return natural_less(va, vb);
+		return natural_less(a.name, b.name);
+	});
+}
+
 QList<xSibling> media_siblings(Computer* comp, const QString& path, int id, int drv, int* cur) {
 	QList<xSibling> res;
 	QString file = path;
@@ -1210,10 +1225,89 @@ QList<xSibling> media_siblings(Computer* comp, const QString& path, int id, int 
 		}
 	}
 	if (res.size() < 2) return QList<xSibling>();
-	std::stable_sort(res.begin(), res.end(), [](const xSibling& a, const xSibling& b) {return natural_less(a.name, b.name);});
+	sib_sort(&res);
 	for (int i = 0; i < res.size(); i++)
 		if (res[i].path == path) *cur = i;
 	return res;
+}
+
+// An archive's images that are a set by name: the archive's own list is not one, it
+// holds versions as often as sides (Gryzor - 48k / - 128k)
+static QList<xSibling> arc_siblings(Computer* comp, const QString& archive, const QString& entry, int* cur) {
+	QList<xSibling> res;
+	QString err;
+	const QStringList names = media_candidates(comp, archive, FG_TAPE, -1, &err);
+	const int at = int(names.indexOf(entry));
+	if ((names.size() < 2) || (at < 0)) return res;
+	std::vector<std::string> raw;
+	for (const QString& name : names) raw.push_back(name.toUtf8().constData());
+	for (int i : sib_group(raw, at)) res.append({names[i], arc_join(archive, names[i])});
+	sib_sort(&res);
+	for (int i = 0; i < res.size(); i++)
+		if (res[i].name == entry) *cur = i;
+	return res;
+}
+
+// the [flags] of a name, as they stand
+static QString name_flags(const QString& name) {
+	static const QRegularExpression rx("\\[[^\\]]*\\]");
+	QString res;
+	QRegularExpressionMatchIterator it = rx.globalMatch(name);
+	while (it.hasNext()) res += it.next().captured(0);
+	return res;
+}
+
+#ifdef _WIN32
+static const Qt::CaseSensitivity path_case = Qt::CaseInsensitive;
+#else
+static const Qt::CaseSensitivity path_case = Qt::CaseSensitive;
+#endif
+
+static QList<xSibling> tape_set(Computer* comp, const QString& path, int* cur) {
+	QString archive, entry;
+	QList<xSibling> set;
+	*cur = -1;
+	if (arc_split(path, &archive, &entry)) set = arc_siblings(comp, archive, entry, cur);
+	if (set.isEmpty()) set = media_siblings(comp, path, FG_TAPE, -1, cur);
+	return set;
+}
+
+static bool same_file(const QString& a, const QString& b) {
+	return !QDir::fromNativeSeparators(a).compare(QDir::fromNativeSeparators(b), path_case);
+}
+
+QString media_next_tape(Computer* comp, const QString& path, const QStringList& seen, QString* place) {
+	int cur;
+	const QList<xSibling> set = tape_set(comp, path, &cur);
+	if ((set.size() < 2) || (cur < 0)) return QString();
+	// the places in the set, in its order; the next one after this tape's
+	QStringList values;
+	for (const xSibling& sib : set) {
+		const QString val = sib_value_of(sib.name);
+		if (!values.contains(val)) values.append(val);
+	}
+	if (values.size() < 2) return QString();
+	const QString next = values[(values.indexOf(sib_value_of(set[cur].name)) + 1) % values.size()];
+	if (place) *place = next;
+	// A tape that was in and has this one in its set: the user's own side A[a], which
+	// side B's set leaves out, its names matching with their [flags] first
+	for (const QString& was : seen) {
+		if (same_file(was, path)) continue;
+		int at;
+		const QList<xSibling> its = tape_set(comp, was, &at);
+		if ((at < 0) || (sib_value_of(its[at].name) != next)) continue;
+		for (const xSibling& sib : its)
+			if (same_file(sib.path, path)) return was;
+	}
+	QList<xSibling> take;
+	for (const xSibling& sib : set)
+		if (sib_value_of(sib.name) == next) take.append(sib);
+	const QString flags = name_flags(set[cur].name);
+	for (const xSibling& sib : take)
+		if (name_flags(sib.name) == flags) return sib.path;
+	for (const xSibling& sib : take)
+		if (name_flags(sib.name).isEmpty()) return sib.path;
+	return take.first().path;
 }
 
 static QString arc_size_text(qint64 size) {

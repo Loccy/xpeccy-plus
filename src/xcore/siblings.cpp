@@ -103,6 +103,19 @@ static bool bracket_at(const std::string& s, size_t i, sibToken* tok) {
 	return true;
 }
 
+// where the title ends: the first bracket, the spaces before it left out
+static size_t title_end(const std::string& s) {
+	size_t te = s.size();
+	for (size_t i = 1; i < s.size(); i++) {
+		if ((s[i] == '(') || (s[i] == '[')) {
+			te = i;
+			break;
+		}
+	}
+	while ((te > 0) && (s[te - 1] == ' ')) te--;
+	return te;
+}
+
 // the last token of a stem
 static bool find_token(const std::string& s, sibToken* tok) {
 	bool found = false;
@@ -128,19 +141,45 @@ static bool find_token(const std::string& s, sibToken* tok) {
 	}
 	if (found) return true;
 	// a lone letter ending the title
-	size_t te = s.size();
-	for (size_t i = 1; i < s.size(); i++) {
-		if ((s[i] == '(') || (s[i] == '[')) {
-			te = i;
-			break;
-		}
-	}
-	while ((te > 0) && (s[te - 1] == ' ')) te--;
+	const size_t te = title_end(s);
 	if ((te < 3) || !is_sep(s[te - 2])) return false;
 	const char c = lower(s[te - 1]);
 	if ((c < 'a') || (c > 'd')) return false;
 	*tok = {te - 1, te, std::string(1, c), std::string()};
 	return true;
+}
+
+// the title ends in word after a separator: where the separators before it start
+static size_t title_tail(const std::string& s, size_t te, const char* word) {
+	const std::string w(word);
+	if ((te <= w.size()) || (lowered(s.substr(te - w.size(), w.size())) != w)) return 0;
+	size_t i = te - w.size();
+	if (!is_sep(s[i - 1])) return 0;
+	while ((i > 0) && is_sep(s[i - 1])) i--;
+	return i;
+}
+
+// A game's level tape beside it, as WoS names some: "Narc - 128k" + "Narc - 128k -
+// Levels", "Popeye 3 - ... - Game" + "... - Levels", "Bloodwych - The Game" +
+// "Bloodwych - Level Data". Only for a name no side token marks: the level tape is
+// "levels", the other "game", with the title cut there.
+static void level_token(const std::string& s, sibToken* tok) {
+	const size_t te = title_end(s);
+	static const char* level_words[] = {"levels", "level data"};
+	static const char* game_words[] = {"the game", "game"};
+	for (const char* w : level_words) {
+		if (const size_t i = title_tail(s, te, w)) {
+			*tok = {i, te, "levels", std::string()};
+			return;
+		}
+	}
+	for (const char* w : game_words) {
+		if (const size_t i = title_tail(s, te, w)) {
+			*tok = {i, te, "game", std::string()};
+			return;
+		}
+	}
+	*tok = {te, te, "game", std::string()};
 }
 
 typedef struct {
@@ -178,15 +217,23 @@ static void split_name(const std::string& name, std::string* stem, std::string* 
 	*stem = (dot == std::string::npos) ? s : s.substr(0, dot);
 }
 
-static bool parse_name(const std::string& name, bool flags, sibName* res) {
+// The token a stem has: a side token, else the game/levels pair's - level says so, and
+// its key is kept apart, so that it never pairs with a side token
+static void stem_token(const std::string& stem, sibToken* tok, bool* level) {
+	*level = !find_token(stem, tok);
+	if (*level) level_token(stem, tok);
+}
+
+static void parse_name(const std::string& name, bool flags, sibName* res) {
 	std::string stem;
 	split_name(name, &stem, &res->ext, &res->packed);
 	if (!flags) stem = no_flags(stem);
 	sibToken tok;
-	if (!find_token(stem, &tok)) return false;
-	res->key = lowered(stem.substr(0, tok.start)) + '\x01' + tok.total + '\x01' + lowered(stem.substr(tok.end));
+	bool level;
+	stem_token(stem, &tok, &level);
+	res->key = std::string(level ? "\x02" : "") + lowered(stem.substr(0, tok.start)) + '\x01' + tok.total + '\x01'
+		+ lowered(stem.substr(tok.end));
 	res->value = tok.value;
-	return true;
 }
 
 bool sib_prefix(const std::string& name, std::string* prefix) {
@@ -194,23 +241,31 @@ bool sib_prefix(const std::string& name, std::string* prefix) {
 	bool packed;
 	split_name(name, &stem, &ext, &packed);
 	sibToken tok;
-	if (!find_token(stem, &tok)) return false;
+	bool level;
+	stem_token(stem, &tok, &level);
 	size_t end = std::min(tok.start, stem.find('['));
 	// a sibling without the flags may have one space less
 	while ((end > 0) && (stem[end - 1] == ' ')) end--;
 	*prefix = lowered(stem.substr(0, end));
-	return true;
+	return !prefix->empty();
+}
+
+std::string sib_value(const std::string& name) {
+	sibName me;
+	parse_name(name, true, &me);
+	return me.value;
 }
 
 std::vector<int> sib_group(const std::vector<std::string>& names, int cur) {
 	for (int step = 0; step < 3; step++) {
 		sibName me;
-		if (!parse_name(names[cur], step == 0, &me)) continue;
+		parse_name(names[cur], step == 0, &me);
 		std::vector<int> grp;
 		std::set<std::string> values;
 		for (int i = 0; i < int(names.size()); i++) {
 			sibName it;
-			if (!parse_name(names[i], step == 0, &it) || (it.key != me.key)) continue;
+			parse_name(names[i], step == 0, &it);
+			if (it.key != me.key) continue;
 			if ((step < 2) && ((it.ext != me.ext) || (it.packed != me.packed))) continue;
 			grp.push_back(i);
 			values.insert(it.value);

@@ -3801,6 +3801,7 @@ void MainWin::watchMedia() {
 		showMedia(QString(), MEDIA_SNAP);
 	}
 	game_check(comp);		// the game's tape or disk taken out: saves go elsewhere
+	watchTapeSet(comp);
 	// another image in a drive, or none: the name goes if it was this one,
 	// and a motor still running from the last one counts as a new start
 	for (int src = 0; src < MEDIA_SRCS; src++) {
@@ -3844,6 +3845,57 @@ void MainWin::watchMedia() {
 			break;
 		}
 	}
+}
+
+// Another tape in the deck: whether it has a next one in its set, which auto play asks
+// for at its end (Rewind at end). The folder is read once a tape; the flag shares its
+// word with the ones the emulation sets, so it is written under the lock.
+void MainWin::watchTapeSet(Computer* comp) {
+	Tape* tap = comp->tape;
+	const QByteArray raw(tap->path ? tap->path : "");
+	if ((tap == setTape) && (raw == setRaw)) return;
+	setTape = tap;
+	setRaw = raw;
+	const QString path = QString::fromLocal8Bit(raw);
+	if (!path.isEmpty()) {
+		tapeSeen.removeAll(path);
+		tapeSeen.prepend(path);
+		while (tapeSeen.size() > 16) tapeSeen.removeLast();
+	}
+	const QString next = path.isEmpty() ? QString() : media_next_tape(comp, path, tapeSeen);
+	const bool set = !next.isEmpty();
+	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
+	emu_lock();
+	if (QByteArray(tap->path ? tap->path : "") == raw) tap->inSet = set;
+	emu_unlock();
+}
+
+// Auto play asked for the next tape of the set and the machine waits: it goes in at its
+// start, and the loader's next reads play it. Not a user's open: no Recent, and the game
+// stays the one opened. Should it not open, this tape rewinds as a lone one does.
+void MainWin::tapeNext() {
+	Computer* comp = conf.zx;
+	Tape* tap = comp->tape;
+	const QString now = QString::fromLocal8Bit(tap->path ? tap->path : "");
+	QString place;
+	const QString next = (tap->wantNext && !comp->rzx.play) ? media_next_tape(comp, now, tapeSeen, &place) : QString();
+	bool done = false;
+	emu_lock();
+	if (tap->wantNext) {
+		done = !next.isEmpty() && (load_file(comp, next.toLocal8Bit().data(), FG_TAPE, -1) == ERR_OK);
+		if (!done) {
+			xlog(XLG_TAPE, XLL_WARN, "the next tape of the set did not go in: this one rewinds");
+			tap->inSet = 0;
+			tapRewind(tap, 0);
+		}
+	}
+	conf.emu.pause &= ~PR_TAPE;
+	emu_unlock();
+	if (!done) return;
+	game_tape_next(now, next);
+	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be
+	setMessage(QString(" tape: %0 ").arg(place));
+	emit s_tape_upd(tap);
 }
 
 void MainWin::setMachine(const std::string& id) {

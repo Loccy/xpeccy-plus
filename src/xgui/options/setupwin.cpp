@@ -1981,7 +1981,7 @@ void SetupWin::buildDevices() {
 		tr("Per cent of normal. A few images made on machines with an unusual clock load only when it is nudged either way"));
 	tape.line();
 	tape.check(cbTapeAuto, tr("Auto play / stop"), tr("Start the tape when a loader asks for it, stop it between blocks"), true);
-	tape.check(cbTapeRewind, tr("Rewind at end"), tr("Play or the next load starts the tape again. Off: it stops at the end"), true);
+	tape.check(cbTapeRewind, tr("Rewind at end"), tr("Play or the next load starts the tape again; a load goes on to the next tape of a set. Off: it stops at the end"), true);
 	tape.check(cbTapeFast, tr("Fast loading"), tr("Full speed, sound off and picture held while a loader reads the tape"), true);
 	tape.check(cbTapeFlash, tr("Flash loading"), tr("With fast loading: ROM blocks go straight to the machine"), true);
 	tape.check(cbTapeEdge, tr("Edge detection"), tr("With fast loading: a loader waiting for a pulse gets it at once. Faster, not exact"), true);

@@ -22,6 +22,7 @@ static void folder(const std::string& title, const std::vector<std::string>& nam
 		const bool marked = sib_prefix(names[i], &prefix);
 		std::printf("%s [%s]:", names[i].c_str(), marked ? prefix.c_str() : "-");
 		if (others.empty()) std::printf(" -");
+		else std::printf(" {%s}", sib_value(names[i]).c_str());
 		for (const std::string& o : others) std::printf(" | %s", o.c_str());
 		std::printf("\n");
 		// every sibling starts with the prefix the name gives

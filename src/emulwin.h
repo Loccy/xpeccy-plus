@@ -250,6 +250,7 @@ class MainWin : public QWidget {
 		void pause(bool, int);
 		bool inputResume();
 		void tapStateChanged(int,int);
+		void tapeNext();
 		void onPrfChange();
 		void kPress(QKeyEvent*);
 		void kRelease(QKeyEvent*);
@@ -333,6 +334,10 @@ class MainWin : public QWidget {
 		QByteArray mediaRaw[7];	// what each drive, the tape and the cards held, as last seen
 		int cardReads[2];	// the divMMC cards' read counts as last seen
 		void watchMedia();
+		Tape* setTape = nullptr;	// the tape whose set was looked for, and its path then
+		QByteArray setRaw;
+		QStringList tapeSeen;	// the tapes that were in, newest first, for the side a set turns back to
+		void watchTapeSet(Computer*);
 		double hwMulSeen = 1.0;	// the board's turbo as last reported
 		std::string macSeen;	// ...on this machine
 		void watchClock();

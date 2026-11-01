@@ -387,6 +387,8 @@ void tapEject(Tape* tap) {
 	tap->armed = 0;
 	tap->paused.ok = 0;
 	tap->userStop = 0;
+	tap->inSet = 0;
+	tap->wantNext = 0;
 	tap->block = 0;
 	tap->pos = 0;
 	tap_set_text(tap, NULL);
@@ -486,6 +488,18 @@ int tap_rewind_at_end(Tape* tap) {
 	return 1;
 }
 
+// A tape of a set goes on to the next one instead, as a person puts in side B: auto play,
+// or a load through the ROM whose block is not on this tape, asks the gui for it and
+// leaves this one at its end. Play stays with this tape, and so does one recorded on: it
+// would have to be saved first.
+static int tap_next_at_end(Tape* tap) {
+	if (!tap->inSet || tap->changed || !tap_at_end(tap)) return 0;
+	if (!tap->wantNext)
+		xlog(XLG_TAPE, XLL_INFO, "the tape has run out: the next one of its set is asked for");
+	tap->wantNext = 1;
+	return 1;
+}
+
 // A block with this flag byte and this many bytes of data
 static int tap_block_fits(TapeBlock* blk, int flag, int len) {
 	return blk->hasBytes && (tapGetBlockSize(blk) == len) && (tapGetBlockByte(blk, 0) == flag);
@@ -504,12 +518,14 @@ static int tap_find_block(Tape* tap, int from, int flag, int len) {
 // its length - the block a rewound tape gives a loader that passes the others
 // by. Not to the start: a program's loader may fail on the first block with its
 // flag and reset (Narco Police asks for side B's level so, with block 0 a
-// header). Nothing when the block is not on the tape: a program's part on
-// another tape (Saigon's). Basic's LOAD always finds one, the first header.
+// header). A block not on the tape is a program's part on another tape (Saigon's,
+// Narc's Erbe release): the next tape of its set, else nothing. Basic's LOAD always
+// finds one, the first header. LD-BYTES looks for a pilot as long as it takes, so the
+// load waits the frame the gui needs to put that tape in.
 int tap_rewind_for(Tape* tap, int flag, int len) {
 	if (!tap_at_end(tap)) return 0;
 	int blk = tap_find_block(tap, 0, flag, len);
-	if (blk < 0) return 0;
+	if (blk < 0) return tap_next_at_end(tap);
 	tapRewind(tap, blk);
 	return 1;
 }
@@ -647,6 +663,10 @@ void tapDetectLoader(Tape* tap, int tick, int pc, const unsigned char* regs, int
 	} else if ((tap->detectOn || tap->armed) && (kind != TAPE_RD_EDGE) && (kind != TAPE_RD_KEYS) && (tickDiff <= 500)
 			&& ((kind == TAPE_RD_EAR) || (turn && fromRam))) {
 		if (++tap->detectReads >= 10) {
+			if (tap->detectOn && tap_next_at_end(tap)) {
+				tap->detectReads = 0;
+				return;
+			}
 			if (tap->detectOn)
 				tap_rewind_at_end(tap);
 			tapPlay(tap);
@@ -713,6 +733,7 @@ void tapRewind(Tape* tap, int blk) {
 	tap->armed = 0;
 	tap->paused.ok = 0;
 	tap->userStop = 0;
+	tap->wantNext = 0;
 	if (blk < tap->blkCount) {
 		tap->block = blk;
 		tap->pos = 0;
