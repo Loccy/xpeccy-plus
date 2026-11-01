@@ -91,9 +91,15 @@ struct xMount {
 };
 bool media_mount_can(Computer*, const QString& path, int id, int drv);
 bool media_mount_asks(Computer*, const QString& path, int id, int drv);	// begin will ask about a change
-int media_mount_begin(Computer*, const QString& path, int id, int drv, xMount*);
+// ask false: a changed medium in the way is not asked about, begin refuses instead
+int media_mount_begin(Computer*, const QString& path, int id, int drv, xMount*, bool ask = true);
 void media_mount_read(xMount*);
 int media_mount_end(xMount*);		// ERR_CANCEL: something else went in meanwhile
+// end's parts, for a caller that holds the emulation lock itself: fits (read well, and
+// nothing else went in), put (fits, then in; under the lock), note (after a put)
+bool media_mount_fits(xMount*);
+bool media_mount_put(xMount*);
+void media_mount_note(xMount*);
 void media_mount_fail(xMount*);		// says why read failed
 void media_mount_free(xMount*);
 // An archive's images the request can take (id and drv as load_file has them), in

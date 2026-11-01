@@ -3933,27 +3933,70 @@ void MainWin::watchTapeSet(Computer* comp) {
 		tapeSeen.prepend(path);
 		while (tapeSeen.size() > 16) tapeSeen.removeLast();
 	}
-	const QString next = path.isEmpty() ? QString() : media_next_tape(comp, path, tapeSeen);
+	QString place;
+	const QString next = path.isEmpty() ? QString() : media_next_tape(comp, path, tapeSeen, &place);
 	const bool set = !next.isEmpty();
 	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
 	emu_lock();
 	if (QByteArray(tap->path ? tap->path : "") == raw) tap->inSet = set;
 	emu_unlock();
+	spareTape(comp, next, place);
+}
+
+// past this a tape is not read ahead: a WAV of half an hour is hundreds of megabytes parsed
+#define SPARE_TAPE_MAX	(32 << 20)
+
+// The next tape of the set, read ahead on a thread of its own as soon as this one is in,
+// so that auto play's swap only hands it over. Not when the deck's tape is changed (it
+// would have to be saved first), nor a big one. Another tape in the deck drops it.
+void MainWin::spareTape(Computer* comp, const QString& next, const QString& place) {
+	if (tapeSpare && tapeSpareReady)
+		media_mount_free(tapeSpare.get());
+	tapeSpare.reset();			// one still being read is freed when it ends
+	tapeSpareReady = false;
+	quint64 gen = ++spareGen;
+	if (next.isEmpty() || comp->rzx.play) return;
+	QString archive;
+	if (QFileInfo(arc_split(next, &archive, nullptr) ? archive : next).size() > SPARE_TAPE_MAX) return;
+	std::shared_ptr<xMount> job = std::make_shared<xMount>();
+	if (media_mount_begin(comp, next, FG_TAPE, -1, job.get(), false) != ERR_OK) {
+		media_mount_free(job.get());
+		return;
+	}
+	tapeSpare = job;
+	tapeSpareNext = next;
+	tapeSparePlace = place;
+	auto done = [this, job, gen]() {
+		if ((gen == spareGen) && (tapeSpare == job))
+			tapeSpareReady = true;
+		else
+			media_mount_free(job.get());
+	};
+	std::thread([this, job, done]() {
+		media_mount_read(job.get());
+		QMetaObject::invokeMethod(this, done, Qt::QueuedConnection);
+	}).detach();
 }
 
 // Auto play asked for the next tape of the set and the machine waits: it goes in at its
-// start, and the loader's next reads play it. Not a user's open: no Recent, and the game
-// stays the one opened. Should it not open, this tape rewinds as a lone one does.
+// start, and the loader's next reads play it - the one read ahead (spareTape) when it is
+// whole and the deck is as it was, else read now. Not a user's open: no Recent, and the
+// game stays the one opened. Should it not open, this tape rewinds as a lone one does.
 void MainWin::tapeNext() {
 	Computer* comp = conf.zx;
 	Tape* tap = comp->tape;
 	const QString now = QString::fromLocal8Bit(tap->path ? tap->path : "");
-	QString place;
-	const QString next = (tap->wantNext && !comp->rzx.play) ? media_next_tape(comp, now, tapeSeen, &place) : QString();
+	std::shared_ptr<xMount> spare = (tapeSpareReady && tap->wantNext && !comp->rzx.play
+		&& media_mount_fits(tapeSpare.get())) ? tapeSpare : nullptr;
+	QString place = spare ? tapeSparePlace : QString();
+	const QString next = spare ? tapeSpareNext
+		: (tap->wantNext && !comp->rzx.play) ? media_next_tape(comp, now, tapeSeen, &place) : QString();
 	bool done = false;
+	bool put = false;
 	emu_lock();
 	if (tap->wantNext) {
-		done = !next.isEmpty() && (load_file(comp, next.toLocal8Bit().data(), FG_TAPE, -1) == ERR_OK);
+		put = spare && media_mount_put(spare.get());
+		done = put || (!next.isEmpty() && (load_file(comp, next.toLocal8Bit().data(), FG_TAPE, -1) == ERR_OK));
 		if (!done) {
 			xlog(XLG_TAPE, XLL_WARN, "the next tape of the set did not go in: this one rewinds");
 			tap->inSet = 0;
@@ -3962,6 +4005,12 @@ void MainWin::tapeNext() {
 	}
 	conf.emu.pause &= ~PR_TAPE;
 	emu_unlock();
+	if (put) media_mount_note(spare.get());
+	if (spare) {
+		media_mount_free(spare.get());		// the tape that went out, or the spare unused
+		tapeSpare.reset();
+		tapeSpareReady = false;
+	}
 	if (!done) return;
 	game_tape_next(now, next);
 	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be

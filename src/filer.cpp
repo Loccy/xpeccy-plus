@@ -1618,7 +1618,7 @@ bool media_mount_asks(Computer* comp, const QString& path, int id, int drv) {
 	return comp->tape->changed && (comp->tape->blkCount > 0);
 }
 
-int media_mount_begin(Computer* comp, const QString& path, int id, int drv, xMount* m) {
+int media_mount_begin(Computer* comp, const QString& path, int id, int drv, xMount* m, bool ask) {
 	m->comp = comp;
 	m->path = arc_canonical(path);
 	if (m->path.isEmpty()) return ERR_CANT_OPEN;
@@ -1626,6 +1626,7 @@ int media_mount_begin(Computer* comp, const QString& path, int id, int drv, xMou
 	m->ftype = inf->id;
 	m->disk = inf->ch;
 	m->drv = (drv < 0) ? 0 : (drv & 3);
+	if (!ask && media_mount_asks(comp, m->path, id, drv)) return ERR_CANCEL;
 	if (replace_ok(comp, inf, m->drv) != ERR_OK) return ERR_CANCEL;	// a failed save has been shown
 	if (m->disk) {
 		Floppy* flp = comp->dif->flp[m->drv];
@@ -1670,25 +1671,38 @@ void media_mount_read(xMount* m) {
 		game_hash_ahead(m->path);
 }
 
-int media_mount_end(xMount* m) {
+bool media_mount_fits(xMount* m) {
 	Computer* comp = m->comp;
-	emu_lock();
-	bool same = (comp == conf.zx) && (mount_stamp(comp, m) == m->stamp)
+	return (m->err == ERR_OK) && (comp == conf.zx) && (mount_stamp(comp, m) == m->stamp)
 		&& (!m->disk || (comp->dif->flp[m->drv]->fitted && !comp->dif->out));
-	if (same) {
-		xspeed_modes_off();
-		x_media_replaced();
-		if (m->disk)
-			flp_take_disk(comp->dif->flp[m->drv], m->flp);
-		else
-			tap_take_image(comp->tape, m->tape);
-	}
+}
+
+bool media_mount_put(xMount* m) {
+	if (!media_mount_fits(m)) return false;
+	Computer* comp = m->comp;
+	xspeed_modes_off();		// as load_file
+	if (m->disk)
+		flp_take_disk(comp->dif->flp[m->drv], m->flp);
+	else
+		tap_take_image(comp->tape, m->tape);
+	return true;
+}
+
+int media_mount_end(xMount* m) {
+	emu_lock();
+	bool put = media_mount_put(m);
+	if (put) x_media_replaced();
 	emu_unlock();
-	QByteArray name = m->path.toLocal8Bit();
-	if (!same) {
-		xlog(XLG_FILE, XLL_INFO, "open %s: something else went in meanwhile", name.constData());
+	if (!put) {
+		xlog(XLG_FILE, XLL_INFO, "open %s: something else went in meanwhile", m->path.toLocal8Bit().constData());
 		return ERR_CANCEL;
 	}
+	media_mount_note(m);
+	return ERR_OK;
+}
+
+void media_mount_note(xMount* m) {
+	QByteArray name = m->path.toLocal8Bit();
 	last_as_kind = as_kind_of(m->ftype);
 	last_as_drv = m->drv;
 	last_loaded = m->path;
@@ -1698,7 +1712,6 @@ int media_mount_end(xMount* m) {
 	} else {
 		xlog(XLG_FILE, XLL_INFO, "open %s: %s", inf->name, name.constData());
 	}
-	return ERR_OK;
 }
 
 void media_mount_fail(xMount* m) {
