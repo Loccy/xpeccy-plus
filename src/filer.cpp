@@ -893,10 +893,17 @@ static bool szx_holds(Computer* comp, const szxMedia* m, const QString& link) {
 // too; a carried image is written out to a temporary file first, and goes in
 // under the name it had when the file says it. See szx_exact for what is left in.
 // A carried disk is unsaved if it was when saved, or if its file is gone: the
-// question on exit is where it gets back to a file.
+// question on exit is where it gets back to a file. Nothing is taken out for
+// what the snapshot did not have; the user can keep its media out altogether,
+// but for a quick load.
 static void szx_mount(Computer* comp, const QString& snap) {
 	const szxMedia* med;
+	bool load = szx_exact || conf.saves.snapLoad;
 	int count = szx_media(&med);
+	if (!load) {
+		if (count) xlog(XLG_FILE, XLL_INFO, "szx: the tape and the drives left as they are (Options)");
+		count = 0;
+	}
 	int carried = 0;	// drives whose disk came out of the snapshot
 	int gone = 0;		// ...and has no file left under its name
 	for (int i = 0; i < count; i++) {
@@ -997,7 +1004,7 @@ static void szx_mount(Computer* comp, const QString& snap) {
 		xlog(XLG_FILE, XLL_INFO, "szx: %s %s%s", (m->kind == SZX_MED_TAPE) ? "tape" : "disk",
 			asRaw.constData(), fresh ? " (carried)" : "");
 	}
-	szx_ext_media(comp, carried);
+	szx_ext_media(comp, carried, load);
 	for (int i = 0; i < 4; i++)
 		if (gone & (1 << i)) comp->dif->flp[i]->changed = 1;
 }

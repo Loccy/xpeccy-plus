@@ -60,9 +60,9 @@ int szx_ext_load(Computer*, const unsigned char* ext, size_t len);
 int szx_ext_can_save(Computer*);		// a machine the spec cannot name, but we can
 // what the tape and the drives were doing, once the program has put the media
 // of szx_media() back in; carried: a bit per drive whose disk came out of the
-// file, which takes the saved one's "changed" too
-void szx_ext_media(Computer*, int carried);
-// the id of the running machine, written into the file with it
+// file, which takes the saved one's "changed" too; tape_too: 0 when the tape in
+// is not the snapshot's
+void szx_ext_media(Computer*, int carried, int tape_too);// the id of the running machine, written into the file with it
 void szx_set_machine(const char* id);
 
 // What a snapshot was taken with that the machine it went into lacks or has

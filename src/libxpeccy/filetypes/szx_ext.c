@@ -1115,7 +1115,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 
 // What the tape and the drives were doing, once the program has put the media
 // back. A medium that did not come back keeps what loading it set.
-void szx_ext_media(Computer* comp, int carried) {
+void szx_ext_media(Computer* comp, int carried, int tape_too) {
 	size_t pos = 0;
 	unsigned id;
 	const unsigned char* p;
@@ -1124,7 +1124,7 @@ void szx_ext_media(Computer* comp, int carried) {
 	if (!ext_held) return;
 	while (ext_next(ext_held, ext_held_len, &pos, &id, &p, &n)) {
 		int idx;
-		if ((id == XR_TAPE) && comp->tape->blkCount) {
+		if ((id == XR_TAPE) && tape_too && comp->tape->blkCount) {
 			Tape* tape = comp->tape;
 			EXT_TAKE(Tape, tape, fld_tape, p, n)
 			if (tmp_.block >= tape->blkCount) continue;

@@ -176,6 +176,7 @@ void conf_init(char* confdir) {
 	conf.saves.perGame = 1;
 	conf.saves.carry = 1;
 	conf.saves.snapMedia = SNAP_MEDIA_ASK;
+	conf.saves.snapLoad = 1;
 	conf.saves.quickKeep = 20;		// Volutar's number
 	conf.saves.exitOn = 1;
 	conf.saves.exitKeep = 5;
@@ -405,6 +406,7 @@ void saveConfig() {
 	fprintf(cfile, "media = %s\n", conf.saves.carry ? "carry" : "links");
 	fprintf(cfile, "snapshot.media = %s\n", (conf.saves.snapMedia == SNAP_MEDIA_CARRY) ? "carry"
 		: (conf.saves.snapMedia == SNAP_MEDIA_LINKS) ? "links" : "ask");
+	fprintf(cfile, "snapshot.load = %s\n", YESNO(conf.saves.snapLoad));
 	fprintf(cfile, "exit = %s\n", YESNO(conf.saves.exitOn));
 	fprintf(cfile, "exit.keep = %i\n", conf.saves.exitKeep);
 	fprintf(cfile, "auto = %s\n", YESNO(conf.saves.timedOn));
@@ -1457,6 +1459,7 @@ void loadConfig() {
 					if (pnam == "media") conf.saves.carry = (pval != "links");
 					if (pnam == "snapshot.media") conf.saves.snapMedia = (pval == "carry") ? SNAP_MEDIA_CARRY
 						: (pval == "links") ? SNAP_MEDIA_LINKS : SNAP_MEDIA_ASK;
+					if (pnam == "snapshot.load") conf.saves.snapLoad = arg.b;
 					if (pnam == "exit") conf.saves.exitOn = arg.b;
 					if (pnam == "exit.keep") conf.saves.exitKeep = getRanged(arg.s, 1, 99);
 					if (pnam == "auto") conf.saves.timedOn = arg.b;

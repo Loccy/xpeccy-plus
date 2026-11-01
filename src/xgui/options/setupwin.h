@@ -132,6 +132,7 @@ class SetupWin : public QDialog {
 		QCheckBox* cbKeepOne;
 		QLineEdit* leSaveDir;
 		QCheckBox* cbSnapEmbed;
+		QCheckBox* cbSnapLoad;
 		bool snapTouched = false;	// the box clicked: an answer, no more asking
 		QGridLayout* gridSaves[4];	// their names lined up with Emulation's
 

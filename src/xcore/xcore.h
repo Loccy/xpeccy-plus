@@ -928,6 +928,7 @@ struct xConfig {
 		unsigned perGame:1;	// a folder per game, else one per machine
 		unsigned carry:1;	// the tape and the disks go into the save, not only their names
 		int snapMedia;		// the same for a snapshot saved by hand: SNAP_MEDIA_*
+		int snapLoad;		// a snapshot opened as a file puts its tape and disks in
 		unsigned exitOn:1;	// an autosave on exit
 		unsigned timedOn:1;	// and every timedMin minutes of running
 		unsigned cleanOn:1;	// saves older than cleanDays go at start
