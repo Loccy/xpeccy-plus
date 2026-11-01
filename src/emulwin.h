@@ -173,8 +173,11 @@ class MainWin : public QWidget {
 		void hotkeysNote();
 		void setMessage(QString, double = 2.0, bool hold = false);
 		void fillUserMenu();
-		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false);
-		void mountMedia(const QString& path, int id, int drv, bool pinned);	// a tape or a disk, read in the background
+		// side: another side of the set in the deck or the drive, picked from its list
+		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false, bool side = false);
+		void mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from);	// a tape or a disk, read in the background
+		QString mediaIn(int id, int drv);
+		void mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk);
 		void padGame(const QString&);		// an image opened: player 1 takes its .pad, or its own table back
 		bool openCheats(const QString&);	// a .pok, into the Cheats window
 		void fsOverlay(QWidget*);

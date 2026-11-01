@@ -197,9 +197,16 @@ void game_forget() {
 // The tape in its place is the game's own next side: the image moves on, the hash, the
 // name and the stamp stay, so game_follow finds it the same game when it starts
 void game_tape_next(const QString& from, const QString& to) {
-	if (game.image.isEmpty() || !same_image(from, game.image)) return;
-	game.image = to;
-	game.src = GSRC_TAPE;
+	game_side_next(from, to, false);
+}
+
+// the path as the drive or the deck has it, which game_check compares by its bytes
+bool game_side_next(const QString& from, const QString& to, bool disk) {
+	if (game.image.isEmpty() || from.isEmpty() || !same_image(from, game.image)) return false;
+	const QString canon = arc_canonical(to);
+	game.image = canon.isEmpty() ? to : canon;
+	game.src = disk ? GSRC_DISK : GSRC_TAPE;
+	return true;
 }
 
 // the tape or the disk it was opened as has left its place

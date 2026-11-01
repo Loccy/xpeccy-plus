@@ -65,6 +65,9 @@ bool game_stale();
 void game_restamp();
 // the game's tape gave way to the next one of its set (Rewind at end): still the game
 void game_tape_next(const QString& from, const QString& to);
+// another side of its set took the place of the game's tape or disk (picked from a
+// menu): still the game. False when the image that went out was not the game's
+bool game_side_next(const QString& from, const QString& to, bool disk);
 QString game_image();			// empty: none
 QString game_name();			// what the folder and the menus call it
 

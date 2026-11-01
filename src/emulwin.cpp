@@ -2032,8 +2032,9 @@ void MainWin::dropAsk(QString path) {
 // it anyway, so there is nothing to gain from letting it run a cycle first.
 // A tape or a disk put into the running machine goes in without holding it
 // (mountMedia); the machine is held only while a dialog can come up.
-void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned) {
+void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned, bool side) {
 	Computer* comp = conf.zx;
+	const QString from = side ? mediaIn(id, drv) : QString();
 	bool held = false;
 	auto hold = [this, &held]() {
 		if (!held) pause(true, PR_FILE);
@@ -2074,7 +2075,7 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		if (!mac.empty()) setMachine(mac);
 		if ((run == AR_MOUNT) && mac.empty() && media_mount_can(comp, fpath, id, drv)) {
 			if (held) pause(false, PR_FILE);
-			mountMedia(fpath, id, drv, pinned);
+			mountMedia(fpath, id, drv, pinned, from);
 			return;
 		}
 		hold();
@@ -2088,14 +2089,8 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 			x_state_replaced();
 		int err = load_file(comp, loc.data(), id, drv);
 		emu_unlock();
-		if (err == ERR_OK) {
-			recent_add(fpath);		// the list is saved with the rest on exit
-			if (drv < 1) {			// a disk in drive B is not the game
-				padGame(fpath);
-				cheats_pick(fpath);
-			}
-			media_opened(fpath, id, drv, run, pinned);
-		}
+		if (err == ERR_OK)
+			mediaOpened(fpath, id, drv, run, pinned, from, media_to_drive(comp, fpath, id));
 		media_autorun(comp, run);
 		// its reset starts the game, not ends it
 		if ((err == ERR_OK) && (drv < 1)) game_restamp();
@@ -2105,11 +2100,31 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 	emit s_tape_upd(comp->tape);
 }
 
+// what the deck or a drive holds, as its path: a side's place in the game
+QString MainWin::mediaIn(int id, int drv) {
+	Computer* comp = conf.zx;
+	const char* raw = (id == FG_TAPE) ? comp->tape->path : comp->dif->flp[((drv < 0) ? 0 : drv) & 3]->path;
+	return QString::fromLocal8Bit(raw ? raw : "");
+}
+
+// An image is in: Recent has it, and it is the game - its .pad, its pokes, its quick saves
+// - unless a disk went into drive B, or it is another side picked for the game's own tape
+// or disk (from: what went out), which keeps the game, as auto play's next tape does.
+void MainWin::mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk) {
+	recent_add(path);		// the list is saved with the rest on exit
+	bool kept = (drv < 1) && game_side_next(from, path, disk);
+	if ((drv < 1) && !kept) {
+		padGame(path);
+		cheats_pick(path);
+	}
+	media_opened(path, id, drv, run, pinned, !kept);
+}
+
 // A tape or a disk into the running machine, read on a thread of its own: the machine
 // runs on meanwhile, and the image goes in under the lock once it is whole. Held only
 // while the one it replaces is asked about. A mount started later wins: an earlier one
 // that ends after it is dropped.
-void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned) {
+void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from) {
 	Computer* comp = conf.zx;
 	std::shared_ptr<xMount> job = std::make_shared<xMount>();
 	bool ask = media_mount_asks(comp, path, id, drv);
@@ -2122,7 +2137,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned) {
 		return;
 	}
 	quint64 gen = ++mountGen;
-	auto done = [this, job, gen, path, id, drv, pinned]() {
+	auto done = [this, job, gen, path, id, drv, pinned, from]() {
 		int err = job->err;
 		if (gen != mountGen) {
 			err = ERR_CANCEL;
@@ -2135,12 +2150,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned) {
 		}
 		media_mount_free(job.get());		// what went out, or what did not go in
 		if (err != ERR_OK) return;
-		recent_add(path);
-		if (drv < 1) {			// a disk in drive B is not the game
-			padGame(path);
-			cheats_pick(path);
-		}
-		media_opened(path, id, drv, AR_MOUNT, pinned);
+		mediaOpened(path, id, drv, AR_MOUNT, pinned, from, job->disk);
 		if (drv < 1) game_restamp();
 		emit s_tape_upd(conf.zx->tape);
 		if (diskWin->isVisible()) diskWin->refresh();

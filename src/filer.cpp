@@ -1736,11 +1736,11 @@ void media_mount_free(xMount* m) {
 
 static xMediaOpen media_last = {QString(), FG_ALL, 0, 0, false};
 
-void media_opened(const QString& path, int id, int drv, int run, bool pinned) {
+void media_opened(const QString& path, int id, int drv, int run, bool pinned, bool newGame) {
 	media_last = {path, id, drv, run, pinned};
 	if (drv < 1) {				// a disk in drive B is not the program
 		labels_image(path);
-		game_set(last_loaded.isEmpty() ? path : last_loaded);
+		if (newGame) game_set(last_loaded.isEmpty() ? path : last_loaded);
 	}
 }
 

@@ -132,7 +132,7 @@ typedef struct {
 } xMediaOpen;
 // a file the user opened: kept for Reload, and its labels come with it; one
 // into drive A, a tape or a snapshot is the game the quick saves are of
-void media_opened(const QString& path, int id, int drv, int run, bool pinned);
+void media_opened(const QString& path, int id, int drv, int run, bool pinned, bool newGame = true);
 xMediaOpen media_last_open();
 // a snapshot loaded since the last call, empty when none
 QString file_take_snapshot();

@@ -121,7 +121,7 @@ void MainWin::otherImages(QMenu* m, int id, int drv, QAction* before, int inline
 		if (i == cur) continue;
 		const QString open = paths[i];
 		connect(act, &QAction::triggered, this, [this, open, id, drv]() {
-			openMedia(open, id, drv, AR_MOUNT, true);
+			openMedia(open, id, drv, AR_MOUNT, true, true);
 			if (diskWin->isVisible()) diskWin->refresh();
 		});
 	}
