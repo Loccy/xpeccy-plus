@@ -125,7 +125,9 @@ tape plays, its other sides cannot be picked either, as it cannot be ejected.
 The set is found by the names: files named the same but for the side or the part, as
 `Game (Side A).tzx` and `Game (Side B).tzx`, `Game - Side 1.tzx`, `game_a.tap` and
 `game_b.tap`, `Game (Tape 1 of 2).tzx`, `Game - Disk 2.trd`. A number alone does not make a
-part: `Dizzy 2` and `Dizzy 3` are two games. Notes in square brackets, as `[a]` or
+part: `Dizzy 2` and `Dizzy 3` are two games. A game with its level tape beside it is a set
+too, as some archives name them: `Game` and `Game - Levels`, `Game - The Game` and
+`Game - Level Data`; the game comes first. Notes in square brackets, as `[a]` or
 `[SpeedLock 4]`, may differ from side to side, and a `.tap` side goes with a `.tzx` one when
 there is no other. An archive beside it counts when it holds one image of that kind, as
 `Game (Side B).tzx.zip`. A tape or disk from an archive holding several lists that archive's

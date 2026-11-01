@@ -114,6 +114,14 @@ you press **Play**, rewind it, or put another tape in.
   beginning, and it plays. A game that loads its level after every game over finds it each
   time, however many times the tape goes round.
 
+A tape that is one of a set (see
+[The other sides beside an image](files.md#the-other-sides-beside-an-image)) goes on
+instead: when a program's own loader reads it again at its end, or a load through the ROM
+asks for a block that is not on it, the next tape of the set goes in at its start and plays
+- side A, side B, then side A again - and the screen shows `tape: side b`. A game whose
+levels are on side B gets them after side A with no hand on the deck. **Play** rewinds the
+tape that is in, as above, and so does a tape you have recorded on.
+
 With this switch off, the tape stays at its end until you rewind it: turn it off for a game
 that asks you to turn the tape over, or the game gets the same side again. It is on by
 default.
