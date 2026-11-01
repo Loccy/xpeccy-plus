@@ -181,7 +181,8 @@ before that point is upstream's history and is not repeated here.
 - **A multi-load game finds its next part on a tape that has run out**: with Rewind at end,
   a load through the ROM goes back to the block the game asks for, not to the start. A game
   with a loader of its own gets the tape from the start with Auto play, after every game
-  over (Narc). *(reported by Volutar)*
+  over; a tape of a set goes on to the next one - Side A to Side B, a game to its Levels
+  tape (Narc). *(reported by Volutar)*
 
 - **A loader that borrows the ROM's edge routine loads with Auto play**: the tape no longer
   stops halfway, and after the load it stays at the next level's block. *(reported by
