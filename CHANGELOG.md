@@ -14,29 +14,26 @@ before that point is upstream's history and is not repeated here.
 - **ZX Spectrum Next snapshots**: File > Save writes the whole Next as an SZX, with its
   ESP-01, so quick saves, autosaves, Resume Last Session and RZX recording work on it too.
   The SD card stays out of the file: loading puts the same card back and says so when its
-  files have changed since.
+  files have changed since. Saving a Next as .sna or .z80 says to use .szx.
+
+- **Update check**: once a day the program looks for a newer version, on the releases or
+  the development channel, and shows what is new since yours. Help > Check for Updates asks at
+  once; how often, and which channel, is set in the same window or in Options. On Windows
+  and with the AppImage, **Update** puts the new version in place of the old one; settings,
+  machines and the files you changed are kept.
 
 - **Quick saves per game**: F5 keeps the last 20 saves of each game, with its tape and
-  disks as they were. The game is the one that runs - opened, or started from the tape or
-  drive A, as a disk from TR-DOS - and a reset or another machine ends it; loading a save
-  brings its game back. F9 loads the newest, Shift+F9 opens Save History to pick another,
-  delete a game or clear old ones, and Undo Quick Load moves to Ctrl+F9. The program saves
-  the machine on exit into the game's folder, for File > Resume Last Session, and can every
-  few minutes too. *(requested by Volutar)*
+  disks as they were; F9 loads the newest, Shift+F9 opens Save History to pick another or
+  clear old ones, and Undo Quick Load moves to Ctrl+F9. The game is the one that runs -
+  opened, or started from the tape or drive A - until a reset or another machine. On exit
+  the machine is saved in the game's folder for File > Resume Last Session, and every few
+  minutes if you like. *(requested by Volutar)*
 
 - **Snapshots with their media**: File > Save can put the tape and the disks, +3 ones too,
   inside an SZX; the Save dialog offers it as a type and remembers the pick, and the first
   time asks. Opening one puts its tape and disks in, unless Options > Saves says not to;
   a disk brought back unsaved, or without its file, asks to be saved.
   *(requested by Volutar)*
-
-- **Pause in menus**: the machine waits while a menu of the window is open - the menu
-  bar, the right-click menu, a toolbar list - and goes on when it closes. On by default;
-  the volume slider does not stop it.
-
-- **Resume by input**: after Pause, a key, a click in the picture, a click on the Virtual
-  Keyboard or a pad button lets the machine go on. The key and the pad reach the game.
-  Off by default.
 
 - **Images in archives**: a snapshot, tape or disk opens from a .zip, .gz or .7z; with
   several images in it, a list asks which. The drive and tape menus offer the archive's
@@ -47,43 +44,6 @@ before that point is upstream's history and is not repeated here.
   Side B, Tape 1 of 2, game_a and game_b - and one-image archives beside it. The file name
   in the Tape Player and the Disk Manager drops the same list down. An empty drive B offers
   the disks of drive A's set. *(requested by Volutar)*
-
-- **Dumps of any memory page**: the Debugger's Save dump and Load dump take a source - the
-  CPU's 64K as before, or a RAM, ROM, divMMC or Multiface page, paged in or not, and the
-  pages after it. *(requested by AlexZor)*
-
-- **Heat map** in the Debugger:
-  - a Heat Map window (Tools > Heat Map) that follows the machine while it runs;
-  - All, mixed and All, by count show the three counters at once in mixed colors;
-  - Pages lists the pages the program touched; the CPU view names the page in each window,
-    and on the ZX Spectrum Next has eight 8K slots;
-  - divMMC's memory and the Next's layer 2 over banks 5 and 7 are counted, and the CSV
-    names each memory area.
-
-- **Faster and Slower**: Shift+Num++ and Shift+Num+- step the whole machine through 1/8, 1/4,
-  1/2, normal speed, x2, x4, x8 and x16, with its sign in the corner. Fast Forward goes up to
-  x16. The Overclock slider and its keys, Overclock Up and Overclock Down (Alt+Num++ and
-  Alt+Num+-), only speed the CPU up now. *(requested by ZXJaggedGaming, thanks to Volutar)*
-
-- **RZX playback sign**: while an RZX plays, a green triangle blinks next to RZX in the corner of the
-  picture. The Record Video and RZX Record buttons are drawn for the 24 px toolbar.
-
-- **Klava** in the Virtual Keyboard: the 58-key keyboard of many Spectrum clones (Delta-S,
-  Profi, Scorpion and others), worn, with crooked, yellowed caps, or clean as Klava
-  (Washed). By machine shows it on the clones. Skins of your own in the `vkbd` folder of
-  the settings are in the Skin menu too. *(thanks to Volutar)*
-
-- **The menu bar can be hidden**: View > Menu Bar. The toolbar hides with it, as in
-  fullscreen. Hold the pointer at the top edge of the window and both come down over the
-  picture; a thin strip there shows at once that the pointer is in place. The right-click
-  menu can bring the menu bar back too. Here and in fullscreen the bars stay a moment
-  after the pointer leaves them. *(thanks to lovebeam and Volutar)*
-
-- **Update check**: once a day the program looks for a newer version, on the releases or
-  the development channel, and shows what is new since yours. Help > Check for Updates asks at
-  once; how often, and which channel, is set in the same window or in Options. On Windows
-  and with the AppImage, **Update** puts the new version in place of the old one; settings,
-  machines and the files you changed are kept.
 
 - **VSync** in Options > Video: no tearing, and a machine close to the screen's rate runs
   at it, so motion is even - a Next at 58.15 Hz scrolls smoothly on a 60 Hz screen, a
@@ -97,8 +57,47 @@ before that point is upstream's history and is not repeated here.
   blurred and dimmed, instead of black - past the border, or from the border size chosen
   (View > Side Fill); how soft and bright, in Options > Video.
 
+- **Heat map** in the Debugger:
+  - a Heat Map window (Tools > Heat Map) that follows the machine while it runs;
+  - All, mixed and All, by count show the three counters at once in mixed colors;
+  - Pages lists the pages the program touched; the CPU view names the page in each window,
+    and on the ZX Spectrum Next has eight 8K slots;
+  - divMMC's memory and the Next's layer 2 over banks 5 and 7 are counted, and the CSV
+    names each memory area.
+
+- **Klava** in the Virtual Keyboard: the 58-key keyboard of many Spectrum clones (Delta-S,
+  Profi, Scorpion and others), worn, with crooked, yellowed caps, or clean as Klava
+  (Washed). By machine shows it on the clones. Skins of your own in the `vkbd` folder of
+  the settings are in the Skin menu too. *(thanks to Volutar)*
+
+- **Faster and Slower**: Shift+Num++ and Shift+Num+- step the whole machine through 1/8, 1/4,
+  1/2, normal speed, x2, x4, x8 and x16, with its sign in the corner. Fast Forward goes up to
+  x16. The Overclock slider and its keys, Overclock Up and Overclock Down (Alt+Num++ and
+  Alt+Num+-), only speed the CPU up now. *(requested by ZXJaggedGaming, thanks to Volutar)*
+
+- **Dumps of any memory page**: the Debugger's Save dump and Load dump take a source - the
+  CPU's 64K as before, or a RAM, ROM, divMMC or Multiface page, paged in or not, and the
+  pages after it. *(requested by AlexZor)*
+
+- **The menu bar can be hidden**: View > Menu Bar. The toolbar hides with it, as in
+  fullscreen. Hold the pointer at the top edge of the window and both come down over the
+  picture; a thin strip there shows at once that the pointer is in place. The right-click
+  menu can bring the menu bar back too. Here and in fullscreen the bars stay a moment
+  after the pointer leaves them. *(thanks to lovebeam and Volutar)*
+
 - **The mellow palette**: softer colors, each kept near the classic one, easier on the eyes.
   Pick it in View > ZX Palette. *(thanks to Volutar)*
+
+- **Pause in menus**: the machine waits while a menu of the window is open - the menu
+  bar, the right-click menu, a toolbar list - and goes on when it closes. On by default;
+  the volume slider does not stop it.
+
+- **Resume by input**: after Pause, a key, a click in the picture, a click on the Virtual
+  Keyboard or a pad button lets the machine go on. The key and the pad reach the game.
+  Off by default.
+
+- **RZX playback sign**: while an RZX plays, a green triangle blinks next to RZX in the corner of the
+  picture. The Record Video and RZX Record buttons are drawn for the 24 px toolbar.
 
 ### Changed
 
@@ -107,15 +106,7 @@ before that point is upstream's history and is not repeated here.
   `win-x86`); macOS is `macos-arm64`. A development build named the old way updates itself
   to the new name; an old `win-x64` one becomes the Windows 10 and 11 build.
 
-- **Pause settings on the Emulation page**: Pause when inactive moved there from
-  Application, beside Pause in menus and Resume by input.
-
-- **Options moved to the Tools menu**, from the bottom of File. The right-click menu keeps it
-  at its foot; on macOS it is Settings in the application menu.
-
-- **Save icons say what they do**: a floppy saves, a floppy with a pencil is Save As or
-  Export to a new file, two floppies save all changed disks. Storage, the Debugger's FDC
-  panel and Copy to disk show a drive.
+- **The macOS build runs on macOS 13 and later**, Ventura included.
 
 - **With no shader, a fitted picture stays sharp**: in fullscreen or a maximized window
   every dot keeps one width, only the seams between dots are softened. *(thanks to Volutar)*
@@ -129,38 +120,24 @@ before that point is upstream's history and is not repeated here.
   on a quick tap too. One Caps Shift lights, not both: the right one for the right Shift.
   *(thanks to Volutar)*
 
-- **Fast Mode render** in Options > Emulation is only the frames a second: the choice of how
-  a frame is drawn is no longer offered. *(thanks to Volutar)*
+- **Options moved to the Tools menu**, from the bottom of File. The right-click menu keeps it
+  at its foot; on macOS it is Settings in the application menu.
+
+- **Pause settings on the Emulation page**: Pause when inactive moved there from
+  Application, beside Pause in menus and Resume by input.
+
+- **Save icons say what they do**: a floppy saves, a floppy with a pencil is Save As or
+  Export to a new file, two floppies save all changed disks. Storage, the Debugger's FDC
+  panel and Copy to disk show a drive.
 
 - **Tidier menus**: under every style the text starts where the System style puts it, and a
   list where one is picked has round marks. Help has icons, and an item or button that opens
   a page in your browser carries a box with an arrow.
 
+- **Fast Mode render** in Options > Emulation is only the frames a second: the choice of how
+  a frame is drawn is no longer offered. *(thanks to Volutar)*
+
 ### Fixed
-
-- **Another tape or disk goes in without a stall**: a side picked from a set's list, Open
-  Tape or a drive's Open no longer stops the picture and the sound for a few frames, and
-  auto play reads the next tape of a set ahead.
-
-- **Another side picked from its list is the same game**: its quick saves, gamepad bindings
-  and cheat file stay.
-
-- **The ZX 48K and ALF TV Game show 48 KB of memory** on the Machine page, not 64 KB.
-
-- **A drive in the status bar opens its own tab**: a click on B: opens the Disk Manager on
-  drive B, not on the tab it had last.
-
-- **The breakpoint log writes F and F' as two digits**, as it writes A, not four.
-
-- **A Next card given with `--sdcard` is used**: with System/Next on it, the Next starts
-  from it and the SD card window no longer opens. A card without System/Next opens the window
-  on that card, saying why.
-
-- **The Debugger's dump shows the Next's own pages**: on the ZX Spectrum Next the RAM and
-  ROM views show its 8K RAM pages and four ROMs, numbered as in MEMMAP; an edit or a
-  breakpoint there lands on that byte. On every machine the page number stops at the last
-  page, a page view shows the whole page (the size box is gone), and the right-click menu
-  ticks the breakpoints of the byte under it.
 
 - **Files and folders with any letters in their names** (Cyrillic, Greek, Chinese...) open
   and save on Windows 10 and 11, from the menus, the command line and a double-click, and
@@ -170,25 +147,6 @@ before that point is upstream's history and is not repeated here.
 - **A ROM file picked from any folder loads**: a path with a drive letter, or with Cyrillic
   or other letters, is kept whole and survives a restart, and a ROM file that cannot be read
   is reported instead of leaving its bank silently empty. *(reported by AlexZor)*
-
-- **The signs in the corner of the picture are smooth** on a 100 % screen: their slanted
-  edges and letters are no longer ragged. *(reported by Volutar)*
-
-- **The docked virtual keyboard is as wide as the window** and casts a shadow, as other
-  windows do (Windows). *(reported by Volutar)*
-
-- **A Next program's UDP link no longer brings up the firewall prompt**: the link's own port
-  opens to the network only with Server on the network.
-
-- **Building for macOS**: configuring with Qt 6.11.0 or 6.11.1, which crash at start on macOS
-  27.2, prints a warning; the bundle installs with a read-only SDL3 from Homebrew.
-  *(thanks to DruzhininPavel)*
-
-- **View > ZX Palette and Shaders show one tick**: a pick from the right-click menu no longer
-  leaves the old one ticked in the View menu. *(thanks to Volutar)*
-
-- **The virtual keyboard no longer leaves Caps Shift or Symbol Shift lit** after Backspace,
-  an arrow or a punctuation key on the PC keyboard.
 
 - **A multi-load game finds its next part on a tape that has run out**: with Rewind at end,
   a load through the ROM goes back to the block the game asks for, not to the start. A game
@@ -200,13 +158,56 @@ before that point is upstream's history and is not repeated here.
   stops halfway, and after the load it stays at the next level's block. *(reported by
   Volutar)*
 
+- **A two-sided game in one tape file finds side B**: a load through the ROM winds the tape on
+  past a block that cannot be the one it asks for. *(reported by Volutar)*
+
 - **Fast loading ends with the load**: a game that reads its keys from a table no longer keeps
   the tape and fast mode running through a long last pause. *(reported by Volutar)*
 
 - **A snapshot taken with the tape run out opens with it run out**, instead of at the start.
 
-- **A two-sided game in one tape file finds side B**: a load through the ROM winds the tape on
-  past a block that cannot be the one it asks for. *(reported by Volutar)*
+- **Another tape or disk goes in without a stall**: a side picked from a set's list, Open
+  Tape or a drive's Open no longer stops the picture and the sound for a few frames, and
+  auto play reads the next tape of a set ahead.
+
+- **Another side picked from its list is the same game**: its quick saves, gamepad bindings
+  and cheat file stay.
+
+- **A Next card given with `--sdcard` is used**: with System/Next on it, the Next starts
+  from it and the SD card window no longer opens. A card without System/Next opens the window
+  on that card, saying why.
+
+- **The Debugger's dump shows the Next's own pages**: on the ZX Spectrum Next the RAM and
+  ROM views show its 8K RAM pages and four ROMs, numbered as in MEMMAP; an edit or a
+  breakpoint there lands on that byte. On every machine the page number stops at the last
+  page, a page view shows the whole page (the size box is gone), and the right-click menu
+  ticks the breakpoints of the byte under it.
+
+- **A Next program's UDP link no longer brings up the firewall prompt**: the link's own port
+  opens to the network only with Server on the network.
+
+- **The docked virtual keyboard is as wide as the window** and casts a shadow, as other
+  windows do (Windows). *(reported by Volutar)*
+
+- **The signs in the corner of the picture are smooth** on a 100 % screen: their slanted
+  edges and letters are no longer ragged. *(reported by Volutar)*
+
+- **View > ZX Palette and Shaders show one tick**: a pick from the right-click menu no longer
+  leaves the old one ticked in the View menu. *(thanks to Volutar)*
+
+- **The virtual keyboard no longer leaves Caps Shift or Symbol Shift lit** after Backspace,
+  an arrow or a punctuation key on the PC keyboard.
+
+- **A drive in the status bar opens its own tab**: a click on B: opens the Disk Manager on
+  drive B, not on the tab it had last.
+
+- **The ZX 48K and ALF TV Game show 48 KB of memory** on the Machine page, not 64 KB.
+
+- **The breakpoint log writes F and F' as two digits**, as it writes A, not four.
+
+- **Building for macOS**: configuring with Qt 6.11.0 or 6.11.1, which crash at start on macOS
+  27.2, prints a warning; the bundle installs with a read-only SDL3 from Homebrew.
+  *(thanks to DruzhininPavel)*
 
 ## 2026.8.2 - 2026-10-27
 
