@@ -86,7 +86,8 @@ it. Leave them alone unless you know the hardware.
   **...and it crashes**, **MIC in the beeper** and **ULA plus**.
 - **Board** - **Even M1** (Scorpion ZS 256) and **DD palette** (Profi).
 
-Each one is explained beside it, or in a tooltip when you hold the mouse over it.
+Each one is explained beside it, or in a tooltip when you hold the mouse over it. What contention, snow and the floating bus are, and how they are emulated, is in
+[Contention, snow and the floating bus](ula-snow-floating-bus.md).
 
 ## Machine: Tape
 
