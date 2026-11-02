@@ -596,7 +596,8 @@ addresses as numbers.
 
 A line that cannot be read is left out and named in the log. A condition or a log
 expression that does not compile is kept as it is: the condition then fires every time, and
-the expression is written as `?`, so the mistake shows.
+the expression is written as `?`, so the mistake shows. A line the list already holds word
+for word is left out, so a list loaded twice counts each hit once.
 
 ```{index} --bp, --brk, --brk-log
 ```
