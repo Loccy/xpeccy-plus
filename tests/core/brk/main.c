@@ -251,10 +251,31 @@ int main(void) {
 		ok &= !cpu_int_ready(cpu);		// not sampled
 		cpu->flgACK = 1;
 		cpu_set_reg(cpu, "IFF1", 0);
-		ok &= !cpu_int_ready(cpu) && !(cpu->inten & Z80_INT);
+		ok &= !cpu_int_ready(cpu);
 		cpu->intrq |= Z80_NMI;
 		ok &= cpu_int_ready(cpu);		// NMI whatever IFF1 says
 		check("taken: NMI, or INT with IFF1, past EI, sampled; IFF1 edits follow", ok && on);
+		compDestroy(comp);
+	}
+	{
+		// an NMI handler after EI (IFF1 off, IFF2 on) whose registers the debugger
+		// writes back: RETN puts IFF2 into IFF1 and INT comes in again
+		Computer* comp = machine();
+		CPU* cpu = comp->cpu;
+		comp_poke(comp, 0x8060, 0xed, 0);	// RETN
+		comp_poke(comp, 0x8061, 0x45, 0);
+		cpu->regPC = 0x8060;
+		cpu->regSP = 0x8ffe;
+		comp_poke(comp, 0x8ffe, 0x20, 0);	// back to #8020
+		comp_poke(comp, 0x8fff, 0x80, 0);
+		cpu->inten |= Z80_INT;
+		cpu->flgIFF1 = 0;
+		cpu->flgIFF2 = 1;
+		cpu_set_reg(cpu, "IFF1", 0);
+		compExec(comp);
+		cpu->intrq |= Z80_INT;
+		cpu->flgACK = 1;
+		check("an IFF1 edit, then RETN: INT is taken", (cpu->regPC == 0x8020) && cpu->flgIFF1 && cpu_int_ready(cpu));
 		compDestroy(comp);
 	}
 
@@ -278,6 +299,20 @@ int main(void) {
 		int ints = comp->intTaken;
 		for (long n = 0; (n < 100000) && !comp->flgBRK; n++) compExec(comp);
 		check("IM 1 counts once", comp->flgBRK && (cpu->regPC == 0x8033) && (comp->intTaken > ints));
+		compDestroy(comp);
+	}
+	{
+		// IM 2 counts as a CALL does, to the cap where Step Out gives up
+		Computer* comp = machine();
+		CPU* cpu = comp->cpu;
+		cpu->regPC = 0x8020;
+		cpu_set_reg(cpu, "IFF1", 1);
+		cpu->intrq |= Z80_INT;
+		cpu->flgACK = 1;
+		cpu->flgRetBRK = 1;
+		cpu->regCallCnt = 65000;
+		compExec(comp);
+		check("IM 2 counts to the cap", (cpu->regPC == 0x8383) && !cpu->flgRetBRK && (cpu->regCallCnt == 65000));
 		compDestroy(comp);
 	}
 
@@ -317,6 +352,20 @@ int main(void) {
 		compExec(comp);
 		check("Fetch on TR-DOS #3D2F from BASIC", comp->flgBRK && (comp->brkn == 1) && (comp->brkhit[0].t == BRK_MEMROM)
 			&& (comp->brkhit[0].a == 0x7d2f) && !comp->flgDOS);
+		compDestroy(comp);
+	}
+	{
+		// the heat map counts the TR-DOS byte that runs, as the Fetch point sees it
+		Computer* comp = machine();
+		difSetHW(comp->dif, DIF_BDI);
+		comp->mem->romData[0x7d2f] = 0x00;		// TR-DOS: NOP
+		comp->hw->mapMem(comp);
+		comp_heat_sync(comp);
+		comp->flgHEAT = 1;
+		comp->cpu->regPC = 0x3d2f;
+		compExec(comp);
+		check("heat of a #3Dxx fetch in TR-DOS", comp->flgDOS && (comp->cpu->regPC == 0x3d30)
+			&& (comp->heatRom.ex[0x7d2f] == 1) && !comp->heatRom.ex[0x3d2f] && !comp->heatRom.rd[0x3d2f]);
 		compDestroy(comp);
 	}
 
@@ -376,6 +425,26 @@ int main(void) {
 		compExec(comp);
 		check("a temp point under a cpu address fetch point", (comp->brkn == 2) && hit_of(comp, BRK_CPUADR, 0x8008)
 			&& hit_of(comp, BRK_TEMP, 0x8008) && !(comp->brkRamMap[cell.abs] & MEM_BRK_TFETCH));
+		compDestroy(comp);
+	}
+	{
+		// run to cursor waits for PC: an instruction whose prefix stands before the
+		// cursor's byte runs on, a Fetch point there still gets the prefixed fetch
+		Computer* comp = machine();
+		comp_poke(comp, 0x8060, 0xdd, 0);	// DD
+		comp_poke(comp, 0x8061, 0x23, 0);	// INC IX
+		comp_poke(comp, 0x8062, 0x00, 0);	// NOP
+		xAdr cell = comp_get_xadr(comp, 0x8061, MEM_VIEW_READ);
+		comp->brkRamMap[cell.abs] = MEM_BRK_TFETCH;
+		comp->flgBRKMEM = 1;
+		comp->cpu->regPC = 0x8060;
+		compExec(comp);
+		ok = !comp->flgBRK && (comp->cpu->regPC == 0x8062) && (comp->brkRamMap[cell.abs] & MEM_BRK_TFETCH);
+		comp->brkRamMap[cell.abs] = MEM_BRK_FETCH;
+		comp->cpu->regPC = 0x8060;
+		compExec(comp);
+		ok &= comp->flgBRKPRE && (hit_of(comp, BRK_MEMRAM, 0x8061) != NULL);
+		check("a temp point waits for PC, not a prefix before it", ok);
 		compDestroy(comp);
 	}
 	{

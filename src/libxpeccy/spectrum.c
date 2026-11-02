@@ -419,8 +419,11 @@ static int comp_fetch_bp(Computer* comp) {
 	opCode* tab = tabs ? tabs->np : NULL;
 	int adr = cpu_get_pc(comp->cpu) & 0xffff;
 	int n = comp->brkn;
+	// a temporary point (Step Over, Run to cursor) waits for PC itself
+	int mask = MEM_BRK_FETCH | MEM_BRK_TFETCH;
 	for (int i = 0; i < 0x10000; i++) {		// memory full of DD would never end
-		comp_hit_bp(comp, adr, MEM_BRK_FETCH | MEM_BRK_TFETCH, MEM_VIEW_FETCH, MEM_BRK_FETCH, -1);
+		comp_hit_bp(comp, adr, mask, MEM_VIEW_FETCH, MEM_BRK_FETCH, -1);
+		mask = MEM_BRK_FETCH;
 		if (!tab) break;
 		opCode* op = &tab[comp_peek(comp, adr, MEM_VIEW_FETCH, NULL)];
 		if (!(op->flag & OF_PREFIX)) break;
@@ -487,10 +490,13 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 	}
 	if (m1 && comp->rzx.rec.on)
 		comp->rzx.rec.fetch++;
-	// the Next pages for a fetch in its own read, after this: its view is asked
-	// for the fetch. A divMMC elsewhere has already paged for it (memrd), so the
-	// map as it stands is the fetch's
-	int access = ((m1 && comp->hw->memView) ? MEM_VIEW_FETCH : MEM_VIEW_READ) | MEM_VIEW_LIVE;
+	// the Next pages for a fetch in its own read, after this, and so does TR-DOS:
+	// their view is asked for the fetch. A divMMC elsewhere has already paged for
+	// it (memrd), so the map as it stands is the fetch's
+	int access = MEM_VIEW_READ;
+	if (m1 && (comp->hw->memView || (comp_fetch_dos(comp, adr) != comp->flgDOS)))
+		access = MEM_VIEW_FETCH;
+	access |= MEM_VIEW_LIVE;
 	// only the debugger's aids want to know whether this is an instruction byte
 	unsigned isExecByte = 0;
 	if (comp->flgMAP || comp->flgHEAT)

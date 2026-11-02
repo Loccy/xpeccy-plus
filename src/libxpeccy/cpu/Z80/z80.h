@@ -99,6 +99,12 @@ int z80_exec(CPU*);
 // ran and wants xend, which the caller sends with cpu->t one tick back
 int z80_exec_open(CPU*, int* end);
 int z80_int_ready(CPU*);		// the next exec takes an interrupt (NMI, or INT as z80_int takes it)
+// Step Out counts calls, interrupts too, up to a cap past which it gives up
+static inline void z80_count_call(CPU* cpu) {
+	if (!cpu->flgRetBRK) return;
+	if (cpu->regCallCnt < 65000) cpu->regCallCnt++;
+	else cpu->flgRetBRK = 0;
+}
 xAsmScan z80_asm(int, const char*, char*);
 xAsmScan z80_asm_tabs(const opTabSet*, int, const char*, char*);
 // the Next's Z80N (z80n.c): the Z80 core on tables of its own

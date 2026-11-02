@@ -242,8 +242,7 @@ void rzx_rec_in(Computer* comp, int val) {
 }
 
 static int rr_int_now(CPU* cpu) {
-	int req = cpu->intrq & cpu->inten;
-	return (req & Z80_INT) && !(req & Z80_NMI) && cpu->flgIFF1 && !cpu->flgNOINT && cpu->flgACK;
+	return z80_int_ready(cpu) && !(cpu->intrq & cpu->inten & Z80_NMI);
 }
 
 // The machine was changed from outside - a reset, a snapshot, a poke: the log
