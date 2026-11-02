@@ -49,12 +49,12 @@ static unsigned char* brk_map_start(Computer* comp, xBrkPoint* brk, int* start) 
 	return NULL;
 }
 
-xbpIndex brkFind(xBrkPoint* brk, int flag = 0) {
+xbpIndex brkFind(xBrkPoint* brk) {
 	xbpIndex res;
 	res.ptr = NULL;
 	res.idx = -1;
 	xBrkPoint* tbrk;
-	std::vector<xBrkPoint>* list = (flag & BRKF_SYSTEM) ? &conf.brk.list_sys : &conf.brk.list;
+	std::vector<xBrkPoint>* list = &conf.brk.list;
 	int i;
 	int max = list->size();
 	for (i = 0; (i < max) && !res.ptr; i++) {
@@ -109,8 +109,6 @@ static bool brk_takes(Computer* comp, xBrkPoint* brk, int t, int adr, int kind) 
 void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out) {
 	out.clear();
 	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++)
-		if (brk_takes(conf.zx, &(*it), t, adr, kind)) out.push_back(&(*it));
-	for (auto it = conf.brk.list_sys.begin(); it != conf.brk.list_sys.end(); it++)
 		if (brk_takes(conf.zx, &(*it), t, adr, kind)) out.push_back(&(*it));
 }
 
@@ -297,8 +295,8 @@ static bool brk_compare(const xBrkPoint& bp1, const xBrkPoint& bp2) {
 }
 void brkSort() {std::stable_sort(conf.brk.list.begin(), conf.brk.list.end(), brk_compare);}
 
-void brkAdd(xBrkPoint brk, int flag) {
-	xBrkPoint* bp = brkFind(&brk, flag & BRKF_SYSTEM).ptr;
+void brkAdd(xBrkPoint brk) {
+	xBrkPoint* bp = brkFind(&brk).ptr;
 	if (bp) {
 		bp->fetch = brk.fetch;
 		bp->read = brk.read;
@@ -311,8 +309,6 @@ void brkAdd(xBrkPoint brk, int flag) {
 		bp->script = brk.script;
 		bp->logx = brk.logx;
 		bp->logexp = brk.logexp;
-	} else if (flag & BRKF_SYSTEM) {
-		conf.brk.list_sys.push_back(brk);
 	} else {
 		conf.brk.list.push_back(brk);
 	}
@@ -456,7 +452,6 @@ void brkInstallAll() {
 	comp->flgBRKMEM = 0;		// brkInstall() sets it again for each point it puts in the maps
 	comp->flgIBRK = 0;
 	brkInstallList(&conf.brk.list);
-	brkInstallList(&conf.brk.list_sys);
 }
 
 // ------------------------------------------------------------------ logging

@@ -263,8 +263,6 @@ void clear_comments();
 
 #define DELBREAKS 0		// delete breakpoint on FRW=000
 
-#define BRKF_SYSTEM 1
-
 enum {
 	BRK_ACT_DBG = 1,
 	BRK_ACT_SCR,
@@ -316,7 +314,7 @@ xBrkPoint brkCreate(int type, int flag, int adr, int mask, int act = BRK_ACT_DBG
 int brk_new_id();
 void brkSet(int, int, int, int);
 void brkXor(int, int, int, int, int);
-void brkAdd(xBrkPoint, int = 0);
+void brkAdd(xBrkPoint);
 // void brkInstall(xBrkPoint*, int);
 void brkDelete(xBrkPoint);
 void brkInstallAll();
@@ -859,7 +857,6 @@ struct xConfig {
 	std::string lastDir;
 	struct {
 		std::vector<xBrkPoint> list;
-		std::vector<xBrkPoint> list_sys;
 	} brk;
 	QMap<int, QMap<int, QString> > commap;	// comments: [memtype][addr] = string
 	QMap<int, QMap<int, QString> > labmap;	// [memtype][addr] = name
