@@ -3,9 +3,9 @@ name: itch
 # Puts a published release on the itch.io page named by the repository variable
 # ITCH_GAME (user/project), with butler, itch's own uploader. Nothing is built
 # here: the release's own files go up. itch hands every upload out as a zip of
-# its own, named <project>-<channel>.zip, so butler pushes a release zip's
-# contents (its versioned folder) and the download is one zip, not a zip in a
-# zip; the AppImage and the dmg arrive inside one under their own names.
+# its own, named <project>-<channel>.zip, so a release zip goes up unpacked (its
+# versioned folder) and the download is one zip, not a zip in a zip; the
+# AppImage and the dmg arrive inside one under their own names.
 #
 #   gh workflow run itch.yml -R dotkoval/xpeccy-plus -f tag=v2026.9    # again
 #   gh workflow run itch.yml -R dotkoval/xpeccy-plus -f tag=nightly    # a nightly
@@ -88,9 +88,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # one folder per channel, holding its one file - a zip in it is pushed
-          # as what it holds (butler's default); a whole tail, so -win-x64.zip
-          # catches neither -legacy nor an old-name copy
+          # one folder per channel, holding its one file; a whole tail, so
+          # -win-x64.zip catches neither -legacy nor an old-name copy
           for ch in win-x64.zip win-x86-legacy.zip linux-x86_64.AppImage macos-arm64.dmg; do
             gh release download "$TAG" -p "*-$ch" -D "push/${ch%.*}"
           done
@@ -100,6 +99,13 @@ jobs:
           ver=${ver%-win-x64.zip}
           echo "VER=$ver" >> "$GITHUB_ENV"
           echo "version: $ver"
+          # a zip goes up unpacked: butler can push one as what it holds, but
+          # --if-changed then reads its paths as if the zip were a folder and
+          # stops on a folder the zip has no entry for
+          for z in push/*/*.zip; do
+            unzip -q "$z" -d "$(dirname "$z")"
+            rm "$z"
+          done
           ls -lR push
 
       - name: Push
