@@ -1214,7 +1214,7 @@ void DebugWin::customEvent(QEvent* ev) {
 			}
 			switch(traceType) {
 				case DBG_TRACE_INT:
-					if (comp->cpu->intrq & comp->cpu->inten)
+					if (cpu_int_ready(comp->cpu))		// the next step takes it
 						stopTrace();
 					break;
 				case DBG_TRACE_HERE:
@@ -1271,7 +1271,7 @@ void DebugWin::fillNotCPU() {
 	setSignal(ui_misc.labDOS, comp->flgDOS);
 	setSignal(ui_misc.labROM, comp->flgROM);
 	setSignal(ui_misc.labCPM, comp->flgCPM);
-	setSignal(ui_misc.labINT, comp->cpu->intrq & comp->cpu->inten);
+	setSignal(ui_misc.labINT, cpu_int_ready(comp->cpu));	// the next step takes an interrupt
 
 	ui_misc.labRX->setNum(comp->vid->ray.x);
 	setSignal(ui_misc.labRX, comp->vid->hblank);

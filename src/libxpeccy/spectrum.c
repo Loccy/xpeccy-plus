@@ -15,12 +15,36 @@ static int nsTime;
 static int res2;
 int res4 = 0;		// save last T synced with video (last is res2-res4)
 
+// The DOS flag an opcode fetch at adr leaves on a Beta Disk machine: TR-DOS comes
+// in from #3Dxx of the BASIC ROM and goes from RAM, by the machine's own rule
+// (stdMRd's, which asicMRd and scoMRd read through)
+static int comp_fetch_dos(Computer* comp, int adr) {
+	switch (comp->hw->id) {
+		case HW_PENTEVO: return evo_fetch_dos(comp, adr);
+		case HW_TSLAB: return tsl_fetch_dos(comp, adr);
+	}
+	int mrd = (comp->hw->mrd == stdMRd) || (comp->hw->mrd == asicMRd) || (comp->hw->mrd == scoMRd);
+	if (!mrd || (comp->dif->type != DIF_BDI)) return comp->flgDOS;
+	return bdi_fetch_pages(comp, mem_get_page(comp->mem, adr), adr) ? !comp->flgDOS : comp->flgDOS;
+}
+
 // The map as it stands, or with FETCH as the opcode fetch at start leaves it: a
 // divMMC entry point pages the board in (or 1FF8-1FFF out) for the fetch after
-// it, #3Dxx for its own. While the debugger holds the machine, a paging the last
-// fetch armed is shown done, unless LIVE asks for the map the machine uses. The
-// machine's memory under the board is in mem->under.
+// it, #3Dxx for its own; TR-DOS comes in or goes for its own. While the debugger
+// holds the machine, a paging the last fetch armed is shown done, unless LIVE
+// asks for the map the machine uses. The machine's memory under the board is in
+// mem->under.
 static xAdr comp_view_xadr(Computer* comp, int start, int adr, int mode) {
+	// the map is the flags' (mapMem): page TR-DOS there and back. Only the
+	// machine's thread and a debugger holding the machine ask for a fetch view.
+	if ((mode & MEM_VIEW_FETCH) && (comp_fetch_dos(comp, start) != comp->flgDOS)) {
+		comp->flgDOS = !comp->flgDOS;
+		comp->hw->mapMem(comp);
+		xAdr xa = comp_view_xadr(comp, start, adr, mode);
+		comp->flgDOS = !comp->flgDOS;
+		comp->hw->mapMem(comp);
+		return xa;
+	}
 	int dabs;
 	int fv = -1;
 	if (comp->div) {
@@ -359,6 +383,28 @@ static bpChecker comp_check_bp(Computer* comp, int adr, int mask, int access) {
 	return ch;
 }
 
+// Fetch: the M1 bytes of the instruction about to run, its opcode and every
+// prefix before it (Zilog: each is an opcode fetch); DD CB d op ends at the CB,
+// d and op being reads. Each byte as its own fetch sees the memory. *where: the
+// byte that hit, or the last one looked at.
+static bpChecker comp_fetch_bp(Computer* comp, int* where) {
+	const opTabSet* tabs = comp->cpu->tabs;
+	opCode* tab = tabs ? tabs->np : NULL;
+	int adr = cpu_get_pc(comp->cpu) & 0xffff;
+	bpChecker ch;
+	for (int n = 0; n < 0x10000; n++) {		// memory full of DD would never end
+		ch = comp_check_bp(comp, adr, MEM_BRK_FETCH | MEM_BRK_TFETCH, MEM_VIEW_FETCH);
+		if ((ch.t >= 0) || !tab) break;
+		opCode* op = &tab[comp_peek(comp, adr, MEM_VIEW_FETCH, NULL)];
+		if (!(op->flag & OF_PREFIX)) break;
+		tab = op->tab;
+		if ((tab == tabs->ddcb) || (tab == tabs->fdcb)) break;
+		adr = (adr + 1) & 0xffff;
+	}
+	*where = adr;
+	return ch;
+}
+
 // video callbacks
 
 int vid_mrd_cb(int adr, void* ptr) {
@@ -421,7 +467,7 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 	int access = ((m1 && comp->hw->memView) ? MEM_VIEW_FETCH : MEM_VIEW_READ) | MEM_VIEW_LIVE;
 	// only the debugger's aids want to know whether this is an instruction byte
 	unsigned isExecByte = 0;
-	if (comp->flgMAP || comp->flgHEAT || comp->flgCOND)
+	if (comp->flgMAP || comp->flgHEAT)
 		isExecByte = (cpu_get_pc(comp->cpu) - 1) == adr;
 	if (comp->flgMAP) {
 		unsigned char* fptr = comp_get_memcell_flag_ptr(comp, adr,
@@ -446,7 +492,9 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 		comp_heat_hit(comp, adr, (isExecByte || m1) ? HEAT_EX : HEAT_RD,
 			access);
 	}
-	if (comp->flgBRKMEM) {
+	// Read is a memory read cycle without M1 (Zilog): operands, DD CB d and op,
+	// data, stack, the IM 2 vector; never an opcode or prefix fetch
+	if (comp->flgBRKMEM && !m1) {
 		bpChecker ch = comp_check_bp(comp, adr, MEM_BRK_RD,
 			access);
 		if (ch.t >= 0) {
@@ -471,8 +519,8 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 			radr = (adr & ~0x7f) | low;
 	}
 	int res = comp->hw->mrd(comp,radr,m1);
-	// instruction bytes are not a data read, don't latch them as RD
-	if (comp->flgCOND && !isExecByte) {
+	// RD follows the same cycles as the Read breakpoint
+	if (comp->flgCOND && !m1) {
 		comp->brkev.rd = adr;
 		comp->brkev.mdt = res & 0xff;
 	}
@@ -1414,30 +1462,33 @@ int compExec(Computer* comp) {
 	if (comp->flgBOOT) comp_boot(comp);
 	comp->flgBRKPRE = 0;
 // breakpoints. A run-ahead frame is thrown away, so a break there would fire
-// twice: leave it to the pass that keeps its result
+// twice: leave it to the pass that keeps its result. An interrupt taken runs no
+// instruction: the IRQ breakpoint fires, a Fetch waits for the instruction to
+// run. Halted, the CPU runs nothing it fetches: the HALT fired once, before.
 	if (!comp->flgDBG && !x_runahead) {
-		bpChecker ch;
-		ch.t = -1;
-		if (comp->flgBRKMEM)
-			ch = comp_check_bp(comp, cpu_get_pc(comp->cpu), MEM_BRK_FETCH | MEM_BRK_TFETCH, MEM_VIEW_FETCH);
-		if (ch.t >= 0) {
-			comp->flgBRK = 1;
-			comp->brkt = ch.t;
-			comp->brka = ch.a;
-			comp->brkev.kind = MEM_BRK_FETCH;
-			comp->brkev.adr = cpu_get_pc(comp->cpu);
-			comp->flgBRKPRE = 1;
-			if (*ch.ptr & MEM_BRK_TFETCH) {
-				*ch.ptr &= ~MEM_BRK_TFETCH;
-				comp->brkt = -1;		// temp (not in list)
+		if (cpu_int_ready(comp->cpu)) {
+			if (comp->flgIBRK) {
+				comp->flgBRK = 1;
+				comp->brkt = BRK_IRQ;
+				comp->flgBRKPRE = 1;
+				return 0;
 			}
-			return 0;
-		}
-		if (comp->cpu->intrq && comp->flgIBRK) {
-			comp->flgBRK = 1;
-			comp->brkt = BRK_IRQ;
-			comp->flgBRKPRE = 1;
-			return 0;
+		} else if (comp->flgBRKMEM && !comp->cpu->flgHALT) {
+			int adr;
+			bpChecker ch = comp_fetch_bp(comp, &adr);
+			if (ch.t >= 0) {
+				comp->flgBRK = 1;
+				comp->brkt = ch.t;
+				comp->brka = ch.a;
+				comp->brkev.kind = MEM_BRK_FETCH;
+				comp->brkev.adr = adr;
+				comp->flgBRKPRE = 1;
+				if (*ch.ptr & MEM_BRK_TFETCH) {
+					*ch.ptr &= ~MEM_BRK_TFETCH;
+					comp->brkt = -1;		// temp (not in list)
+				}
+				return 0;
+			}
 		}
 	}
 // start

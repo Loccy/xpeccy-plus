@@ -189,6 +189,22 @@ static void evo_cache_wr(Computer* comp, int adr) {
 	if (comp->xregData.w == tag) comp->xregData.w = 0;
 }
 
+// TR-DOS on an M1 at adr (Beta Disk): left from a window the current map holds
+// RAM in, unless A9 of #xx77 low holds the DOS signal on; entered from offset
+// #3Dxx of a window whose map 1 entry is ROM with the dos7ffd bit set
+static inline int evo_dos_leaves(Computer* comp, int adr) {
+	return comp->flgDOS && (comp->prt2 & 0x40) && (comp->memFlag((comp->flgROM << 2) | ((adr >> 14) & 3)) & 0x40);
+}
+
+static inline int evo_dos_enters(Computer* comp, int adr) {
+	return ((adr & 0x3f00) == 0x3d00) && comp->flgROM && ((comp->memFlag(4 | ((adr >> 14) & 3)) & 0xc0) == 0x80);
+}
+
+int evo_fetch_dos(Computer* comp, int adr) {
+	if (comp->dif->type != DIF_BDI) return comp->flgDOS;
+	return evo_dos_enters(comp, adr) || (comp->flgDOS && !evo_dos_leaves(comp, adr));
+}
+
 // What evoMRd() does with an M1 at adr, doing it again: nothing, where TR-DOS is
 // neither entered nor left, no NMI page comes or goes and the cache stays as it is
 // (evo_cache_rd): a ram word it holds, or a rom fetch with both words empty already.
@@ -196,11 +212,7 @@ static void evo_cache_wr(Computer* comp, int adr) {
 static int evo_fetch_quiet(Computer* comp, int adr) {
 	if (comp->regM1CNT || (comp->flgNMIS && (adr == 0x0066))) return 0;
 	if ((comp->regBF & 0x10) && (adr == comp->xregBRKA.w)) return 0;
-	if (comp->dif->type == DIF_BDI) {
-		int win = (adr >> 14) & 3;
-		if (comp->flgDOS && (comp->prt2 & 0x40) && (comp->memFlag((comp->flgROM << 2) | win) & 0x40)) return 0;
-		if (((adr & 0x3f00) == 0x3d00) && comp->flgROM && ((comp->memFlag(4 | win) & 0xc0) == 0x80)) return 0;
-	}
+	if ((comp->dif->type == DIF_BDI) && (evo_dos_leaves(comp, adr) || evo_dos_enters(comp, adr))) return 0;
 	if (mem_get_page(comp->mem, adr)->type != MEM_RAM)
 		return !comp->xregCode.w && !comp->xregData.w;
 	int tag = 0x8000 | (adr >> 1);
@@ -214,20 +226,14 @@ int evoMRd(Computer* comp, int adr, int m1) {
 	}
 	int nmient = 0;
 	if (comp->dif->type == DIF_BDI) {
-		int win = (adr >> 14) & 3;
-		// leave TR-DOS: M1 from a window the current map holds RAM in.
-		// A9 of #xx77 low holds the DOS signal on, so it blocks this.
-		if (comp->flgDOS && (comp->prt2 & 0x40) &&
-				(comp->memFlag((comp->flgROM << 2) | win) & 0x40)) {
+		if (evo_dos_leaves(comp, adr)) {
 			comp->flgDOS = 0;
 			comp->hw->mapMem(comp);		// dos feeds the rom pages of both maps
 		}
-		// enter TR-DOS: M1 from offset #3Dxx of a window whose map 1
-		// entry is rom with the dos7ffd bit set. Every such fetch, in DOS
-		// already or not, holds the clock for 4 fclk so the rom can answer
-		// (atm_pager.v zclk_stall): a 7 MHz tact, two ticks at 14 MHz.
-		if (((adr & 0x3f00) == 0x3d00) && comp->flgROM &&
-				((comp->memFlag(4 | win) & 0xc0) == 0x80)) {
+		// Every fetch that enters TR-DOS, in DOS already or not, holds the
+		// clock for 4 fclk so the rom can answer (atm_pager.v zclk_stall):
+		// a 7 MHz tact, two ticks at 14 MHz.
+		if (evo_dos_enters(comp, adr)) {
 			comp->cpu->t += (comp->hwMul == 4) ? 2 : 1;
 			if (!comp->flgDOS) {
 				comp->flgDOS = 1;

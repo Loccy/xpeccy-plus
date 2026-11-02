@@ -1,0 +1,26 @@
+== read
+operands, DD CB d and op, data, IM 2 vector, stack are reads: ok
+opcode, prefix and HALT fetches are no reads: ok
+LD IX,nn operands read once: ok
+a read stops after its instruction: ok
+== fetch
+instruction start: ok
+DD CB: the CB is a fetch, before the instruction: ok
+DD CB: d and op are no fetches: ok
+ED: the opcode after it is a fetch: ok
+operands are no fetches: ok
+HALT once, not while halted: ok
+the byte after HALT when it runs only: ok
+no fetch where an interrupt is taken instead: ok
+== interrupt
+IRQ once per interrupt taken, halted: ok
+IRQ and fetch on the same step: both, once: ok
+no IRQ under DI, the request there: ok
+taken: NMI, or INT with IFF1, past EI, sampled; IFF1 edits follow: ok
+== step out
+IM 1 counts once: ok
+== condition
+RD: operands and data, no fetches: ok
+== tr-dos
+a #3Dxx fetch is seen in TR-DOS, the map left as it was: ok
+Fetch on TR-DOS #3D2F from BASIC: ok

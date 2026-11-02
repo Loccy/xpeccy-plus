@@ -110,12 +110,16 @@ int debugger_check(void) {
 		&& comp->heatRam.ex[8] == 1 && !comp->heatRam.ex[0x10008]
 		&& (comp->brkRamMap[8] & 0xf0) == DBG_VIEW_EXEC && !(comp->brkRamMap[0x10008] & 0xf0));
 	comp->cpu->regPC = 8;
-	comp->brkRamMap[0x10008] |= MEM_BRK_RD;
+	comp->brkRamMap[0x10008] |= MEM_BRK_FETCH;
 	comp->flgBRKMEM = 1;
 	compExec(comp);
-	check("M1 heat and read breakpoint follow automap", comp->next->dmHeld
-		&& comp->heatRam.ex[0x10008] == 1 && comp->heatRam.ex[8] == 1
-		&& comp->flgBRK && comp->brka == 0x10008);
+	ok = comp->flgBRK && comp->flgBRKPRE && comp->brka == 0x10008 && comp->cpu->regPC == 8;
+	comp->flgBRK = 0;
+	comp->flgDBG = 1;		// stepped over, as the app does
+	compExec(comp);
+	comp->flgDBG = 0;
+	check("M1 heat and fetch breakpoint follow automap", ok && comp->next->dmHeld
+		&& comp->heatRam.ex[0x10008] == 1 && comp->heatRam.ex[8] == 1);
 	compDestroy(comp);
 
 	const unsigned char load[] = {0x01, 0x12, 0x34};

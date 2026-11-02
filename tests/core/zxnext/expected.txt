@@ -13,7 +13,7 @@ CPU write breakpoint on ROM: ok
 protected ROM has no physical write: ok
 CPU write breakpoint on unmapped slot: ok
 operands do not trigger automap: ok
-M1 heat and read breakpoint follow automap: ok
+M1 heat and fetch breakpoint follow automap: ok
 instant automap instruction and bytes: ok
 delayed automap keeps the fetched opcode: ok
 automap exit changes the operand view: ok
