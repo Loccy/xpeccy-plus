@@ -9,6 +9,13 @@ before that point is upstream's history and is not repeated here.
 
 ## Unreleased
 
+### Fixed
+
+- **Breakpoints follow the CPU's bus cycles**: Read no longer stops on an opcode fetch;
+  Fetch also stops on the opcode after a prefix, on a HALT once, and not where an interrupt
+  comes instead; Interrupt stops only on an interrupt the CPU takes, and so do Trace and
+  stop on INT and the INT signal. Step Out counts an IM 1 interrupt once.
+
 ## 2026.9 - 2026-11-02
 
 ### Added
