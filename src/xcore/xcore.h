@@ -321,7 +321,7 @@ void brkAdd(xBrkPoint, int = 0);
 void brkDelete(xBrkPoint);
 void brkInstallAll();
 void brk_clear_tmp(Computer*);
-xBrkPoint* brk_find(int, int);
+void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out);
 void brk_set_cond(xBrkPoint*, const char*);
 int brk_cond_true(xBrkPoint*, Computer*);
 int brk_check_cond(Computer*);
@@ -860,7 +860,6 @@ struct xConfig {
 	struct {
 		std::vector<xBrkPoint> list;
 		std::vector<xBrkPoint> list_sys;
-		std::map<int, std::map<int, xBrkPoint*> > map;	// [memtype][addr] = pointer
 	} brk;
 	QMap<int, QMap<int, QString> > commap;	// comments: [memtype][addr] = string
 	QMap<int, QMap<int, QString> > labmap;	// [memtype][addr] = name

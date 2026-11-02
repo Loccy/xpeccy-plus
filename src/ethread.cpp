@@ -942,17 +942,25 @@ void xThread::emuCycle(Computer* comp) {
 			} else if (comp->brkt == -2) {
 				emit s_close();
 			} else {				// others
-				xBrkPoint* ptr = brk_find(comp->brkt, comp->brka);
-				if (!ptr) {			// breakpoint didn't found, but bit is set (?)
-					comp->flgBRK = 0;
-				} else {
-					if (!brk_hit(ptr, comp)) {	// condition is false: go on
-						comp->flgBRK = 0;
-						if (comp->flgBRKPRE) brkskip = 1;
-					} else {
-						brkAction(comp, ptr, &brkskip);
+				// every point the access is for gets it, each with its own
+				// condition and action; one asking to stop is enough, and the
+				// debugger is asked once
+				static std::vector<xBrkPoint*> hit;
+				brk_find_all(comp->brkt, comp->brka, comp->brkev.kind, hit);
+				int stop = 0;
+				for (xBrkPoint* ptr : hit) {
+					if (!brk_hit(ptr, comp)) continue;	// condition is false
+					if (stop && (ptr->action == BRK_ACT_DBG)) {
+						brk_log_hit(ptr, comp);
+						continue;
 					}
+					comp->flgBRK = 1;
+					brkAction(comp, ptr, &brkskip);
+					if (comp->flgBRK) stop = 1;
 				}
+				comp->flgBRK = stop;
+				// none stopped: a break raised before the cpu ran steps over itself
+				if (!stop && comp->flgBRKPRE) brkskip = 1;
 			}
 		} else if (brk_cond_n && brk_check_cond(comp)) {	// conditions not bound to an address
 			int stop = 0;
