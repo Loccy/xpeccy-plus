@@ -5,7 +5,8 @@ name: itch
 # here: the release's own files go up. itch hands every upload out as a zip of
 # its own, named <project>-<channel>.zip, so a release zip goes up unpacked (its
 # versioned folder) and the download is one zip, not a zip in a zip; the
-# AppImage and the dmg arrive inside one under their own names.
+# AppImage and the dmg arrive inside one named after the channel, as the zip
+# is: a channel keeps one name, and itch keeps the version beside it.
 #
 #   gh workflow run itch.yml -R dotkoval/xpeccy-plus -f tag=v2026.9    # again
 #   gh workflow run itch.yml -R dotkoval/xpeccy-plus -f tag=nightly    # a nightly
@@ -106,6 +107,11 @@ jobs:
             unzip -q "$z" -d "$(dirname "$z")"
             rm "$z"
           done
+          for f in push/linux-x86_64/*.AppImage push/macos-arm64/*.dmg; do
+            ch=$(basename "$(dirname "$f")")
+            mv "$f" "push/$ch/xpeccy-plus-$ch.${f##*.}"
+          done
+          chmod +x push/linux-x86_64/*.AppImage
           ls -lR push
 
       - name: Push
