@@ -377,8 +377,8 @@ On a breakpoint with an address, `HITS` counts every hit of it, this one include
 the condition says. `HITS > 30` lets the first 30 hits pass and stops on the 31st.
 
 On a global condition there is no address to count, so `HITS` counts the times the
-condition itself fired. It can limit a condition (`HITS < 3` stops the first three times)
-but cannot skip hits: `PC == 0x8000 && HITS > 30` never comes true, because `HITS` only
+condition itself fired, this one included. It can limit a condition (`HITS <= 3` stops the
+first three times) but cannot skip hits: `PC == 0x8000 && HITS > 30` never comes true, because `HITS` only
 grows when the whole condition is true. To let an address pass a number of times, make it
 an address breakpoint with the condition `HITS > 30`. The editor warns about this in amber.
 
@@ -395,8 +395,12 @@ condition.
 
 ### Good to know
 
-- An address holds one breakpoint, so it has one condition. Join several conditions with
-  `||`.
+- A place - the kind, the first and the last byte - holds one breakpoint, so it has one
+  condition. Join several conditions with `||`.
+- Breakpoints of one kind whose bytes or ports overlap are separate: each one gets the hits
+  on what it covers, with its own condition, counter and action, and one asking for the
+  Debugger is enough to stop. A switched-off breakpoint takes nothing and hides nothing from
+  the others.
 - A condition that cannot be worked out when it runs, such as one with a label that is no
   longer loaded, fires, so the mistake does not go unnoticed.
 
@@ -573,7 +577,7 @@ CPU:DONE::F]:DBG:DT > 11400
 | 1, kind | `CPU`, `IO`, `RAM`, `ROM`, `SLT`, `DIV`, `IRQ` or `COND` |
 | 2 | `CPU`: the address or a range; `IO`: the port; `RAM`, `ROM`, `SLT`, `DIV`: the page in hex, or a name such as `ROM0` or `DIVROM`; others: empty |
 | 3 | `IO`: the mask; `RAM`, `ROM`, `SLT`, `DIV`: the offset or a range of offsets; others: empty |
-| 4, flags | any of `F`, `R`, `W`; `0` switched off; `E` **On change**; `L` **Log**; `[` opens a span, `]` closes one |
+| 4, flags | any of `F`, `R`, `W`; `0` switched off; `E` **On change** (`COND` only); `L` **Log**; `[` opens a span, `]` closes one |
 | 5, action | `DBG` (**Debugger**), `CNT` (**Counter**) or `SCR` (**Screen dump**) |
 | 6, condition | the condition, or empty |
 | 7, log | what a logged hit writes: expressions split by commas. Leave it out for every register |
