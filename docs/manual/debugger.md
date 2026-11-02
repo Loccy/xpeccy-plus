@@ -242,7 +242,9 @@ place where the machine was to stop is forgotten. If the program never gets ther
 machine just runs on.
 
 While you step or trace, breakpoints are not checked. They work again once the machine
-runs with the Debugger closed.
+runs with the Debugger closed, from the instruction at PC: a read, a write or a port it
+uses can stop the machine at once, and the Debugger then stays open after that instruction.
+So **Step out** with PC on the RET itself stops after that RET.
 
 ### Trace
 

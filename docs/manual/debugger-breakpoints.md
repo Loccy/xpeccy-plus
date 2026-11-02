@@ -397,10 +397,13 @@ condition.
 
 - A place - the kind, the first and the last byte - holds one breakpoint, so it has one
   condition. Join several conditions with `||`.
-- Breakpoints of one kind whose bytes or ports overlap are separate: each one gets the hits
-  on what it covers, with its own condition, counter and action, and one asking for the
-  Debugger is enough to stop. A switched-off breakpoint takes nothing and hides nothing from
-  the others.
+- Breakpoints whose bytes or ports overlap are separate, a **CPU address** and a cell on the
+  same byte too: each one gets the hits on what it covers, with its own condition, counter
+  and action, and one asking for the Debugger is enough to stop. A switched-off breakpoint
+  takes nothing and hides nothing from the others.
+- A breakpoint is hit once per instruction, however many of its bytes the instruction uses:
+  a **Write** on `FF44-FF45` counts a `PUSH` there once, and its log line names the first
+  of the two writes.
 - A condition that cannot be worked out when it runs, such as one with a label that is no
   longer loaded, fires, so the mistake does not go unnoticed.
 
