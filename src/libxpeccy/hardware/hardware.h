@@ -171,6 +171,10 @@ int stdMRd(Computer*, int, int);
 void stdMWr(Computer*, int, int);
 int asicMRd(Computer*, int, int);	// stdMRd/stdMWr plus the +2A/+3 bus latch
 void asicMWr(Computer*, int, int);
+int scoMRd(Computer*, int, int);	// stdMRd plus the Scorpion's even M1 and ROM switch
+// the DOS flag an opcode fetch at adr leaves, by the machine's own rule
+int evo_fetch_dos(Computer*, int adr);
+int tsl_fetch_dos(Computer*, int adr);
 
 // the ZX Spectrum Next (zxnext.c): a test bench's hooks on every i/o and nextreg write
 extern void (*next_log_out)(Computer*, int, int);

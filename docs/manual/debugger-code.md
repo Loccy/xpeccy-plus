@@ -52,6 +52,10 @@ The row the CPU will run next, at PC, has its own color. Rows with a breakpoint 
 text in the breakpoint color, and a selected block has its own color too. The colors are
 set on the **Debugger** page of **Options**.
 
+Each row shows the bytes the CPU would run there. Where fetching a row pages other memory
+in, the row shows that memory: the rows at `3D00`-`3DFF` show the TR-DOS ROM of a Beta Disk
+interface, or the ROM of a [divMMC](divmmc.md), while the BASIC ROM is in.
+
 The last column says more about the instruction at PC:
 
 - for an instruction that reads or writes memory, such as `LD A,(HL)` or `LD (#5C3A),HL`,

@@ -126,6 +126,11 @@ void cpu_reset(CPU* cpu) {
 	cpu->core->reset(cpu);
 }
 
+int cpu_int_ready(CPU* cpu) {
+	if ((cpu->type != CPU_Z80) && (cpu->type != CPU_Z80N)) return 0;
+	return z80_int_ready(cpu);
+}
+
 // disasm
 
 static const char halfByte[] = "0123456789ABCDEF";

@@ -247,6 +247,7 @@ xMnem cpuDisasmView(CPU*, int, char*, cbmr, void*);
 int cpuAsm(CPU*, const char*, char*, unsigned short);
 xAsmScan scanAsmTab(const char*, opCode*);
 unsigned short cpu_peek_word(cbdmr, void*, int);	// little-endian word at adr, wrapping at 0xffff
+int cpu_int_ready(CPU*);		// the next exec takes an interrupt, not an instruction
 
 xRegBunch cpuGetRegs(CPU*);
 void cpuSetRegs(CPU*, xRegBunch);

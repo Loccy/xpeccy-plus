@@ -640,7 +640,7 @@ static QString brk_log_state(Computer* comp) {
 	res.append(QString(" ROMPG=%0").arg((pg0->type == MEM_ROM) ? QString::number(pg0->num >> 6) : QString("-")));
 	res.append(QString(" RAMPG=%0").arg((pg3->type == MEM_RAM) ? QString::number(pg3->num >> 6) : QString("-")));
 	res.append(QString(" DOS=%0 ROM=%1 CPM=%2").arg(comp->flgDOS).arg(comp->flgROM).arg(comp->flgCPM));
-	res.append(QString(" INT=%0").arg((comp->cpu->intrq & comp->cpu->inten) ? 1 : 0));
+	res.append(QString(" INT=%0").arg(cpu_int_ready(comp->cpu)));
 	return res;
 }
 

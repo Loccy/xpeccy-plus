@@ -160,9 +160,8 @@ int z80_int(CPU* cpu) {
 			cpu->opTab = cpu->tabs->np;
 			if (cpu->xinta)
 				cpu->xinta(cpu->xptr);
-			if (cpu->flgRetBRK) {
-				cpu->regCallCnt++;
-			}
+			// the debugger's call count (Step Out): IM 0 and IM 1 go through
+			// z80_call(), which counts itself; IM 2 below counts its own
 			switch(cpu->regIM) {
 				case 0:
 					cpu->t = 2;
@@ -184,6 +183,8 @@ int z80_int(CPU* cpu) {
 					z80_call(cpu, 0x38);	// +3 +3 execution. 13 total
 					break;
 				case 2:
+					if (cpu->flgRetBRK)
+						cpu->regCallCnt++;
 					cpu->regR++;
 					cpu->t = 7;
 					z80_push(cpu, cpu->regPC);			// +3 (10) +3 (13)
@@ -199,6 +200,15 @@ int z80_int(CPU* cpu) {
 		}
 	}
 	return res;
+}
+
+// The next exec takes an interrupt: the test z80_exec_in() and z80_int() make.
+// NMI always; INT with IFF1 set, past EI's one instruction, sampled at the end
+// of the instruction before (flgACK).
+int z80_int_ready(CPU* cpu) {
+	int req = cpu->intrq & cpu->inten;
+	if (req & Z80_NMI) return 1;
+	return (req & Z80_INT) && cpu->flgIFF1 && !cpu->flgNOINT && cpu->flgACK;
 }
 
 static inline __attribute__((always_inline)) int z80_exec_in(CPU* cpu, int* end) {
@@ -510,7 +520,12 @@ void z80_set_r(CPU* cpu, int v) {cpu->regR = v; cpu->regR7 = v & 0x80;}
 void z80_set_ir(CPU* cpu, int v) {cpu->regI = (v >> 8) & 0xff; z80_set_r(cpu, v & 0xff);}
 void z80_set_wz(CPU* cpu, int v) {cpu->regWZ = v;}
 void z80_set_im(CPU* cpu, int v) {cpu->regIM = (v & 2) ? 2 : v & 1;}
-void z80_set_iff1(CPU* cpu, int v) {cpu->flgIFF1 = !!v;}
+// as EI and DI do: inten follows IFF1
+void z80_set_iff1(CPU* cpu, int v) {
+	cpu->flgIFF1 = !!v;
+	if (v) cpu->inten |= Z80_INT;
+	else cpu->inten &= ~Z80_INT;
+}
 void z80_set_iff2(CPU* cpu, int v) {cpu->flgIFF2 = !!v;}
 void z80_set_fa(CPU* cpu, int v) {cpu->regFa = v;}
 

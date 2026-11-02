@@ -167,13 +167,28 @@ static void ts_dos_stall(Computer* comp) {
 	comp->cpu->t += (comp->hwMul == 4) ? 2 : 1;
 }
 
+// TR-DOS on an M1 at adr (Beta Disk): left from above #4000 unless VDOS holds
+// it, entered from #3Dxx of the BASIC ROM
+static inline int ts_dos_leaves(Computer* comp, int adr) {
+	return comp->flgDOS && (adr >= 0x4000) && !comp->flgVDOS;
+}
+
+static inline int ts_dos_enters(Computer* comp, int adr) {
+	return ((adr & 0xff00) == 0x3d00) && comp->flgROM && !(comp->tsconf.p21af & 0x04);
+}
+
+int tsl_fetch_dos(Computer* comp, int adr) {
+	if (comp->dif->type != DIF_BDI) return comp->flgDOS;
+	return ts_dos_enters(comp, adr) || (comp->flgDOS && !ts_dos_leaves(comp, adr));
+}
+
 int tslMRd(Computer* comp, int adr, int m1) {
 	if (m1 && (comp->dif->type == DIF_BDI)) {
-		if (comp->flgDOS && (adr >= 0x4000) && (!comp->flgVDOS)) {
+		if (ts_dos_leaves(comp, adr)) {
 			comp->flgDOS = 0;
 			comp->hw->mapMem(comp);
 		}
-		if (((adr & 0xff00) == 0x3d00) && (comp->flgROM) && ((comp->tsconf.p21af & 0x04) == 0x00)) {
+		if (ts_dos_enters(comp, adr)) {
 			ts_dos_stall(comp);
 			if (!comp->flgDOS) {
 				comp->flgDOS = 1;
@@ -191,10 +206,7 @@ int tslMRd(Computer* comp, int adr, int m1) {
 // tag it holds again, which changes nothing but there. The DRAM cycle it counts is the
 // DMA's business, and the DMA is not running.
 static int ts_fetch_quiet(Computer* comp, int adr) {
-	if (comp->dif->type == DIF_BDI) {
-		if (comp->flgDOS && (adr >= 0x4000) && !comp->flgVDOS) return 0;
-		if (((adr & 0xff00) == 0x3d00) && comp->flgROM && !(comp->tsconf.p21af & 0x04)) return 0;
-	}
+	if ((comp->dif->type == DIF_BDI) && (ts_dos_leaves(comp, adr) || ts_dos_enters(comp, adr))) return 0;
 	int tag = ts_cache_tag(comp, adr);
 	if (!tag) return 1;
 	if (comp->tsconf.cache[(adr >> 1) & 0xff] != tag) return 0;

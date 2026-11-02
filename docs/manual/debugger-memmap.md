@@ -37,7 +37,8 @@ port is used.
 - **DOS** - the TR-DOS ROM is switched in;
 - **ROM** - the ROM bit of port `7FFD` is set; on a 128K that is the 48K BASIC ROM;
 - **CPM** - the machine is in its CP/M mode;
-- **INT** - an interrupt is waiting and the CPU will take it.
+- **INT** - the CPU takes an interrupt on its next step: an NMI, or an INT while
+  interrupts are enabled and not held off by EI.
 
 ```{index} FRAME, frame counter, Reset counter
 ```

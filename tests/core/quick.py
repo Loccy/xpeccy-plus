@@ -15,6 +15,7 @@ text cut into `== <case>` sections, and a case passes when its section is the sa
   esp       esp-bench over core/esp/bin (cases.txt): the emulated ESP-01 on the Next's UART, a
             server on 127.0.0.1
   siblings  siblings-bench over core/siblings/folders.txt: which file names are sides of a set
+  brk       brk-bench: breakpoints against the Z80's bus cycles (Read, Fetch, Interrupt) on a 48K
 
 The programs are committed assembled; core/mkbins.py rebuilds them with sjasmplus.
 """
@@ -33,7 +34,7 @@ from pathlib import Path
 CORE = Path(__file__).resolve().parent
 ROOT = CORE.parent.parent
 BUILD = ROOT / "build" / "out" / "tests"
-BENCHES = ("z80", "tsconf", "baseconf", "divmmc", "tape", "pok", "vfat", "zxnext", "kbd", "esp", "siblings")
+BENCHES = ("z80", "tsconf", "baseconf", "divmmc", "tape", "pok", "vfat", "zxnext", "kbd", "esp", "siblings", "brk")
 EXE = ".exe" if os.name == "nt" else ""
 # the qt6-x64 toolchain of packaging/make-dist.ps1, used when nothing else is given
 WIN_MINGW = Path(r"C:\Qt\Tools\mingw1120_64")
@@ -167,6 +168,14 @@ def bench_siblings():
     return res
 
 
+def bench_brk():
+    p = subprocess.run([str(BUILD / f"brk-bench{EXE}")], capture_output=True, text=True, errors="replace", timeout=120)
+    res = read_sections(p.stdout)
+    if not res:
+        res["brk-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
+    return res
+
+
 def bench_vfat():
     with tempfile.TemporaryDirectory(prefix="xquick-") as tmp:
         p = subprocess.run([str(BUILD / f"vfat-bench{EXE}"), tmp, "4", "120"], capture_output=True, text=True,
@@ -231,7 +240,7 @@ def run(args, matches):
             passed, failed = passed + ok, failed + (not ok)
             continue
         got = {"tape": bench_tape, "pok": bench_pok, "vfat": bench_vfat, "zxnext": bench_zxnext,
-               "siblings": bench_siblings}.get(bench, lambda: bench_prog(bench, args.jobs))()
+               "siblings": bench_siblings, "brk": bench_brk}.get(bench, lambda: bench_prog(bench, args.jobs))()
         got = {k: v for k, v in got.items() if matches(k, f"{bench}/{k}", args.k)}
         exp_path = CORE / bench / "expected.txt"
         exp = read_sections(exp_path.read_text(encoding="utf-8")) if exp_path.exists() else {}

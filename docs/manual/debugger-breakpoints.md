@@ -29,21 +29,38 @@ breakpoint (see [Running and stepping](debugger.md#running-and-stepping)).
 | **ROM cell** | the CPU uses a byte of ROM, wherever that page is mapped |
 | **Slot cell** | the CPU uses a byte of the cartridge |
 | **divMMC cell** | the CPU uses a byte of a [divMMC](divmmc.md)'s ROM or RAM, wherever that page is mapped |
-| **Interrupt** | the CPU gets an interrupt request |
+| **Interrupt** | the CPU takes an interrupt: an NMI, or an INT while interrupts are enabled |
 | **Condition (global)** | an expression comes true; no address |
 
 ```{index} breakpoint; Fetch, breakpoint; Read, breakpoint; Write
 ```
 
-A memory breakpoint has three flags, and any number of them can be on:
+A memory breakpoint has three flags, and any number of them can be on. They follow the
+Z80's own bus cycles:
 
-- **Fetch** - the CPU is about to run the instruction there. The machine stops before it
-  runs, with the instruction under the cursor in the listing.
-- **Read** - the CPU reads the byte as data.
+- **Fetch** - the CPU fetches the byte as an opcode to run it: the first byte of an
+  instruction, or a prefix byte after it, such as the `CB` of `DD CB d op` or the byte after
+  `ED`. The machine stops before the instruction runs, with it under the cursor in the
+  listing. A HALT stops once, not again on every cycle the CPU waits in it. When the CPU
+  takes an interrupt instead of the instruction, the breakpoint waits for the instruction
+  to run.
+- **Read** - the CPU reads the byte in a memory read cycle: an operand, the `d` and the
+  last byte of `DD CB d op`, data, a word popped from the stack, the vector of an IM 2
+  interrupt. Opcode fetches are not reads.
 - **Write** - the CPU writes the byte.
 
 A port breakpoint has **Read** (IN) and **Write** (OUT). A read, write or port breakpoint
 stops after the instruction that made the access has run to its end.
+
+An **Interrupt** breakpoint stops the machine before the step in which the CPU takes the
+interrupt, with PC on the instruction it interrupts; the next step enters the handler. An
+interrupt request the CPU does not take - under DI, right after EI, or while the handler
+still runs with interrupts off - does not stop it.
+
+Breakpoints see the CPU of the machine and nothing else. They miss memory changed by a DMA
+(the ZX Spectrum Next's, TSConf's), by the General Sound's own CPU, and by
+[flash loading](tape-loading.md#flash-loading), which puts a tape's bytes into memory
+without the CPU reading them.
 
 **CPU address** and **RAM cell** differ on a machine that pages its memory. A breakpoint
 on CPU address `C000` stops the machine whatever page is at `C000`. A breakpoint on a RAM
@@ -303,7 +320,7 @@ when there was none.
 
 | Variable | Meaning |
 |---|---|
-| `RD` | the address of the last memory read |
+| `RD` | the address of the last memory read, as **Read** sees it: opcode fetches do not count |
 | `WR` | the address of the last memory write |
 | `MDT` | the byte of that read or write |
 | `IN` | the port of the last IN |
