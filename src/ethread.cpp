@@ -441,39 +441,19 @@ void xThread::tap_catch_save(Computer* comp) {
 	}
 }
 
-// what to do when a breakpoint fired
-
-void xThread::brkAction(Computer* comp, xBrkPoint* ptr, int* brkskip) {
-	QString fnams;
-	QFile file;
-	int idx;
-	brk_log_hit(ptr, comp);		// logged whatever else it does, the debugger included
-	// TODO: fetch break continues to repeat, comp->brk=0 is not enough?
-	switch (ptr->action) {
-		case BRK_ACT_COUNT:			// counted by the caller, just go on
-			break;
-		case BRK_ACT_SCR:
-			fnams = shot_dir().append(SLASH);
-			fnams.append(QString("xpeccy_%0").arg(QTime::currentTime().toString("HHmmss_zzz")));	// TODO: counter-based name (1ms is not enough)
-			idx = 0;
-			do {
-				file.setFileName(QString("%0_%1.scr").arg(fnams).arg(idx));
-				idx++;
-			} while (file.exists());
-			if (!file.open(QFile::WriteOnly) || (file.write((char*)(comp->mem->ramData + (5 << 14)), 0x1b00) != 0x1b00))
-				xlog(XLG_APP, XLL_WARN, "can't save screenshot %s", file.fileName().toLocal8Bit().data());
-			file.close();
-			break;
-		default:					// BRK_ACT_DBG
+// The step's breakpoint hits handled (brk_take_hits), and what a stop asks of
+// the gui. 1 = the machine stops here
+int xThread::takeHits(Computer* comp, int* brkskip, bool conds) {
+	switch (brk_take_hits(comp, brkskip, conds)) {
+		case BRK_GO_DBG:
 			conf.emu.pause |= PR_DEBUG;
 			emit dbgRequest();
-			return;
+			return 1;
+		case BRK_GO_CLOSE:
+			emit s_close();
+			return 1;
 	}
-	// everything but the debugger goes on; a break raised before the cpu got
-	// to run - a fetch, or an interrupt about to be taken - has to step over
-	// itself, or the same check fires again and the machine stands still
-	comp->flgBRK = 0;
-	if (comp->flgBRKPRE) *brkskip = 1;
+	return 0;
 }
 
 // Run-ahead.
@@ -739,7 +719,9 @@ static int tape_hook_at(Computer* comp) {
 
 void xThread::emuCycle(Computer* comp) {
 	int tm;
-	int brkskip = 0;
+	// the step over a hit the last cycle left, if the machine has not moved since
+	int brkskip = (skipTick == comp->tickTotal) ? 1 : 0;
+	skipTick = -1;
 	// the mode only changes at a frame end on this thread, so it is asked there
 	// and not on every opcode
 	bool rewinding = rewind_active();
@@ -748,6 +730,10 @@ void xThread::emuCycle(Computer* comp) {
 	// remainder on every wake-up, and wake-ups come every 2ms.
 	conf.snd.fill = 1;
 	xreplay_hold = conf.emu.fast;	// no redraw snapshots of a machine run fast
+	// a stop the redraw ran into (MainWin::renderFrame) is acted on now; its
+	// step's conditions were asked there
+	if (comp->flgBRK)
+		takeHits(comp, &brkskip, false);
 	while (!comp->flgBRK && conf.snd.fill && !finish && !conf.emu.pause) {
 		// the rewind history playing back stands in for the machine
 		if (rewinding) {
@@ -825,10 +811,20 @@ void xThread::emuCycle(Computer* comp) {
 			sndNsFixed += NS_TO_FIXED(tm);
 			int watch = vrecWatch.load(std::memory_order_relaxed);
 			if (watch) vrec_auto_pc(comp, watch);
+			// the step's hits before anything else runs: a stop leaves the
+			// machine as the step did, tape and loader skip untouched. A frame
+			// the step ended is counted further down; the breakpoints (FRAME,
+			// the log's F) stand in the new one already, as T does
+			if (comp->flgBRK || brk_cond_n) {
+				int ended = comp->flgFRM ? 1 : 0;
+				comp->frmCount += ended;
+				takeHits(comp, &brkskip);
+				comp->frmCount -= ended;
+			}
 			// None of the tape tricks while a recording plays or is made: the
 			// machine takes its input from the recording alone, and a recording
 			// holds only what came in through a port.
-			if (hooks && !comp->rzx.play && !comp->rzx.rec.on) {
+			if (hooks && !comp->flgBRK && !comp->rzx.play && !comp->rzx.rec.on) {
 				// tape trap	TODO: rework it as a system breakpoint
 				// this runs on every instruction, and the rom is paged in for most
 				// of them: the pc straight from the Z80, not through the cpu's
@@ -934,56 +930,15 @@ void xThread::emuCycle(Computer* comp) {
 #if LOG_OUTPUT
 // ...
 #endif
-		if (comp->flgBRK) {
-			// printf("brkt = %i, brka = %X\n", comp->brkt, comp->brka);
-			if (comp->brkt == -1) {			// irq or tmp
-				conf.emu.pause |= PR_DEBUG;
-				emit dbgRequest();
-			} else if (comp->brkt == -2) {
-				emit s_close();
-			} else {				// others
-				// every point the access is for gets it, each with its own
-				// condition and action; one asking to stop is enough, and the
-				// debugger is asked once
-				static std::vector<xBrkPoint*> hit;
-				brk_find_all(comp->brkt, comp->brka, comp->brkev.kind, hit);
-				int stop = 0;
-				for (xBrkPoint* ptr : hit) {
-					if (!brk_hit(ptr, comp)) continue;	// condition is false
-					if (stop && (ptr->action == BRK_ACT_DBG)) {
-						brk_log_hit(ptr, comp);
-						continue;
-					}
-					comp->flgBRK = 1;
-					brkAction(comp, ptr, &brkskip);
-					if (comp->flgBRK) stop = 1;
-				}
-				comp->flgBRK = stop;
-				// none stopped: a break raised before the cpu ran steps over itself
-				if (!stop && comp->flgBRKPRE) brkskip = 1;
-			}
-		} else if (brk_cond_n && brk_check_cond(comp)) {	// conditions not bound to an address
-			int stop = 0;
-			comp->brkt = BRK_COND;
-			comp->brka = 0;
-			// each one gets its own action, and one asking to stop is enough
-			for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++) {
-				if (!it->fired) continue;
-				it->count++;
-				comp->flgBRK = 1;
-				brkAction(comp, &(*it), &brkskip);
-				if (comp->flgBRK) stop = 1;
-			}
-			comp->flgBRK = stop;
-		}
 		if (comp->flgCOND)
 			comp_brk_newstep(comp);
 	}
 	// whoever looks next - the debugger, a snapshot, the gui - sees the ray where
 	// it stands, not the dots an undrawn frame has only counted
 	vid_unlazy(comp->vid);
-	comp->flgBRK = 0;
+	comp_brk_clear(comp);
 	comp->flgNMIRQ = 0;
+	if (brkskip) skipTick = comp->tickTotal;
 }
 
 // a recording opened since the last cycle starts playing here

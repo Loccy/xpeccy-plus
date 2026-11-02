@@ -344,65 +344,91 @@ static unsigned char* comp_get_memcell_flag_ptr(Computer* comp, int adr, int acc
 	return res;
 }
 
-static bpChecker comp_check_bp(Computer* comp, int adr, int mask, int access) {
-	bpChecker ch;
-	ch.t = -1;
-	ch.ptr = NULL;
+// A hit for the step's list. The same access on the same map twice in a step (a
+// prefix byte repeated) is one; past BRK_HITS the rest are left out, but a stop
+// always gets in, in place of the last one
+static xBrkHit* comp_brk_add(Computer* comp, int t, int a, int kind, int adr, int val) {
+	xBrkHit* hit = comp->brkhit;
+	comp->flgBRK = 1;
+	for (int i = 0; i < comp->brkn; i++, hit++) {
+		if ((hit->t == t) && (hit->a == a) && (hit->kind == kind) && (hit->adr == adr))
+			return hit;
+	}
+	if (comp->brkn < BRK_HITS) {
+		comp->brkn++;
+	} else if (t < 0) {
+		hit = comp->brkhit + BRK_HITS - 1;
+	} else {
+		return NULL;
+	}
+	hit->t = t;
+	hit->a = a;
+	hit->kind = kind;
+	hit->adr = adr;
+	hit->val = val;
+	return hit;
+}
+
+// a map byte that answered: the list's points, and a temp point's bit (fetch
+// only) as a stop of its own, cleared as it is taken
+static void comp_brk_bits(Computer* comp, unsigned char* ptr, int mask, int t, int a, int kind, int adr, int val) {
+	if (*ptr & mask & ~MEM_BRK_TFETCH)
+		comp_brk_add(comp, t, a, kind, adr, val);
+	if (*ptr & mask & MEM_BRK_TFETCH) {
+		*ptr &= ~MEM_BRK_TFETCH;
+		comp_brk_add(comp, BRK_TEMP, 0, 0, adr, -1);
+	}
+}
+
+// An access at cpu address adr against both maps that can watch it: the cpu
+// address one and the cell's. Each one that answers is a hit of its own, so a
+// cpu address point and a cell point on the same byte both get it
+static void comp_hit_bp(Computer* comp, int adr, int mask, int access, int kind, int val) {
 	if (comp->mem->busmask < 0x10000) {
-		ch.ptr = comp->brkAdrMap + (adr & comp->mem->busmask);
-		if (*ch.ptr & mask) {
-			ch.t = BRK_CPUADR;
-			ch.a = adr & comp->mem->busmask;
-		}
+		int cadr = adr & comp->mem->busmask;
+		unsigned char* ptr = comp->brkAdrMap + cadr;
+		if (*ptr & mask) comp_brk_bits(comp, ptr, mask, BRK_CPUADR, cadr, kind, adr, val);
 	}
-	if (ch.t < 0) {
-		xAdr xadr = comp_get_xadr(comp, adr, access);
-		switch (xadr.type) {
-			case MEM_RAM: xadr.abs &= comp->mem->ramMask; ch.ptr = comp->brkRamMap + xadr.abs; ch.t = BRK_MEMRAM; break;
-			case MEM_ROM: xadr.abs &= comp->mem->romMask; ch.ptr = comp->brkRomMap + xadr.abs; ch.t = BRK_MEMROM; break;
-			case MEM_SLOT: if (comp->slot->brkMap) {
-					xadr.abs &= comp->slot->memMask;
-					ch.ptr = comp->slot->brkMap + xadr.abs;
-					ch.t = BRK_MEMSLT;
-				} break;
-			case MEM_DIV: if (comp->div) {
-					xadr.abs %= DIV_EE_SIZE + DIV_RAM_MAX;
-					ch.ptr = comp->div->brkMap + xadr.abs;
-					ch.t = BRK_MEMDIV;
-				} break;
-		}
-		if (ch.ptr) {
-			if (*ch.ptr & mask) {
-				// printf("xadr.abs = %X, page=%X, off=%X\n",xadr.abs,xadr.bank,xadr.adr & comp->mem->pgmask);
-				ch.a = xadr.abs;
-			} else {
-				ch.t = -1;
-			}
-		}
+	unsigned char* ptr = NULL;
+	int t = -1;
+	xAdr xadr = comp_get_xadr(comp, adr, access);
+	switch (xadr.type) {
+		case MEM_RAM: xadr.abs &= comp->mem->ramMask; ptr = comp->brkRamMap + xadr.abs; t = BRK_MEMRAM; break;
+		case MEM_ROM: xadr.abs &= comp->mem->romMask; ptr = comp->brkRomMap + xadr.abs; t = BRK_MEMROM; break;
+		case MEM_SLOT: if (comp->slot->brkMap) {
+				xadr.abs &= comp->slot->memMask;
+				ptr = comp->slot->brkMap + xadr.abs;
+				t = BRK_MEMSLT;
+			} break;
+		case MEM_DIV: if (comp->div) {
+				xadr.abs %= DIV_EE_SIZE + DIV_RAM_MAX;
+				ptr = comp->div->brkMap + xadr.abs;
+				t = BRK_MEMDIV;
+			} break;
 	}
-	return ch;
+	if (ptr && (*ptr & mask)) comp_brk_bits(comp, ptr, mask, t, xadr.abs, kind, adr, val);
 }
 
 // Fetch: the M1 bytes of the instruction about to run, its opcode and every
 // prefix before it (Zilog: each is an opcode fetch); DD CB d op ends at the CB,
-// d and op being reads. Each byte as its own fetch sees the memory. *where: the
-// byte that hit, or the last one looked at.
-static bpChecker comp_fetch_bp(Computer* comp, int* where) {
+// d and op being reads. Each byte as its own fetch sees the memory, and each
+// one is looked at: a point on the prefix and one on the opcode both get it.
+// 1 = something hit.
+static int comp_fetch_bp(Computer* comp) {
 	const opTabSet* tabs = comp->cpu->tabs;
 	opCode* tab = tabs ? tabs->np : NULL;
 	int adr = cpu_get_pc(comp->cpu) & 0xffff;
-	bpChecker ch;
-	for (int n = 0; n < 0x10000; n++) {		// memory full of DD would never end
-		ch = comp_check_bp(comp, adr, MEM_BRK_FETCH | MEM_BRK_TFETCH, MEM_VIEW_FETCH);
-		if ((ch.t >= 0) || !tab) break;
+	int n = comp->brkn;
+	for (int i = 0; i < 0x10000; i++) {		// memory full of DD would never end
+		comp_hit_bp(comp, adr, MEM_BRK_FETCH | MEM_BRK_TFETCH, MEM_VIEW_FETCH, MEM_BRK_FETCH, -1);
+		if (!tab) break;
 		opCode* op = &tab[comp_peek(comp, adr, MEM_VIEW_FETCH, NULL)];
 		if (!(op->flag & OF_PREFIX)) break;
 		tab = op->tab;
 		if ((tab == tabs->ddcb) || (tab == tabs->fdcb)) break;
 		adr = (adr + 1) & 0xffff;
 	}
-	*where = adr;
-	return ch;
+	return comp->brkn != n;
 }
 
 // video callbacks
@@ -494,17 +520,9 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 	}
 	// Read is a memory read cycle without M1 (Zilog): operands, DD CB d and op,
 	// data, stack, the IM 2 vector; never an opcode or prefix fetch
-	if (comp->flgBRKMEM && !m1) {
-		bpChecker ch = comp_check_bp(comp, adr, MEM_BRK_RD,
-			access);
-		if (ch.t >= 0) {
-			comp->flgBRK = 1;
-			comp->brkt = ch.t;
-			comp->brka = ch.a;
-			comp->brkev.kind = MEM_BRK_RD;
-			comp->brkev.adr = adr;
-		}
-	}
+	int hits = comp->brkn;		// the hits this read adds get its value
+	if (comp->flgBRKMEM && !m1)
+		comp_hit_bp(comp, adr, MEM_BRK_RD, access, MEM_BRK_RD, -1);
 	// the ULA took a refresh cycle from under this one and this machine's ram
 	// cannot take that (see zx_snow): the ram is left addressed the way the ULA
 	// left it, so an opcode fetched from a slow bank comes back from the wrong
@@ -519,6 +537,8 @@ static int memrd_watched(Computer* comp, int adr, int m1) {
 			radr = (adr & ~0x7f) | low;
 	}
 	int res = comp->hw->mrd(comp,radr,m1);
+	for (; hits < comp->brkn; hits++)
+		comp->brkhit[hits].val = res & 0xff;
 	// RD follows the same cycles as the Read breakpoint
 	if (comp->flgCOND && !m1) {
 		comp->brkev.rd = adr;
@@ -557,16 +577,8 @@ static void memwr_watched(Computer* comp, int adr, int val) {
 			*fptr = flag;
 		}
 	}
-	if (comp->flgBRKMEM) {
-		bpChecker ch = comp_check_bp(comp, adr, MEM_BRK_WR, MEM_VIEW_WRITE | MEM_VIEW_LIVE);
-		if (ch.t >= 0) {
-			comp->flgBRK = 1;
-			comp->brkt = ch.t;
-			comp->brka = ch.a;
-			comp->brkev.kind = MEM_BRK_WR;
-			comp->brkev.adr = adr;
-		}
-	}
+	if (comp->flgBRKMEM)
+		comp_hit_bp(comp, adr, MEM_BRK_WR, MEM_VIEW_WRITE | MEM_VIEW_LIVE, MEM_BRK_WR, val & 0xff);
 	if (comp->flgCOND) {
 		comp->brkev.wr = adr;
 		comp->brkev.mdt = val & 0xff;
@@ -770,6 +782,9 @@ int iord(int port, void* ptr) {
 	} else {
 		comp_vid_to_lazy(comp, comp->cpu->t + 3);
 	}
+// brk: a recording played back reads the port all the same
+	xBrkHit* hit = (comp->brkIOMap[port] & MEM_BRK_RD)
+		? comp_brk_add(comp, BRK_IOPORT, port, MEM_BRK_RD, port, -1) : NULL;
 // play rzx
 	int res = 0xff;
 	int logged = -1;	// a Next recording's byte: the device is read all the same, for what
@@ -781,6 +796,11 @@ int iord(int port, void* ptr) {
 			if (comp->hw->id == HW_ZXNEXT) {
 				logged = res;
 			} else {
+				if (hit) hit->val = res & 0xff;
+				if (comp->flgCOND) {
+					comp->brkev.in = port;
+					comp->brkev.val = res & 0xff;
+				}
 				if (inview.on) iview_in(&inview, comp, port, res);
 				return res;
 			}
@@ -793,15 +813,6 @@ int iord(int port, void* ptr) {
 		}
 	}
 	comp->flgBDI = (comp->flgDOS && (comp->dif->type == DIF_BDI)) ? 1 : 0;
-// brk
-	if (comp->brkIOMap[port] & MEM_BRK_RD) {
-		comp->flgBRK = 1;
-		comp->brkt = BRK_IOPORT;
-		comp->brka = port;
-		comp->brkev.kind = MEM_BRK_RD;
-		comp->brkev.adr = port;
-	}
-
 	vid_settle(comp->vid);		// some port handlers read the ray (Scorpion, Profi)
 	res = comp->hw->in ? comp->hw->in(comp, port) : 0xff;
 	if (logged >= 0) res = logged;
@@ -810,6 +821,7 @@ int iord(int port, void* ptr) {
 		comp->brkev.val = res & 0xff;
 	}
 	if (xreplay_mode) res = xreplay_in(res);
+	if (hit) hit->val = res & 0xff;		// the byte the cpu gets
 	if (comp->pwbus) pwatch_hit(comp, port, res);
 	if (comp->rzx.rec.on) rzx_rec_in(comp, res);
 	if (inview.on && (xreplay_mode != XRP_FEED)) iview_in(&inview, comp, port, res);
@@ -845,13 +857,8 @@ void iowr(int port, int val, void* ptr) {
 		comp->vid->ula->palchan = 0;
 	}
 // brk
-	if (comp->brkIOMap[port] & MEM_BRK_WR) {
-		comp->flgBRK = 1;
-		comp->brkt = BRK_IOPORT;
-		comp->brka = port;
-		comp->brkev.kind = MEM_BRK_WR;
-		comp->brkev.adr = port;
-	}
+	if (comp->brkIOMap[port] & MEM_BRK_WR)
+		comp_brk_add(comp, BRK_IOPORT, port, MEM_BRK_WR, port, val & 0xff);
 	if (comp->flgCOND) {
 		comp->brkev.out = port;
 		comp->brkev.val = val & 0xff;
@@ -1468,25 +1475,13 @@ int compExec(Computer* comp) {
 	if (!comp->flgDBG && !x_runahead) {
 		if (cpu_int_ready(comp->cpu)) {
 			if (comp->flgIBRK) {
-				comp->flgBRK = 1;
-				comp->brkt = BRK_IRQ;
+				comp_brk_add(comp, BRK_IRQ, 0, 0, -1, -1);
 				comp->flgBRKPRE = 1;
 				return 0;
 			}
 		} else if (comp->flgBRKMEM && !comp->cpu->flgHALT) {
-			int adr;
-			bpChecker ch = comp_fetch_bp(comp, &adr);
-			if (ch.t >= 0) {
-				comp->flgBRK = 1;
-				comp->brkt = ch.t;
-				comp->brka = ch.a;
-				comp->brkev.kind = MEM_BRK_FETCH;
-				comp->brkev.adr = adr;
+			if (comp_fetch_bp(comp)) {
 				comp->flgBRKPRE = 1;
-				if (*ch.ptr & MEM_BRK_TFETCH) {
-					*ch.ptr &= ~MEM_BRK_TFETCH;
-					comp->brkt = -1;		// temp (not in list)
-				}
 				return 0;
 			}
 		}
@@ -1784,8 +1779,6 @@ void comp_brk_newstep(Computer* comp) {
 	comp->brkev.in = -1;
 	comp->brkev.out = -1;
 	comp->brkev.val = -1;
-	comp->brkev.kind = 0;
-	comp->brkev.adr = -1;
 	comp->brkray = comp->vid ? (comp->vid->ray.y * comp->vid->full.x + comp->vid->ray.x) : 0;
 	// the cpu stands in front of this instruction: a breakpoint it fires
 	// belongs here, wherever pc has moved on to by the time it is read
@@ -1794,8 +1787,15 @@ void comp_brk_newstep(Computer* comp) {
 
 // activate breakpoint w/o type (exit to debuga)
 void comp_brk(Computer* comp, int t) {
-	comp->flgBRK = 1;
-	comp->brkt = t;
+	comp_brk_add(comp, t, 0, 0, -1, -1);
+}
+
+// the step's hits gone unhandled: what the debugger's own steps leave, which
+// run with no breakpoints by design
+void comp_brk_clear(Computer* comp) {
+	comp->flgBRK = 0;
+	comp->flgBRKPRE = 0;
+	comp->brkn = 0;
 }
 
 static unsigned char dumBrk = 0x00;
@@ -1807,13 +1807,6 @@ unsigned char* getBrkPtr(Computer* comp, int madr) {
 		ptr = &dumBrk;
 	}
 	return ptr;
-}
-
-void setBrk(Computer* comp, int adr, unsigned char val) {
-	unsigned char* ptr = getBrkPtr(comp, adr);
-	if (ptr == NULL) return;
-	if (val & 0x0f) comp->flgBRKMEM = 1;
-	*ptr = (*ptr & 0xf0) | (val & 0x0f);
 }
 
 unsigned char getBrk(Computer* comp, int adr) {

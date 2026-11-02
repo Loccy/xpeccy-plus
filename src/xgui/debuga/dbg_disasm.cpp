@@ -390,8 +390,9 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 		fl = getBrk(comp, adr + clen);
 	}
 	if (clen == 0) {		// TODO: non-ascii characters: single db, multiple db untill ascii or wut?
+		// shown with the breakpoints on it; nothing written back - getBrk() has
+		// the cpu address points in it too, and they are not the cell's
 		drow.flag = (getBrk(comp, adr) & 0x0f) | DBG_VIEW_BYTE;
-		setBrk(comp, adr, drow.flag);
 		clen = 1;
 		drow.command = QString("DB #%0").arg(dasmrd(adr, comp));
 	} else {

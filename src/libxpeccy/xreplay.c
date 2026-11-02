@@ -96,7 +96,8 @@ int xreplay_in(int val) {
 // The fields the machine's owner sets from outside it: not history, so the run is
 // not expected to give them back, and they are left out of the comparison
 typedef struct {
-	int brk, brkpre, frm, dbg, brkt, brka, frmCount;
+	int brk, brkpre, frm, dbg, brkn, frmCount;
+	xBrkHit brkhit[BRK_HITS];
 	unsigned debug, tail;
 } xrpOwner;
 
@@ -105,8 +106,8 @@ static void owner_get(xrpOwner* o, Computer* comp) {
 	o->brk = comp->flgBRK;
 	o->brkpre = comp->flgBRKPRE;
 	o->frm = comp->flgFRM;
-	o->brkt = comp->brkt;
-	o->brka = comp->brka;
+	o->brkn = comp->brkn;
+	memcpy(o->brkhit, comp->brkhit, sizeof(o->brkhit));
 	o->frmCount = comp->frmCount;		// counted by the emulation loop, not the machine
 	o->debug = comp->vid->debug;
 	o->tail = comp->vid->tail;
@@ -117,8 +118,8 @@ static void owner_set(Computer* comp, const xrpOwner* o) {
 	comp->flgBRK = o->brk;
 	comp->flgBRKPRE = o->brkpre;
 	comp->flgFRM = o->frm;
-	comp->brkt = o->brkt;
-	comp->brka = o->brka;
+	comp->brkn = o->brkn;
+	memcpy(comp->brkhit, o->brkhit, sizeof(o->brkhit));
 	comp->frmCount = o->frmCount;
 	comp->vid->debug = o->debug;
 	comp->vid->tail = o->tail;

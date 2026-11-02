@@ -3643,21 +3643,34 @@ void MainWin::renderFrame() {
 	// vid_set_ray() looks like the shortcut and is not: it puts the ray at
 	// the interrupt, which is mid-line, so a frame drawn from there lands in
 	// the buffer split and shifted.
+	//
+	// The steps are the machine's own, so the breakpoints see them as they see
+	// any: counted, logged, dumped as they come. A stop ends the frame there,
+	// and the machine waits in it for emuCycle() to act on the stop once the
+	// emulation runs.
 	emu_lock();
-	for (int i = 0; i < 2; i++) {
+	int skip = 0;
+	int stop = BRK_GO;
+	for (int i = 0; (i < 2) && !stop; i++) {
 		int guard = 1 << 19;
 		if (i) vid_clear_image();
 		comp->flgFRM = 0;
-		while (!comp->flgFRM && !comp->flgBRK && (guard-- > 0))
+		while (!comp->flgFRM && !stop && (guard-- > 0)) {
 			// no sound comes of this, but the time passes: the debugger's scope
 			// would have a two frame hole in it otherwise
+			comp->flgDBG = skip;		// a fetch hit that stopped nothing, stepped over
+			skip = 0;
 			snd_scope_step(comp, compExec(comp));
+			comp->flgDBG = 0;
+			if (comp->flgBRK || brk_cond_n)
+				stop = brk_take_hits(comp, &skip);
+			if (comp->flgCOND)
+				comp_brk_newstep(comp);
+		}
 	}
 	comp->flgFRM = 0;			// the frame is ours, not the pacer's
-	// A breakpoint hit inside this one cosmetic frame is dropped on purpose:
-	// emuCycle() would only clear the flag without acting on it, and the
-	// machine runs into the same breakpoint again as soon as it goes on
-	comp->flgBRK = 0;
+	if (stop)
+		comp_brk(comp, (stop == BRK_GO_CLOSE) ? BRK_STOP : BRK_TEMP);
 	frame_publish();
 	emu_unlock();
 }
@@ -3666,6 +3679,9 @@ void MainWin::onPrfChange() {
 	Computer* comp = conf.zx;
 	emu_lock();		// Options comes here without the lock
 	x_state_replaced();
+	// the breakpoints' bits where this machine's memory sizes put them, so a
+	// cell point fires where the list says, and nothing else
+	brkInstallAll();
 	emu_unlock();
 	tape_apply_options(comp->tape);
 	if (comp->flgFRN) {

@@ -85,11 +85,19 @@ typedef struct {
 
 #define TS_DMALOG	64
 
+// One access a breakpoint map answered for, in the step it was made in: the
+// list says which points it goes to (brk_find_all)
 typedef struct {
-	int t;
-	int a;
-	unsigned char* ptr;
-} bpChecker;
+	int t;		// BRK_* type of the map, or BRK_TEMP / BRK_STOP
+	int a;		// what a point of the type is keyed by: cpu address, the cell's offset, port
+	int kind;	// MEM_BRK_FETCH / RD / WR; 0 for an IRQ, a temp point, a stop
+	int adr;	// cpu address or port it was made at (-1 = no access)
+	int val;	// the byte read or written (-1 = none)
+} xBrkHit;
+
+#define BRK_HITS	16		// accesses one step keeps
+#define BRK_TEMP	(-1)		// a temp point (run to cursor, Step Over / Out): stop, not in the list
+#define BRK_STOP	(-2)		// the machine asks to stop the emulator (IRQ_STOP)
 
 #define p7FFD	reg[0]
 #define p1FFD	reg[1]
@@ -119,6 +127,7 @@ typedef struct {
 #define flgBRKPRE sysflag[20]		// the break was raised before the instruction ran
 #define flgBRKMEM sysflag[21]		// a memory breakpoint may be set: 0 lets the core skip the maps
 #define flgBOOT	sysflag[22]		// hw->boot is due before the next instruction
+#define flgBRKIO sysflag[23]		// a port breakpoint is set
 
 #define PWATCH_MAX	16		// ports the debugger can watch at once
 
@@ -497,14 +506,13 @@ typedef struct Computer {
 	int turboCount;
 	unsigned char intVector;
 
-	int brkt;		// breakpoint type (cpu, ram, rom...)
-	int brka;		// breakpoint addr
+	// the step's breakpoint hits, flgBRK set with the first
+	xBrkHit brkhit[BRK_HITS];
+	int brkn;
 	// last mem/io event, for breakpoint conditions (-1 = didn't happen)
 	struct {
 		int rd, wr, mdt;
 		int in, out, val;
-		int kind;	// MEM_BRK_* of the access that fired it
-		int adr;	// cpu address it was made at (-1 = no access)
 	} brkev;
 	int brkray;		// beam position (dots from frame start) before this instruction
 	int brkpc;		// pc before this instruction: where a breakpoint says it is
@@ -840,6 +848,7 @@ extern unsigned rzx_playing;
 extern unsigned rzx_recording;
 
 void comp_brk(Computer*, int);
+void comp_brk_clear(Computer*);
 void comp_brk_newstep(Computer*);
 
 void comp_media_tick(Computer*);
@@ -851,7 +860,6 @@ int comp_pwatch_val(Computer*, int);
 unsigned char* getBrkPtr(Computer*, int);
 unsigned char getBrk(Computer*, int);
 unsigned char getBrkView(Computer*, int, int);
-void setBrk(Computer*, int, unsigned char);
 
 #ifdef __cplusplus
 }

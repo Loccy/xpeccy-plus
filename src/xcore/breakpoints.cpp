@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <QDateTime>
 #include <QFile>
 #include <QMutex>
@@ -12,6 +14,9 @@ typedef struct {
 	xBrkPoint* ptr;
 } xbpIndex;
 
+// the access a point's hit came by, for its log line; NULL for a global condition
+static const xBrkHit* logHit = NULL;
+
 static bool brk_is_ranged(int type) {
 	switch (type) {
 		case BRK_CPUADR:
@@ -25,7 +30,7 @@ static bool brk_is_ranged(int type) {
 }
 
 // The map of a point's type and the first byte of it the point covers, in the
-// form the core names a hit by (brka); NULL when the machine has no such map
+// form the core names a hit by (xBrkHit.a); NULL when the machine has no such map
 static unsigned char* brk_map_start(Computer* comp, xBrkPoint* brk, int* start) {
 	switch (brk->type) {
 		case BRK_CPUADR:
@@ -87,7 +92,7 @@ xbpIndex brkFind(xBrkPoint* brk) {
 }
 
 // does an enabled point take a hit of this kind (MEM_BRK_FETCH/RD/WR) at adr,
-// adr being what the core names the hit by (brka)
+// adr being what the core names the hit by (xBrkHit.a)
 static bool brk_takes(Computer* comp, xBrkPoint* brk, int t, int adr, int kind) {
 	if (brk->off || (brk->type != t)) return false;
 	if (t == BRK_IRQ) return true;
@@ -368,18 +373,27 @@ void brk_clear_tmp(Computer* comp) {
 	for (i = 0; i < MEM_64K; i++) {
 		comp->brkAdrMap[i] &= ~MEM_BRK_TFETCH;
 	}
+	if (comp->slot->brkMap) {
+		for (i = 0; i <= comp->slot->memMask; i++)
+			comp->slot->brkMap[i] &= ~MEM_BRK_TFETCH;
+	}
 	if (comp->div) {
 		for (i = 0; i < DIV_EE_SIZE + DIV_RAM_MAX; i++)
 			comp->div->brkMap[i] &= ~MEM_BRK_TFETCH;
 	}
 }
 
-void clearMap(unsigned char* ptr, int siz) {
+// the list's bits out of a map; a temp point's (run to cursor, Step Over) is
+// not the list's and stays. 1 = one is still there
+static int clearMap(unsigned char* ptr, int siz) {
+	unsigned char tmp = 0;
 	while (siz > 0) {
-		*ptr &= 0xf0;
+		*ptr &= 0xf0 | MEM_BRK_TFETCH;
+		tmp |= *ptr;
 		ptr++;
 		siz--;
 	}
+	return (tmp & MEM_BRK_TFETCH) ? 1 : 0;
 }
 
 // A point's bits go into the maps by OR over what is there: the maps only
@@ -404,6 +418,7 @@ void brkInstall(xBrkPoint* brk, int del) {
 	if (brk->type == BRK_IOPORT) {
 		msk &= (MEM_BRK_RD | MEM_BRK_WR);
 		if (!msk) return;
+		comp->flgBRKIO = 1;
 		for (int adr = 0; adr < 0x10000; adr++)
 			if ((adr & brk->mask) == (brk->adr & brk->mask))
 				comp->brkIOMap[adr] |= msk;
@@ -441,16 +456,19 @@ void brkInstallAll() {
 	// condition reads it, and a logged hit prints it
 	comp->flgCOND = (conds || logs) ? 1 : 0;
 	comp_brk_newstep(comp);		// conditions start from a known beam position
-	memset(comp->brkAdrMap, 0x00, MEM_64K);
 	memset(comp->brkIOMap, 0x00, MEM_64K);
-	clearMap(comp->brkRamMap, MEM_4M);
-	clearMap(comp->brkRomMap, MEM_512K);
+	int tmp = clearMap(comp->brkAdrMap, MEM_64K);
+	tmp |= clearMap(comp->brkRamMap, MEM_4M);
+	tmp |= clearMap(comp->brkRomMap, MEM_512K);
 	if (comp->slot->brkMap)
-		clearMap(comp->slot->brkMap, comp->slot->memMask + 1);
+		tmp |= clearMap(comp->slot->brkMap, comp->slot->memMask + 1);
 	if (comp->div)
-		clearMap(comp->div->brkMap, DIV_EE_SIZE + DIV_RAM_MAX);
-	comp->flgBRKMEM = 0;		// brkInstall() sets it again for each point it puts in the maps
+		tmp |= clearMap(comp->div->brkMap, DIV_EE_SIZE + DIV_RAM_MAX);
+	// brkInstall() sets them again for each point it puts in the maps; a temp
+	// point still pending keeps the core looking
+	comp->flgBRKMEM = tmp;
 	comp->flgIBRK = 0;
+	comp->flgBRKIO = 0;
 	brkInstallList(&conf.brk.list);
 }
 
@@ -562,8 +580,8 @@ static QString brk_log_cell(Computer* comp, int cadr) {
 // says where the cpu saw it, a cpu address says which page it landed in
 
 static QString brk_log_place(xBrkPoint* brk, Computer* comp) {
-	int adr = comp->brka;
-	int cadr = comp->brkev.adr;
+	int adr = logHit ? logHit->a : 0;
+	int cadr = logHit ? logHit->adr : -1;
 	QString own;
 	switch (brk->type) {
 		case BRK_IOPORT: return QString("IO:%0").arg(gethexword(adr));
@@ -583,29 +601,27 @@ static QString brk_log_place(xBrkPoint* brk, Computer* comp) {
 }
 
 // What the machine was doing when it was caught; an IRQ or a global condition
-// is not an access and says nothing here. It is the last mem/io event of the
-// instruction, the same one a condition reads - the breakpoint is raised
-// before the access is made and the instruction then runs on to its end. The
-// cpu address comes with it, so a byte belonging to another access of the same
-// instruction is not read as this one's; an instruction byte is latched as no
-// event at all and gets no value.
+// is not an access and says nothing here. It is the access the hit came by, of
+// all the instruction made, with the cpu address and the byte it carried; an
+// instruction byte gets no value.
 
-static QString brk_log_access(xBrkPoint* brk, Computer* comp) {
+static QString brk_log_access(xBrkPoint* brk) {
+	const xBrkHit* h = logHit;
+	if (!h) return QString();
 	if (brk->type == BRK_IOPORT) {
-		if (comp->brkev.in >= 0) return QString("IN=%0").arg(gethexbyte(comp->brkev.val));
-		if (comp->brkev.out >= 0) return QString("OUT=%0").arg(gethexbyte(comp->brkev.val));
-		return (comp->brkev.kind == MEM_BRK_WR) ? QString("OUT") : QString("IN");
+		QString nm = (h->kind == MEM_BRK_WR) ? QString("OUT") : QString("IN");
+		if (h->val < 0) return nm;
+		return QString("%0=%1").arg(nm).arg(gethexbyte(h->val));
 	}
-	if (comp->brkev.kind == MEM_BRK_FETCH) return QString("F");
-	if (comp->brkev.kind == MEM_BRK_RD) {
-		if (comp->brkev.rd < 0) return QString("RD");
-		return QString("RD %0=%1").arg(gethexword(comp->brkev.rd)).arg(gethexbyte(comp->brkev.mdt));
+	QString nm;
+	switch (h->kind) {
+		case MEM_BRK_FETCH: return QString("F");
+		case MEM_BRK_RD: nm = QString("RD"); break;
+		case MEM_BRK_WR: nm = QString("WR"); break;
+		default: return QString();
 	}
-	if (comp->brkev.kind == MEM_BRK_WR) {
-		if (comp->brkev.wr < 0) return QString("WR");
-		return QString("WR %0=%1").arg(gethexword(comp->brkev.wr)).arg(gethexbyte(comp->brkev.mdt));
-	}
-	return QString();
+	if ((h->adr < 0) || (h->val < 0)) return nm;
+	return QString("%0 %1=%2").arg(nm).arg(gethexword(h->adr)).arg(gethexbyte(h->val));
 }
 
 // PC is the instruction the breakpoint belongs to, not the one after it:
@@ -884,7 +900,7 @@ void brk_log_hit(xBrkPoint* brk, Computer* comp) {
 	if (traceTried && !traceFile) return;		// nowhere to write it
 	bool mine = (hitNote.id == brk->id);	// a global condition comes by no brk_hit
 	QString line = brk_log_place(brk, comp);
-	QString acc = brk_log_access(brk, comp);
+	QString acc = brk_log_access(brk);
 	if (!acc.isEmpty()) line.append(QString(" %0").arg(acc));
 	line.append(QString(" n=%0/%1").arg(brk->count).arg(brk->hits));
 	if (brk->action == BRK_ACT_DBG) line.append(" stop");
@@ -912,6 +928,82 @@ void brk_log_hit(xBrkPoint* brk, Computer* comp) {
 		line.append(brk_log_state(comp));
 	}
 	brk_trace_put(comp, line);
+}
+
+// ------------------------------------------------------------ handling
+
+// the screen as it is, into a file of its own in the screenshot folder
+static void brk_dump_screen(Computer* comp) {
+	QString fnams = shot_dir().append(SLASH);
+	fnams.append(QString("xpeccy_%0").arg(QTime::currentTime().toString("HHmmss_zzz")));
+	QFile file;
+	int idx = 0;
+	do {
+		file.setFileName(QString("%0_%1.scr").arg(fnams).arg(idx));
+		idx++;
+	} while (file.exists());
+	if (!file.open(QFile::WriteOnly) || (file.write((char*)(comp->mem->ramData + (5 << 14)), 0x1b00) != 0x1b00))
+		xlog(XLG_APP, XLL_WARN, "can't save screenshot %s", file.fileName().toLocal8Bit().data());
+	file.close();
+}
+
+// A point that fired: logged whatever else it does, then its action. 1 = it
+// asks for the debugger; asked once a step, the ones after are only logged
+static int brk_act(xBrkPoint* brk, Computer* comp) {
+	brk_log_hit(brk, comp);
+	switch (brk->action) {
+		case BRK_ACT_COUNT: return 0;		// counted by brk_hit, just go on
+		case BRK_ACT_SCR: brk_dump_screen(comp); return 0;
+	}
+	return 1;
+}
+
+// The step's hits and the global conditions, handled. Every access the step
+// made goes to every point it is for, a point taking one hit a step whatever
+// number of its bytes or ports were touched (its line names the first); a temp
+// point stops. The conditions not bound to an address are asked on every step
+// that ran (conds), whatever else hit. A break raised before the cpu ran - a
+// fetch, an interrupt about to be taken - ran nothing: no conditions there, they
+// were asked on the state after the step before. One that stopped nothing is
+// stepped over (*skip), or the same check fires again and the machine stands still.
+// BRK_GO_DBG: open the debugger (flgBRK stays set); BRK_GO_CLOSE: the machine
+// asked to quit; BRK_GO: run on.
+int brk_take_hits(Computer* comp, int* skip, bool conds) {
+	static std::vector<xBrkPoint*> pts;
+	static std::vector<int> seen;
+	int res = BRK_GO;
+	seen.clear();
+	for (int i = 0; comp->flgBRK && (i < comp->brkn); i++) {
+		const xBrkHit* h = &comp->brkhit[i];
+		if (h->t == BRK_TEMP) {
+			if (res == BRK_GO) res = BRK_GO_DBG;
+			continue;
+		}
+		if (h->t == BRK_STOP) {
+			res = BRK_GO_CLOSE;
+			continue;
+		}
+		brk_find_all(h->t, h->a, h->kind, pts);
+		for (xBrkPoint* ptr : pts) {
+			if (std::find(seen.begin(), seen.end(), ptr->id) != seen.end()) continue;
+			seen.push_back(ptr->id);
+			logHit = h;
+			if (brk_hit(ptr, comp) && brk_act(ptr, comp) && (res == BRK_GO))
+				res = BRK_GO_DBG;
+		}
+	}
+	logHit = NULL;
+	if (conds && !comp->flgBRKPRE && brk_cond_n && brk_check_cond(comp)) {
+		for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++) {
+			if (!it->fired) continue;
+			it->count++;
+			if (brk_act(&(*it), comp) && (res == BRK_GO)) res = BRK_GO_DBG;
+		}
+	}
+	if (!res && comp->flgBRKPRE) *skip = 1;
+	comp->brkn = 0;
+	comp->flgBRK = res ? 1 : 0;
+	return res;
 }
 
 // breakpoint list files

@@ -337,13 +337,33 @@ void DebugWin::start() {
 	ui_asm.dasmTable->setFocus();
 }
 
-void DebugWin::stop() {
+// Back to running. The instruction under PC is run here, and the breakpoints
+// see its accesses (not the fetch it stands on): one that stops keeps the
+// debugger open where the machine now is, as if it had opened again - Step
+// Out with PC on the RET stops at the caller. false = still open
+bool DebugWin::stop() {
 	Computer* comp = conf.zx;
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;	// before compExec to add current opcode T
-	// one opcode, and the scope has to hear it too or the wave has a notch in it
-	// at every resume
-	if (comp->flgDBG) snd_scope_step(comp, compExec(comp));
+	if (comp->flgDBG) {
+		comp_brk_clear(comp);		// what the debugger's own steps left
+		if (comp->flgCOND) comp_brk_newstep(comp);
+		// one opcode, and the scope has to hear it too or the wave has a notch
+		// in it at every resume
+		snd_scope_step(comp, compExec(comp));
+		int skip = 0;
+		int res = brk_take_hits(comp, &skip);
+		if (comp->flgCOND) comp_brk_newstep(comp);
+		comp_brk_clear(comp);
+		// the machine asked to quit: the emulation's thread does that, first thing
+		if (res == BRK_GO_CLOSE) comp_brk(comp, BRK_STOP);
+		if (res == BRK_GO_DBG) {
+			comp->cpu->flgRetBRK = 0;
+			brk_clear_tmp(comp);
+			if (!fillAll()) ui_asm.dasmTable->setAdr(cpu_get_pc(comp->cpu));
+			return false;
+		}
+	}
 	comp->flgDBG = 0;		// back to normal work, turn breakpoints on
 	comp->vid->debug = 0;
 	x_input_bump();			// memory, registers, ports may have been edited: frames run ahead go
@@ -360,6 +380,7 @@ void DebugWin::stop() {
 	memViewer->hide();
 	hide();
 	emit closed();
+	return true;
 }
 
 void DebugWin::resetTCount() {
@@ -415,7 +436,7 @@ void DebugWin::onPrfChange() {
 }
 
 // void DebugWin::reject() {stop();}
-void DebugWin::closeEvent(QCloseEvent*) {stop();}
+void DebugWin::closeEvent(QCloseEvent* ev) {if (!stop()) ev->ignore();}
 
 DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	int i;
@@ -999,6 +1020,7 @@ void DebugWin::doStep() {
 	// the scope is fed from the emulation thread, which is not running while we
 	// hold the machine: carry it across this step ourselves
 	snd_scope_step(comp, compExec(comp));
+	comp_brk_clear(comp);		// single steps run without breakpoints, by design
 	if (!fillAll()) {
 		ui_asm.dasmTable->setAdr(cpu_get_pc(comp->cpu));
 		//fillDisasm();
@@ -1110,10 +1132,11 @@ void DebugWin::keyPressEvent(QKeyEvent* ev) {
 			if (!ui_asm.dasmTable->hasFocus()) break;
 			idx = ui_asm.dasmTable->currentIndex();
 			i = ui_asm.dasmTable->getData(idx.row(), 0, Qt::UserRole).toInt();
+			// in place before the machine goes: stop() lets it run
 			ptr = getBrkPtr(comp, i);
-			stop();
 			*ptr |= MEM_BRK_TFETCH;
 			comp->flgBRKMEM = 1;
+			stop();
 			break;
 		case XCUT_RESET:
 			rzxStop(comp);

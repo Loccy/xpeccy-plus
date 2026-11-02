@@ -58,7 +58,7 @@ class DebugWin : public QMainWindow {
 		~DebugWin();
 
 //		void reject();
-		void stop();
+		bool stop();
 
 	signals:
 		void closed();

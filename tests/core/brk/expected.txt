@@ -24,3 +24,9 @@ RD: operands and data, no fetches: ok
 == tr-dos
 a #3Dxx fetch is seen in TR-DOS, the map left as it was: ok
 Fetch on TR-DOS #3D2F from BASIC: ok
+== hits
+PUSH HL: both bytes, each with its value: ok
+cpu address and cell on one byte: both, the byte read: ok
+DD CB: the prefix and the CB, both: ok
+a temp point under a cpu address fetch point: ok
+IN under RZX playback: ok

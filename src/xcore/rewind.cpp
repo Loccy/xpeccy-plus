@@ -421,6 +421,9 @@ int rewind_load(Computer* comp, int back, long long* phase) {
 		rw_drop_all();
 		return 0;
 	}
+	// taken at a frame end, maybe with the frame's last step's breakpoint hit
+	// in it: that one was handled then
+	comp_brk_clear(comp);
 	if (phase) *phase = e->phase;
 	rw_clock = e->frame;
 	Tape* tap = comp->tape;
