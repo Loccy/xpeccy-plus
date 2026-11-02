@@ -608,7 +608,7 @@ void xBrkManager::chaCond(QString str) {
 			&& xexpr_uses_var(exp, XV_HITS)) {
 			ui.labCondErr->setStyleSheet("color:#c17d11");
 			res.append(QString(QChar(10)) + "HITS counts what this condition fired, so it can limit"
-				" (HITS < 3) but not skip. To stop on the Nth hit of an"
+				" (HITS <= 3) but not skip. To stop on the Nth hit of an"
 				" address, make it an address breakpoint with HITS > N-1");
 		} else {
 			ui.labCondErr->setStyleSheet("");
@@ -715,7 +715,7 @@ void xBrkManager::confirm() {
 	brk.temp = 0;
 	brk.last = 0;
 	brk.fired = 0;
-	brk.onchg = ui.brkOnChange->isChecked() ? 1 : 0;
+	brk.onchg = ((brk.type == BRK_COND) && ui.brkOnChange->isChecked()) ? 1 : 0;
 	brk.log = ui.brkLog->isChecked() ? 1 : 0;
 	brk_set_cond(&brk, cond.toLocal8Bit().data());
 	brk.fetch = ui.brkFetch->isChecked() ? 1 : 0;

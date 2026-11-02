@@ -12,12 +12,49 @@ typedef struct {
 	xBrkPoint* ptr;
 } xbpIndex;
 
-xbpIndex brkFind(xBrkPoint* brk, int flag = 0) {
+static bool brk_is_ranged(int type) {
+	switch (type) {
+		case BRK_CPUADR:
+		case BRK_MEMRAM:
+		case BRK_MEMROM:
+		case BRK_MEMSLT:
+		case BRK_MEMDIV:
+			return true;
+	}
+	return false;
+}
+
+// The map of a point's type and the first byte of it the point covers, in the
+// form the core names a hit by (brka); NULL when the machine has no such map
+static unsigned char* brk_map_start(Computer* comp, xBrkPoint* brk, int* start) {
+	switch (brk->type) {
+		case BRK_CPUADR:
+			*start = brk->adr & 0xffff;
+			return comp->brkAdrMap;
+		case BRK_MEMRAM:
+			*start = brk->adr & comp->mem->ramMask;
+			return comp->brkRamMap;
+		case BRK_MEMROM:
+			*start = brk->adr & comp->mem->romMask;
+			return comp->brkRomMap;
+		case BRK_MEMDIV:
+			if (!comp->div) return NULL;
+			*start = brk->adr % (DIV_EE_SIZE + DIV_RAM_MAX);
+			return comp->div->brkMap;
+		case BRK_MEMSLT:
+			if (!comp->slot->brkMap) return NULL;
+			*start = brk->adr & comp->slot->memMask;
+			return comp->slot->brkMap;
+	}
+	return NULL;
+}
+
+xbpIndex brkFind(xBrkPoint* brk) {
 	xbpIndex res;
 	res.ptr = NULL;
 	res.idx = -1;
 	xBrkPoint* tbrk;
-	std::vector<xBrkPoint>* list = (flag & BRKF_SYSTEM) ? &conf.brk.list_sys : &conf.brk.list;
+	std::vector<xBrkPoint>* list = &conf.brk.list;
 	int i;
 	int max = list->size();
 	for (i = 0; (i < max) && !res.ptr; i++) {
@@ -33,7 +70,8 @@ xbpIndex brkFind(xBrkPoint* brk, int flag = 0) {
 					res.ptr = tbrk;
 					res.idx = i;
 				}
-			} else if (brk->type == BRK_CPUADR) {
+			} else if (brk_is_ranged(brk->type)) {
+				// a range and a single at the same start are two points
 				if (tbrk->eadr == brk->eadr) {
 					res.ptr = tbrk;
 					res.idx = i;
@@ -48,28 +86,30 @@ xbpIndex brkFind(xBrkPoint* brk, int flag = 0) {
 	return res;
 }
 
-xBrkPoint* brk_find(int t, int adr) {
-	xBrkPoint* ptr = NULL;
-	if (t == BRK_IRQ) {
-		for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++) {
-			if (!it->off && (it->type == t)) {
-				ptr = &(*it);
-			}
-		}
-	} else {
-		std::map<int, xBrkPoint*>* map = NULL;
-		if (conf.brk.map.count(t) > 0) {
-			map = &conf.brk.map[t];
-		}
-		if (map) {
-			std::map<int, xBrkPoint*>::iterator it;
-			it = map->find(adr);
-			if (it != map->end()) {
-				ptr = map->at(adr);
-			}
-		}
+// does an enabled point take a hit of this kind (MEM_BRK_FETCH/RD/WR) at adr,
+// adr being what the core names the hit by (brka)
+static bool brk_takes(Computer* comp, xBrkPoint* brk, int t, int adr, int kind) {
+	if (brk->off || (brk->type != t)) return false;
+	if (t == BRK_IRQ) return true;
+	switch (kind) {
+		case MEM_BRK_FETCH: if (!brk->fetch) return false; break;
+		case MEM_BRK_RD: if (!brk->read) return false; break;
+		case MEM_BRK_WR: if (!brk->write) return false; break;
+		default: return false;
 	}
-	return ptr;
+	if (t == BRK_IOPORT) return (adr & brk->mask) == (brk->adr & brk->mask);
+	int start;
+	if (!brk_map_start(comp, brk, &start)) return false;
+	return (adr >= start) && (adr <= start + brk->eadr - brk->adr);
+}
+
+// Every point a hit goes to, in list order: the maps only say that something
+// watches the byte, the list says who. Overlapping points each get it, and a
+// disabled one takes nothing. Pointers into the list: good until it changes
+void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out) {
+	out.clear();
+	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++)
+		if (brk_takes(conf.zx, &(*it), t, adr, kind)) out.push_back(&(*it));
 }
 
 // create breakpoint
@@ -232,35 +272,43 @@ int brk_check_cond(Computer* comp) {
 			it->last = 0;
 			continue;
 		}
+		// HITS reads this firing included, as on an address point; taken back
+		// if it does not fire
+		it->hits++;
 		trg = brk_cond_true(&(*it), comp);
 		if (trg && !(it->onchg && it->last)) {
-			it->hits++;
 			it->fired = 1;
 			res++;
+		} else {
+			it->hits--;
 		}
 		it->last = trg ? 1 : 0;
 	}
 	return res;
 }
 
-bool brk_compare(xBrkPoint& bp1, xBrkPoint& bp2) {return (bp1.adr < bp2.adr);}
-void brkSort() {std::sort(conf.brk.list.begin(), conf.brk.list.end(), brk_compare);}
+// stable: points with one start keep the order they were added in, which is the
+// order a hit shared between them is handled in
+static bool brk_compare(const xBrkPoint& bp1, const xBrkPoint& bp2) {
+	if (bp1.adr != bp2.adr) return bp1.adr < bp2.adr;
+	return bp1.eadr < bp2.eadr;
+}
+void brkSort() {std::stable_sort(conf.brk.list.begin(), conf.brk.list.end(), brk_compare);}
 
-void brkAdd(xBrkPoint brk, int flag) {
-	xBrkPoint* bp = brkFind(&brk, flag & BRKF_SYSTEM).ptr;
+void brkAdd(xBrkPoint brk) {
+	xBrkPoint* bp = brkFind(&brk).ptr;
 	if (bp) {
 		bp->fetch = brk.fetch;
 		bp->read = brk.read;
 		bp->write = brk.write;
 		bp->action = brk.action;
+		bp->onchg = brk.onchg;
 		bp->log = brk.log;
 		bp->span = brk.span;
 		bp->cond = brk.cond;
 		bp->script = brk.script;
 		bp->logx = brk.logx;
 		bp->logexp = brk.logexp;
-	} else if (flag & BRKF_SYSTEM) {
-		conf.brk.list_sys.push_back(brk);
 	} else {
 		conf.brk.list.push_back(brk);
 	}
@@ -292,8 +340,16 @@ void brkXor(int type, int flag, int adr, int mask, int del) {
 	// brkInstall(brk, del);		// delete if inactive
 }
 
+// the point itself, by its id: the editor's new point has an id the list does
+// not hold and deletes nothing. One without an id goes by its place
 void brkDelete(xBrkPoint dbrk) {
-	int idx = brkFind(&dbrk).idx;
+	int idx = -1;
+	if (dbrk.id) {
+		for (int i = 0; (i < (int)conf.brk.list.size()) && (idx < 0); i++)
+			if (conf.brk.list[i].id == dbrk.id) idx = i;
+	} else {
+		idx = brkFind(&dbrk).idx;
+	}
 	if (idx < 0) return;
 	if (idx >= (int)conf.brk.list.size()) return;
 	conf.brk.list.erase(conf.brk.list.begin() + idx);
@@ -326,79 +382,40 @@ void clearMap(unsigned char* ptr, int siz) {
 	}
 }
 
+// A point's bits go into the maps by OR over what is there: the maps only
+// tell the core that something watches a byte or a port, and brk_find_all()
+// then finds who. A disabled point puts nothing in and takes nothing out.
 void brkInstall(xBrkPoint* brk, int del) {
 	if (del) {
 		brkDelete(*brk);
-	} else {
-		unsigned char* ptr = NULL;
-		Computer* comp = conf.zx;
-		unsigned char msk = 0;
-		std::map<int, xBrkPoint*>* map = NULL;
-		int cnt = 1;
-		int adr = -1;
-		if (!brk->off) {
-			if (brk->temp) msk |= MEM_BRK_TFETCH;
-			if (brk->fetch) msk |= MEM_BRK_FETCH;
-			if (brk->read) msk |= MEM_BRK_RD;
-			if (brk->write) msk |= MEM_BRK_WR;
-		}
-		if (brk->type != BRK_IRQ)
-			map = &conf.brk.map[brk->type];
-		switch(brk->type) {
-			case BRK_IOPORT:
-				for (adr = 0; adr < 0x10000; adr++) {
-					if ((adr & brk->mask) == (brk->adr & brk->mask)) {
-						comp->brkIOMap[adr] = 0;
-						if (!brk->off) {
-							if (brk->read) comp->brkIOMap[adr] |= MEM_BRK_RD;
-							if (brk->write) comp->brkIOMap[adr] |= MEM_BRK_WR;
-						}
-					}
-					if (comp->brkIOMap[adr]) {
-						conf.brk.map[BRK_IOPORT][adr] = brk;
-						map = NULL;
-					}
-				}
-				break;
-			case BRK_CPUADR:
-				ptr = comp->brkAdrMap + (brk->adr & 0xffff);
-				cnt = brk->eadr - brk->adr + 1;
-				break;
-			case BRK_MEMRAM:
-				ptr = comp->brkRamMap + (brk->adr & comp->mem->ramMask);
-				cnt = brk->eadr - brk->adr + 1;
-				break;
-			case BRK_MEMROM:
-				ptr = comp->brkRomMap + (brk->adr & comp->mem->romMask);
-				cnt = brk->eadr - brk->adr + 1;
-				break;
-			case BRK_MEMDIV:
-				if (!comp->div) break;
-				ptr = comp->div->brkMap + (brk->adr % (DIV_EE_SIZE + DIV_RAM_MAX));
-				cnt = brk->eadr - brk->adr + 1;
-				break;
-			case BRK_MEMSLT:
-				if (!comp->slot->brkMap) break;
-				ptr = comp->slot->brkMap + (brk->adr & comp->slot->memMask);
-				cnt = brk->eadr - brk->adr + 1;
-				break;
-			case BRK_IRQ:
-				comp->flgIBRK = !brk->off;
-				ptr = NULL;
-				break;
-		}
-		if (ptr) {
-			if (msk & 0x0f) comp->flgBRKMEM = 1;
-			adr = brk->adr;
-			while (cnt > 0) {
-				*ptr &= 0xf0;
-				*ptr |= (msk & 0x0f);
-				ptr++;
-				if (map) (*map)[adr++] = brk;
-				cnt--;
-			}
-		}
+		return;
 	}
+	if (brk->off) return;
+	Computer* comp = conf.zx;
+	unsigned char msk = 0;
+	if (brk->temp) msk |= MEM_BRK_TFETCH;
+	if (brk->fetch) msk |= MEM_BRK_FETCH;
+	if (brk->read) msk |= MEM_BRK_RD;
+	if (brk->write) msk |= MEM_BRK_WR;
+	if (brk->type == BRK_IRQ) {
+		comp->flgIBRK = 1;		// any enabled one arms it
+		return;
+	}
+	if (brk->type == BRK_IOPORT) {
+		msk &= (MEM_BRK_RD | MEM_BRK_WR);
+		if (!msk) return;
+		for (int adr = 0; adr < 0x10000; adr++)
+			if ((adr & brk->mask) == (brk->adr & brk->mask))
+				comp->brkIOMap[adr] |= msk;
+		return;
+	}
+	int start;
+	unsigned char* map = brk_map_start(comp, brk, &start);
+	if (!map || !(msk & 0x0f)) return;
+	comp->flgBRKMEM = 1;
+	unsigned char* ptr = map + start;
+	for (int cnt = brk->eadr - brk->adr + 1; cnt > 0; cnt--)
+		*ptr++ |= (msk & 0x0f);
 }
 
 void brkInstallList(std::vector<xBrkPoint>* list) {
@@ -433,10 +450,8 @@ void brkInstallAll() {
 	if (comp->div)
 		clearMap(comp->div->brkMap, DIV_EE_SIZE + DIV_RAM_MAX);
 	comp->flgBRKMEM = 0;		// brkInstall() sets it again for each point it puts in the maps
-	conf.brk.map.clear();
 	comp->flgIBRK = 0;
 	brkInstallList(&conf.brk.list);
-	brkInstallList(&conf.brk.list_sys);
 }
 
 // ------------------------------------------------------------------ logging
@@ -1089,6 +1104,7 @@ int brk_load_list(const char* fpath, int* bad, bool add) {
 			} else {
 				b0 = false;
 			}
+			if (brk.type != BRK_COND) brk.onchg = 0;	// On change is a global condition's
 			if (list.at(4) == "SCR") {
 				brk.action = BRK_ACT_SCR;
 			} else if (list.at(4) == "CNT") {

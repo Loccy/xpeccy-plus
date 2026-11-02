@@ -57,8 +57,8 @@ void load_xmap(QString path) {
 			while(!file.atEnd()) {
 				file.read(buf, 8);
 				len = qfgeti(file);
-				// the flags may carry breakpoints: let the core look at the maps
-				comp->flgBRKMEM = 1;
+				// the flags are the debugger's marks; breakpoint bits in them are
+				// not taken - brkInstallAll() below puts the list's back
 				if (!memcmp(buf, "ramflags", 8)) {
 					if (len <= MEM_4M) {
 						file.read((char*)comp->brkRamMap, len);
@@ -168,6 +168,13 @@ void xputcomments(QByteArray& arr, QMap<int, QString>* map, QString prefix) {
 	}
 }
 
+// a map's bytes with the debugger's marks only: a breakpoint lives in the list
+static void xmap_put_marks(QFile& file, const unsigned char* map, int len) {
+	QByteArray arr((const char*)map, len);
+	for (int i = 0; i < len; i++) arr[i] = (char)(arr[i] & 0xf0);
+	file.write(arr);
+}
+
 void save_xmap(QString path) {
 	QFile file;
 	QByteArray arr;
@@ -184,16 +191,16 @@ void save_xmap(QString path) {
 			// ram map
 			file.write("ramflags", 8);
 			qfputi(file, comp->mem->ramMask + 1);				// to aviod zx48k with 64K ram and 128K mask
-			file.write((char*)comp->brkRamMap, comp->mem->ramMask + 1);
+			xmap_put_marks(file, comp->brkRamMap, comp->mem->ramMask + 1);
 			// rom map
 			file.write("romflags", 8);
 			qfputi(file, comp->mem->romSize);
-			file.write((char*)comp->brkRomMap, comp->mem->romSize);
+			xmap_put_marks(file, comp->brkRomMap, comp->mem->romSize);
 			// cartrige map
 			file.write("sltflags", 8);
 			if (comp->slot->brkMap) {
 				qfputi(file, comp->slot->memMask + 1);
-				file.write((char*)comp->slot->brkMap, comp->slot->memMask + 1);
+				xmap_put_marks(file, comp->slot->brkMap, comp->slot->memMask + 1);
 			} else {
 				qfputi(file, 0);
 			}
