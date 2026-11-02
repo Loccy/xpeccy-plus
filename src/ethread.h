@@ -43,7 +43,10 @@ class xThread : public QThread {
 		void emuCycle(Computer*);
 		void rzx_begin(Computer*);
 		void rewindCheck(Computer*, int full);
-		void brkAction(Computer*, xBrkPoint*, int*);
+		int takeHits(Computer*, int* brkskip, bool conds = true);
+		// a fetch/IRQ hit that stopped nothing, to be stepped over at this
+		// tickTotal: a cycle can end between the hit and that step
+		long long skipTick = -1;
 		void tap_catch_load(Computer*, int, int base = LD_ROM_BASE, int dir = 1);
 		void tap_hand_over(Computer*, int blk, int base, int dir);
 		void tap_catch_save(Computer*);

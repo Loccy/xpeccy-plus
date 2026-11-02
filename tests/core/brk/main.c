@@ -4,7 +4,8 @@
 // an M1 the CPU runs (the opcode and its prefixes), once before the
 // instruction; Interrupt is an interrupt the CPU takes. The steps run the way
 // the app's thread runs them: a break raised before the CPU ran is stepped over
-// with the checks off.
+// with the checks off. Every access a step makes is a hit of its own, on each
+// map that watches it.
 //
 //	brk-bench
 
@@ -81,11 +82,11 @@ static Computer* machine(void) {
 }
 
 typedef struct {
-	int hits;		// breaks raised
+	int hits;		// steps that raised a break
 	int pre;		// ...of them before the step ran
-	int adr;		// the last one's brkev.adr
+	int adr;		// the last hit's cpu address
 	int pc;			// ...and the PC it left
-	int kind;		// ...and its brkt
+	int kind;		// ...and its type
 } xHits;
 
 // one step as the app's thread takes it
@@ -99,13 +100,22 @@ static void step(Computer* comp, xHits* h, int* skip) {
 		compExec(comp);
 	}
 	if (!comp->flgBRK) return;
+	const xBrkHit* last = &comp->brkhit[comp->brkn - 1];
+	int pre = comp->flgBRKPRE;
 	h->hits++;
-	h->pre += comp->flgBRKPRE;
-	h->adr = comp->brkev.adr;
+	h->pre += pre;
+	h->adr = last->adr;
 	h->pc = comp->cpu->regPC;
-	h->kind = comp->brkt;
-	comp->flgBRK = 0;
-	if (comp->flgBRKPRE) *skip = 1;
+	h->kind = last->t;
+	comp_brk_clear(comp);
+	if (pre) *skip = 1;
+}
+
+// the step's hit of this type and cpu address, NULL when there is none
+static const xBrkHit* hit_of(Computer* comp, int t, int adr) {
+	for (int i = 0; i < comp->brkn; i++)
+		if ((comp->brkhit[i].t == t) && (comp->brkhit[i].adr == adr)) return &comp->brkhit[i];
+	return NULL;
 }
 
 // the program from #8000 until it has taken ints interrupts and stands at #8012
@@ -305,7 +315,86 @@ int main(void) {
 		comp->flgBRKMEM = 1;
 		comp->cpu->regPC = 0x3d2f;
 		compExec(comp);
-		check("Fetch on TR-DOS #3D2F from BASIC", comp->flgBRK && (comp->brkt == BRK_MEMROM) && (comp->brka == 0x7d2f) && !comp->flgDOS);
+		check("Fetch on TR-DOS #3D2F from BASIC", comp->flgBRK && (comp->brkn == 1) && (comp->brkhit[0].t == BRK_MEMROM)
+			&& (comp->brkhit[0].a == 0x7d2f) && !comp->flgDOS);
+		compDestroy(comp);
+	}
+
+	printf("== hits\n");
+	{
+		// PUSH HL writes #8FFF then #8FFE: both points get theirs
+		Computer* comp = machine();
+		comp_poke(comp, 0x8060, 0xe5, 0);
+		comp->cpu->regPC = 0x8060;
+		comp->cpu->regHL = 0x1234;
+		comp->brkAdrMap[0x8fff] = MEM_BRK_WR;
+		comp->brkAdrMap[0x8ffe] = MEM_BRK_WR;
+		comp->flgBRKMEM = 1;
+		compExec(comp);
+		const xBrkHit* hi = hit_of(comp, BRK_CPUADR, 0x8fff);
+		const xBrkHit* lo = hit_of(comp, BRK_CPUADR, 0x8ffe);
+		check("PUSH HL: both bytes, each with its value", (comp->brkn == 2) && hi && lo
+			&& (hi->kind == MEM_BRK_WR) && (hi->val == 0x12) && (lo->val == 0x34)
+			&& (comp->brkhit[0].adr == 0x8fff));
+		compDestroy(comp);
+	}
+	{
+		// a cpu address point and the cell under it, on one byte
+		Computer* comp = machine();
+		xAdr cell = comp_get_xadr(comp, 0xa010, MEM_VIEW_READ);
+		comp->brkAdrMap[0xa010] = MEM_BRK_RD;
+		comp->brkRamMap[cell.abs] = MEM_BRK_RD;
+		comp->flgBRKMEM = 1;
+		comp->cpu->regPC = 0x800a;		// LD A,(#A010)
+		compExec(comp);
+		const xBrkHit* cpu = hit_of(comp, BRK_CPUADR, 0xa010);
+		const xBrkHit* ram = hit_of(comp, BRK_MEMRAM, 0xa010);
+		check("cpu address and cell on one byte: both, the byte read", (comp->brkn == 2) && cpu && ram
+			&& (cpu->a == 0xa010) && (ram->a == cell.abs) && (cpu->val == 0x77) && (ram->val == 0x77));
+		compDestroy(comp);
+	}
+	{
+		// DD CB: a fetch point on the prefix and one on the CB both
+		Computer* comp = machine();
+		comp->brkAdrMap[0x8004] = MEM_BRK_FETCH;
+		comp->brkAdrMap[0x8005] = MEM_BRK_FETCH;
+		comp->flgBRKMEM = 1;
+		comp->cpu->regPC = 0x8004;
+		compExec(comp);
+		check("DD CB: the prefix and the CB, both", comp->flgBRKPRE && (comp->brkn == 2)
+			&& hit_of(comp, BRK_CPUADR, 0x8004) && hit_of(comp, BRK_CPUADR, 0x8005));
+		compDestroy(comp);
+	}
+	{
+		// run to cursor where a cpu address fetch point stands: the temp point too
+		Computer* comp = machine();
+		xAdr cell = comp_get_xadr(comp, 0x8008, MEM_VIEW_READ);
+		comp->brkAdrMap[0x8008] = MEM_BRK_FETCH;
+		comp->brkRamMap[cell.abs] = MEM_BRK_TFETCH;
+		comp->flgBRKMEM = 1;
+		comp->cpu->regPC = 0x8008;
+		compExec(comp);
+		check("a temp point under a cpu address fetch point", (comp->brkn == 2) && hit_of(comp, BRK_CPUADR, 0x8008)
+			&& hit_of(comp, BRK_TEMP, 0x8008) && !(comp->brkRamMap[cell.abs] & MEM_BRK_TFETCH));
+		compDestroy(comp);
+	}
+	{
+		// a recording played back reads the port all the same
+		Computer* comp = machine();
+		comp_poke(comp, 0x8060, 0xdb, 0);	// IN A,(#FE)
+		comp_poke(comp, 0x8061, 0xfe, 0);
+		comp->cpu->regPC = 0x8060;
+		comp->cpu->regA = 0x7f;
+		comp->brkIOMap[0x7ffe] = MEM_BRK_RD;
+		comp->rzx.play = 1;
+		comp->rzx.frm.fetches = 100;
+		comp->rzx.frm.size = 1;
+		comp->rzx.frm.pos = 0;
+		comp->rzx.frm.data[0] = 0x5a;
+		compExec(comp);
+		const xBrkHit* io = hit_of(comp, BRK_IOPORT, 0x7ffe);
+		check("IN under RZX playback", (comp->cpu->regA == 0x5a) && io && (io->kind == MEM_BRK_RD) && (io->val == 0x5a));
+		comp->rzx.play = 0;
 		compDestroy(comp);
 	}
 	return failures ? 1 : 0;

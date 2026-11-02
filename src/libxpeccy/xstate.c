@@ -277,6 +277,12 @@ int xstate_load(xState* st, Computer* comp) {
 	vCoord rcut = comp->vid->rcut;
 	vCoord vsze = comp->vid->vsze;
 	int brdmode = comp->vid->brdmode;
+	// What the breakpoint list has set up is the list of now, not of the time
+	// the snapshot was taken: a point added since fires, one deleted is gone
+	int brkMem = comp->flgBRKMEM;
+	int brkIO = comp->flgBRKIO;
+	int brkIrq = comp->flgIBRK;
+	int brkCond = comp->flgCOND;
 	// A snapshot from under another playback, or none: its recording's file
 	// is closed, so the playback is the live one's - which the load ends.
 	size_t rzxLen = offsetof(Computer, rzx.frm.data) - offsetof(Computer, rzx);
@@ -299,6 +305,10 @@ int xstate_load(xState* st, Computer* comp) {
 	comp->vid->rcut = rcut;
 	comp->vid->vsze = vsze;
 	comp->vid->brdmode = brdmode;
+	comp->flgBRKMEM = brkMem;
+	comp->flgBRKIO = brkIO;
+	comp->flgIBRK = brkIrq;
+	comp->flgCOND = brkCond;
 	if (comp->ts) ts_state_restore(comp->ts);
 	// The image buffers are outside the snapshot and may have been swapped
 	// since, so the ray goes back by its offset into whichever buffer is

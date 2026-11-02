@@ -1985,10 +1985,12 @@ typedef struct {
 static quickKept undoKept = {QByteArray(), NULL, std::string(), xGame()};
 
 // A quick save may be from before what a recording has logged since, so the
-// recording joins there instead of going back with the machine.
+// recording joins there instead of going back with the machine. A breakpoint
+// hit it holds is from then, not for now.
 static int quick_xstate_load(xState* st, Computer* comp) {
 	rzxRecPos rec = comp->rzx.rec;
 	int res = xstate_load(st, comp);
+	if (res) comp_brk_clear(comp);
 	if (res && rec.on) {
 		comp->rzx.rec = rec;
 		rzx_rec_touch();

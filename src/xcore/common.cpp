@@ -84,6 +84,9 @@ void x_state_replaced() {
 	autostart_cancel();
 	fastload_forget();
 	cheats_forget();
+	// a breakpoint hit not acted on yet (a stop the redraw ran into) was the
+	// old machine's
+	if (conf.zx) comp_brk_clear(conf.zx);
 }
 
 // Another tape or disk, the machine as it was: its sound goes on and the pokes stay

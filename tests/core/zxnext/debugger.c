@@ -12,6 +12,12 @@ static void check(const char* name, int ok) {
 	if (!ok) failures++;
 }
 
+// the step's last breakpoint hit
+static const xBrkHit* last_hit(Computer* comp) {
+	static const xBrkHit none = {-1, -1, 0, -1, -1};
+	return comp->brkn ? &comp->brkhit[comp->brkn - 1] : &none;
+}
+
 static Computer* machine(void) {
 	Computer* comp = compCreate();
 	compSetHardware(comp, "ZXNext");
@@ -80,12 +86,12 @@ int debugger_check(void) {
 	comp->brkAdrMap[0x123] = MEM_BRK_WR;
 	comp->flgBRKMEM = 1;
 	compExec(comp);
-	check("CPU write breakpoint on ROM", comp->flgBRK && comp->brkt == BRK_CPUADR
-		&& comp->brka == 0x123 && comp->mem->ramData[0x123] == 0x19);
+	check("CPU write breakpoint on ROM", comp->flgBRK && last_hit(comp)->t == BRK_CPUADR
+		&& last_hit(comp)->a == 0x123 && comp->mem->ramData[0x123] == 0x19);
 	comp->brkAdrMap[0x123] = 0;
 	comp->brkRamMap[0x123] = MEM_BRK_WR;
 	comp->cpu->regPC = 0xc000;
-	comp->flgBRK = 0;
+	comp_brk_clear(comp);
 	compExec(comp);
 	check("protected ROM has no physical write", !comp->flgBRK);
 	next_mmu_set(comp, 2, 0xff);
@@ -93,7 +99,7 @@ int debugger_check(void) {
 	comp->brkAdrMap[0x4123] = MEM_BRK_WR;
 	comp->cpu->regPC = 0xc000;
 	compExec(comp);
-	check("CPU write breakpoint on unmapped slot", comp->flgBRK && comp->brka == 0x4123);
+	check("CPU write breakpoint on unmapped slot", comp->flgBRK && last_hit(comp)->a == 0x4123);
 	compDestroy(comp);
 
 	comp = machine();
@@ -113,8 +119,8 @@ int debugger_check(void) {
 	comp->brkRamMap[0x10008] |= MEM_BRK_FETCH;
 	comp->flgBRKMEM = 1;
 	compExec(comp);
-	ok = comp->flgBRK && comp->flgBRKPRE && comp->brka == 0x10008 && comp->cpu->regPC == 8;
-	comp->flgBRK = 0;
+	ok = comp->flgBRK && comp->flgBRKPRE && last_hit(comp)->a == 0x10008 && comp->cpu->regPC == 8;
+	comp_brk_clear(comp);
 	comp->flgDBG = 1;		// stepped over, as the app does
 	compExec(comp);
 	comp->flgDBG = 0;
@@ -208,9 +214,9 @@ int debugger_check(void) {
 	comp->brkRamMap[0x14066] = MEM_BRK_FETCH;
 	comp->flgBRKMEM = 1;
 	compExec(comp);
-	ok &= comp->flgBRKPRE && comp->brka == 0x14066 && !comp->next->irq.mfEnable;
+	ok &= comp->flgBRKPRE && last_hit(comp)->a == 0x14066 && !comp->next->irq.mfEnable;
 	comp->brkRamMap[0x14066] = 0;
-	comp->flgBRK = 0;
+	comp_brk_clear(comp);
 	compExec(comp);
 	check("Multiface NMI fetch and physical breakpoint", ok && comp->cpu->regBC == 0x3412 && comp->next->irq.mfEnable);
 	compDestroy(comp);
@@ -303,10 +309,10 @@ int debugger_check(void) {
 		comp->div->data[cell] = 0x00;		// NOP
 		comp->div->brkMap[cell] = MEM_BRK_FETCH;
 		comp->flgBRKMEM = 1;
-		comp->flgBRK = 0;
+		comp_brk_clear(comp);
 		comp->cpu->regPC = 0x2123;
 		compExec(comp);
-		ok = comp->flgBRK && (comp->brkt == BRK_MEMDIV) && (comp->brka == cell);
+		ok = comp->flgBRK && (last_hit(comp)->t == BRK_MEMDIV) && (last_hit(comp)->a == cell);
 		ok &= (getBrk(comp, 0x2123) & MEM_BRK_FETCH) != 0;
 		comp->div->brkMap[cell] = 0;
 	}
@@ -335,12 +341,12 @@ int debugger_check(void) {
 		comp->flgDBG = 0;		// breakpoints are not checked while it holds the machine
 		comp->div->brkMap[0x000b] = MEM_BRK_FETCH;
 		comp->flgBRKMEM = comp->flgMAP = 1;
-		comp->flgBRK = 0;
+		comp_brk_clear(comp);
 		comp->cpu->regPC = 0x000b;
 		compExec(comp);		// stops before it runs
-		ok &= comp->flgBRK && (comp->brkt == BRK_MEMDIV) && (comp->brka == 0x000b);
+		ok &= comp->flgBRK && (last_hit(comp)->t == BRK_MEMDIV) && (last_hit(comp)->a == 0x000b);
 		comp->div->brkMap[0x000b] = 0;
-		comp->flgBRK = 0;
+		comp_brk_clear(comp);
 		comp->flgBRKMEM = 0;
 		comp->cpu->regA = 0;
 		comp->cpu->regPC = 0x000b;

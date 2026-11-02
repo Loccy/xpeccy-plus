@@ -325,6 +325,9 @@ int brk_cond_true(xBrkPoint*, Computer*);
 int brk_check_cond(Computer*);
 int brk_hit(xBrkPoint*, Computer*);
 void brk_log_hit(xBrkPoint*, Computer*);
+enum {BRK_GO = 0, BRK_GO_DBG, BRK_GO_CLOSE};
+// the step's hits and, conds asked, the global conditions; BRK_GO_*
+int brk_take_hits(Computer*, int* skip, bool conds = true);
 void brk_set_logx(xBrkPoint*, const char*);
 void brk_reset_stats(xBrkPoint*);
 QString brk_label(int type, int adr);	// the label at it, empty when none

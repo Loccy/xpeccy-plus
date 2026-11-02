@@ -15,11 +15,16 @@ before that point is upstream's history and is not repeated here.
   Fetch also stops on the opcode after a prefix, on a HALT once, and not where an interrupt
   comes instead; Interrupt stops only on an interrupt the CPU takes, and so do Trace and
   stop on INT and the INT signal. Step Out counts an IM 1 interrupt once.
-- **Overlapping breakpoints** of one kind each get their hits: a switched-off one no longer
+- **Overlapping breakpoints** each get their hits: a switched-off one no longer
   stops the machine or hides the others, Read and Write on one port in two lines both work,
   a range and a single address at one start are two breakpoints, and any Interrupt
   breakpoint that is on arms it. `HITS` of a global condition counts this firing too, as on
   an address.
+- **No breakpoint hit is lost**: one instruction hits every breakpoint it touches, both
+  bytes of a `PUSH`, a CPU address and a cell on one byte, and global conditions beside
+  them; the log line names its own access. Step Out with PC on a RET stops, and so do reads
+  and writes of the first instruction after the Debugger closes. A quick load or a rewind
+  keeps the breakpoints of now. RZX playback and the loader loop skip see port breakpoints.
 
 ## 2026.9 - 2026-11-02
 
