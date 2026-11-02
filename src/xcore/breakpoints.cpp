@@ -29,29 +29,41 @@ static bool brk_is_ranged(int type) {
 	return false;
 }
 
-// The map of a point's type and the first byte of it the point covers, in the
-// form the core names a hit by (xBrkHit.a); NULL when the machine has no such map
-static unsigned char* brk_map_start(Computer* comp, xBrkPoint* brk, int* start) {
+// The map of a point's type, the first byte of it the point covers, in the
+// form the core names a hit by (xBrkHit.a), and the bytes the map has on this
+// machine; NULL when the machine has no such map
+static unsigned char* brk_map_start(Computer* comp, xBrkPoint* brk, int* start, int* size = NULL) {
+	int siz = 0;
+	unsigned char* map = NULL;
 	switch (brk->type) {
 		case BRK_CPUADR:
-			*start = brk->adr & 0xffff;
-			return comp->brkAdrMap;
+			siz = MEM_64K;
+			map = comp->brkAdrMap;
+			break;
 		case BRK_MEMRAM:
-			*start = brk->adr & comp->mem->ramMask;
-			return comp->brkRamMap;
+			siz = comp->mem->ramMask + 1;
+			map = comp->brkRamMap;
+			break;
 		case BRK_MEMROM:
-			*start = brk->adr & comp->mem->romMask;
-			return comp->brkRomMap;
+			siz = comp->mem->romMask + 1;
+			map = comp->brkRomMap;
+			break;
 		case BRK_MEMDIV:
 			if (!comp->div) return NULL;
-			*start = brk->adr % (DIV_EE_SIZE + DIV_RAM_MAX);
-			return comp->div->brkMap;
+			siz = DIV_EE_SIZE + DIV_RAM_MAX;
+			map = comp->div->brkMap;
+			break;
 		case BRK_MEMSLT:
 			if (!comp->slot->brkMap) return NULL;
-			*start = brk->adr & comp->slot->memMask;
-			return comp->slot->brkMap;
+			siz = comp->slot->memMask + 1;
+			map = comp->slot->brkMap;
+			break;
+		default:
+			return NULL;
 	}
-	return NULL;
+	*start = (brk->type == BRK_MEMDIV) ? (brk->adr % siz) : (brk->adr & (siz - 1));
+	if (size) *size = siz;
+	return map;
 }
 
 xbpIndex brkFind(xBrkPoint* brk) {
@@ -303,6 +315,7 @@ void brkSort() {std::stable_sort(conf.brk.list.begin(), conf.brk.list.end(), brk
 void brkAdd(xBrkPoint brk) {
 	xBrkPoint* bp = brkFind(&brk).ptr;
 	if (bp) {
+		bp->off = brk.off;		// the one confirmed now is on
 		bp->fetch = brk.fetch;
 		bp->read = brk.read;
 		bp->write = brk.write;
@@ -329,6 +342,18 @@ void brkSet(int type, int flag, int adr, int mask) {
 void brkXor(int type, int flag, int adr, int mask, int del) {
 	xBrkPoint brk = brkCreate(type, flag, adr, mask);
 	xbpIndex idx = brkFind(&brk);
+	if (!idx.ptr && brk_is_ranged(brk.type)) {
+		// no single here: a range starting on this byte with this flag is the
+		// mark on the line, and the toggle takes that flag off it
+		for (int i = 0; (i < (int)conf.brk.list.size()) && !idx.ptr; i++) {
+			xBrkPoint* rb = &conf.brk.list[i];
+			if ((rb->type != brk.type) || (rb->adr != brk.adr) || rb->off) continue;
+			if ((brk.fetch && rb->fetch) || (brk.read && rb->read) || (brk.write && rb->write)) {
+				idx.ptr = rb;
+				idx.idx = i;
+			}
+		}
+	}
 	if (idx.ptr) {
 		idx.ptr->fetch ^= brk.fetch;
 		idx.ptr->read ^= brk.read;
@@ -345,13 +370,19 @@ void brkXor(int type, int flag, int adr, int mask, int del) {
 	// brkInstall(brk, del);		// delete if inactive
 }
 
+static xBrkPoint* brk_by_id(int id) {
+	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++)
+		if (it->id == id) return &(*it);
+	return NULL;
+}
+
 // the point itself, by its id: the editor's new point has an id the list does
 // not hold and deletes nothing. One without an id goes by its place
 void brkDelete(xBrkPoint dbrk) {
 	int idx = -1;
 	if (dbrk.id) {
-		for (int i = 0; (i < (int)conf.brk.list.size()) && (idx < 0); i++)
-			if (conf.brk.list[i].id == dbrk.id) idx = i;
+		xBrkPoint* bp = brk_by_id(dbrk.id);
+		if (bp) idx = (int)(bp - conf.brk.list.data());
 	} else {
 		idx = brkFind(&dbrk).idx;
 	}
@@ -424,12 +455,14 @@ void brkInstall(xBrkPoint* brk, int del) {
 				comp->brkIOMap[adr] |= msk;
 		return;
 	}
-	int start;
-	unsigned char* map = brk_map_start(comp, brk, &start);
+	int start, size;
+	unsigned char* map = brk_map_start(comp, brk, &start, &size);
 	if (!map || !(msk & 0x0f)) return;
 	comp->flgBRKMEM = 1;
 	unsigned char* ptr = map + start;
-	for (int cnt = brk->eadr - brk->adr + 1; cnt > 0; cnt--)
+	// a range made on a machine with more memory ends at the end of this one's
+	int cnt = std::min(brk->eadr - brk->adr + 1, size - start);
+	for (; cnt > 0; cnt--)
 		*ptr++ |= (msk & 0x0f);
 }
 
@@ -713,12 +746,6 @@ static struct {
 	xBrkPoint* from;	// the point that opened the stretch it closed
 	int ints;
 } hitNote;
-
-static xBrkPoint* brk_by_id(int id) {
-	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++)
-		if (it->id == id) return &(*it);
-	return NULL;
-}
 
 // the label at an address of a point of this type: a cpu address, or a ram
 // cell's page and offset
@@ -1141,6 +1168,19 @@ static int brk_add_unreal(QString line) {
 // not understood and the conditions that do not compile, each logged. add
 // keeps the points already set, as the command line does with several lists
 
+// the same point as one in the list: place, flags, action, span, condition, log
+static bool brk_twin(xBrkPoint* brk) {
+	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++) {
+		if ((it->type != brk->type) || (it->adr != brk->adr) || (it->eadr != brk->eadr)) continue;
+		if ((brk->type == BRK_IOPORT) && (it->mask != brk->mask)) continue;
+		if ((it->fetch != brk->fetch) || (it->read != brk->read) || (it->write != brk->write)) continue;
+		if ((it->off != brk->off) || (it->onchg != brk->onchg) || (it->log != brk->log)) continue;
+		if ((it->action != brk->action) || (it->span != brk->span)) continue;
+		if ((it->cond == brk->cond) && (it->logx == brk->logx)) return true;
+	}
+	return false;
+}
+
 int brk_load_list(const char* fpath, int* bad, bool add) {
 	QString fnam(fpath);
 	QFile file(fnam);
@@ -1210,6 +1250,9 @@ int brk_load_list(const char* fpath, int* bad, bool add) {
 				brk.last = 0;
 				brk_set_cond(&brk, cond.toLocal8Bit().data());
 				brk_set_logx(&brk, logx.toLocal8Bit().data());
+				// a line the list already holds word for word (a second list
+				// with it, a line written twice) would count every hit twice
+				if (brk_twin(&brk)) continue;
 				conf.brk.list.push_back(brk);
 				if (!cond.isEmpty() && !xexpr_ok(brk.script)) {
 					// kept: a broken condition fires every time
