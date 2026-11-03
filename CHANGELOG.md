@@ -25,6 +25,10 @@ before that point is upstream's history and is not repeated here.
   them; the log line names its own access. Step Out with PC on a RET stops, and so do reads
   and writes of the first instruction after the Debugger closes. A quick load or a rewind
   keeps the breakpoints of now. RZX playback and the loader loop skip see port breakpoints.
+- **`.lnk` files on a folder disk** (Windows): a link NextZXOS makes (Extend+L in the
+  Browser) now reaches the folder instead of a "Writing to a folder" warning, and `.lnk`
+  files in a folder, Windows shortcuts too, are on the disk as files. A link a previous
+  version could not place comes back as `name (recovered).lnk`.
 
 ## 2026.9 - 2026-11-02
 

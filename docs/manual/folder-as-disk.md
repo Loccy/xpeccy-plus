@@ -25,7 +25,7 @@ once; one leading back up the tree is left out, so the machine never sees one fi
 names.
 
 The disk is 512 MB, or twice that and so on, up to 32 GB - whatever holds the files. A folder
-that takes writes gets 256 MB of free room on top of its files.
+that takes writes gets as much free room again as its files take, and 256 MB more.
 
 The folder is read again only with the power off: at a **Hard Reset**, a change of machine, or
 **Apply** in Options - as a real card is taken out, has files copied onto it and goes back in.
@@ -57,6 +57,32 @@ If the machine formats the disk, rewrites its partition table, or deletes nine t
 tree at once, the folder stops following: the disk lives on in memory until it is ejected, and a
 message says so once. A folder set to read only refuses every write, and the machine's DOS
 reports an error, as it would with a protected card.
+
+## What a folder cannot do
+
+```{index} folder as a disk; limits, image; or folder
+```
+
+A folder is files on your computer, and your computer's file system keeps less than a FAT disk
+does. Whatever the machine puts on the disk that is not a file's name, size, last write time or
+content lives in memory only, and is gone once the folder is read again:
+
+- **attributes** - hidden, system, read only: the machine sees them while the disk is in; the
+  files on your computer do not take them;
+- **other dates** - a creation or access date the machine sets; after a reread both are the
+  last write time;
+- **sectors outside files** - what a DOS writes to sectors of its own: a boot sector, the
+  reserved sectors, free space. A copy protection or a map of the disk kept there does not last;
+- **where files lie** - after a reread every file is laid out anew, in one piece. A program that
+  remembers where a file is on the disk, by sector or by cluster, finds something else there;
+- **the volume label** - it goes back to the disk's own.
+
+The folder also shows what your computer has, as it has it: a Windows shortcut (`.lnk`) is a
+file like any other and is not followed, and files the system hides are not on the disk.
+
+**For full compatibility, use an image.** An image file is a disk sector for sector, and
+nothing of the above applies to it. A folder is for convenience: files shared between the
+machine and the computer.
 
 ## Booting from a folder
 
