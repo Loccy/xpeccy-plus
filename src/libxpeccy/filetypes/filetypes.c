@@ -401,6 +401,7 @@ int diskPutSectorData(Floppy* flp, unsigned char tr,unsigned char sc,unsigned ch
 	unsigned short crc;
 	unsigned char* ptr = diskGetSectorDataPtr(flp,tr,sc);
 	if (ptr == NULL) return 0;
+	flp_drop_weak(flp, tr);
 	memcpy(ptr,buf,len);
 	crc = getCrc(ptr - 4,len + 4);
 	*(ptr + len) = ((crc & 0xff00) >> 8);
