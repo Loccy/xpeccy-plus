@@ -511,8 +511,12 @@ static int ra_snapshot(Computer* comp, int finish) {
 	return 1;
 }
 
+// Back where the machine stood: where the sound devices' copy (sound.cpp) stands too,
+// it never saw the frames run ahead - so no new start for it
 static void ra_wind_back(Computer* comp) {
+	int seed = comp->sndSeed;
 	xstate_load(raState, comp);
+	comp->sndSeed = seed;
 	*comp->keyb = raKbd;
 }
 
@@ -629,7 +633,10 @@ static int ra_kept_frames(Computer* comp, int k, int shown, int finish) {
 		}
 		if (!last) ra_raster_get(raShown, vid);
 		if (raKept.count > 0) {
-			if (xstate_load(raKept.state, comp)) {
+			int seed = comp->sndSeed;		// a frame ahead: see ra_wind_back()
+			int ok = xstate_load(raKept.state, comp);
+			comp->sndSeed = seed;
+			if (ok) {
 				*comp->keyb = raKept.kbd;
 			} else {		// not the machine it was taken from: run them all from this one
 				raKept.first = n + 1;

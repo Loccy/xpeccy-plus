@@ -404,7 +404,18 @@ void xPSGPage::mute_toggled(int chan, bool on) {
 	aymChan* ch[3] = {&chip->chanA, &chip->chanB, &chip->chanC};
 	emu_lock();
 	ch[chan]->mute = on ? 1 : 0;
+	if (conf.zx) conf.zx->sndSeed = 1;	// the chips the sound thread mixes take it too
 	emu_unlock();
+}
+
+// What the chip sounds like now - its levels, peaks, envelope - is in the copy the
+// sound thread mixes, when there is one; its registers are the machine's either way
+static aymChip* psg_heard(aymChip* chip) {
+	Computer* comp = conf.zx;
+	if (!comp || !chip) return chip;
+	for (int i = 0; i < 4; i++)
+		if (ts_chip(comp->ts, i) == chip) return snd_heard_chip(comp, i);
+	return chip;
 }
 
 void xPSGPage::blank() {
@@ -439,7 +450,8 @@ void xPSGPage::draw() {
 	}
 	putValue(per[3], chip->reg[6] & 0x1f);
 	putValue(per[4], (chip->reg[12] << 8) | chip->reg[11]);
-	aymChan* chan[3] = {&chip->chanA, &chip->chanB, &chip->chanC};
+	aymChip* heard = psg_heard(chip);
+	aymChan* chan[3] = {&heard->chanA, &heard->chanB, &heard->chanC};
 	QLabel* mix[3] = {ui.labMixA, ui.labMixB, ui.labMixC};
 	QLabel* state[3] = {ui.labStateA, ui.labStateB, ui.labStateC};
 	// The tone and noise generators free-run at a rate nothing on this page can
@@ -455,7 +467,7 @@ void xPSGPage::draw() {
 		// bit, the noise bit and the envelope applied the way the mixer has them.
 		// The figure is only readable on a held machine; the bar is its peak, which
 		// is readable either way.
-		int out = ay_chan_lev(chip, chan[i]);
+		int out = ay_chan_lev(heard, chan[i]);
 		// the bar takes the peak the chip itself kept since the last refresh:
 		// asking once a frame lands on one half of the square wave or the other
 		// and the bar drops to nothing under a note that is still playing
@@ -464,8 +476,8 @@ void xPSGPage::draw() {
 		mute[i]->setChecked(chan[i]->mute);
 	}
 	hold = false;
-	ui.labStateN->setText(!held ? "-" : (chip->chanN.lev ? "1" : "0"));
-	ui.labVolE->setText(gethexbyte(chip->chanE.vol & 0x1f));
+	ui.labStateN->setText(!held ? "-" : (heard->chanN.lev ? "1" : "0"));
+	ui.labVolE->setText(gethexbyte(heard->chanE.vol & 0x1f));
 	envView->setForm(chip->eForm);
 }
 

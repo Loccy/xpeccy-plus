@@ -2869,4 +2869,4 @@ void next_snap_loaded(Computer* comp, int vmode) {
 HardWare nxt_hw_core = {HW_ZXNEXT, "ZXNext", "ZX Spectrum Next", MEM_2M, 1.0, NULL, NULL,
 			nx_init, nx_map_mem, nx_out, nx_in, nx_mrd, nx_mwr, nx_irq, nx_ack, nx_reset, nx_sync,
 			nx_keyp, nx_keyr, nx_vol, NULL, nx_cont, &nx_quiet, 1, nx_power_on, nx_firmware, 1, 1,
-			nx_mem_view, nx_disasm};
+			nx_mem_view, nx_disasm, nx_snd_take, nx_mix};

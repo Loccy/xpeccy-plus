@@ -13,24 +13,29 @@
 extern "C" {
 #endif
 
+// What a mix hears at a sample, every byte meant: it is compared and copied as bytes
+// (sound.cpp sends a copy only when it changed), so there is no padding in it
 typedef struct {
-	// every machine
 	int beep;		// the beeper's level, bitChan.val
 	int tapeRec;		// the tape: recording, and the level it records
 	int tapeLevRec;
 	int tapeMute;		// ...or playing, unless muted, at this level
 	int tapeVolPlay;
+	int sel;		// the Next: the chip selected, the one heard with TurboSound off
+	unsigned char nr06, nr08, nr09;	// ...the mixer's nextregs: AY or YM table, TurboSound, ACB, mono
+	unsigned char pan[3];	// ...each chip's L/R enables
+	unsigned char dac[4];	// ...the DACs' outputs
+	unsigned char pad[2];
+} sndMixIn;
+
+typedef struct {
+	sndMixIn in;
 	TSound* ts;		// the PSGs
 	// zx_vol's other devices, as their own volume functions give them
 	sndPair gs;
 	sndPair sdrv;
 	sndPair saa;
-	// the Next (nx_mix)
-	unsigned char nr06, nr08, nr09;	// the mixer's nextregs: AY or YM table, TurboSound, ACB, mono
-	unsigned char pan[3];	// each chip's L/R enables
-	int sel;		// the chip selected, the one heard with TurboSound off
-	unsigned char dac[4];	// the DACs' outputs
-	int late;		// ns before the chips' time the sample is due
+	int late;		// the Next: ns before the chips' time the sample is due
 	// kept by the mix
 	sndDC dc[5];
 	int bVal, bVol, bLev;	// the beeper's share, for the val and volume it was worked out for
@@ -40,10 +45,10 @@ typedef struct {
 
 // the tape's share of a sample, in the beeper's units: what both mixes start from
 static inline int snd_tape_level(const sndMix* m, const sndVolume* sv) {
-	if (m->tapeRec)
-		return (m->tapeLevRec ? 0x800 : -0x800) * sv->tape / 100;
-	if (!m->tapeMute)
-		return ((m->tapeVolPlay - 0x80) << 8) * sv->tape / 1600;
+	if (m->in.tapeRec)
+		return (m->in.tapeLevRec ? 0x800 : -0x800) * sv->tape / 100;
+	if (!m->in.tapeMute)
+		return ((m->in.tapeVolPlay - 0x80) << 8) * sv->tape / 1600;
 	return 0;
 }
 

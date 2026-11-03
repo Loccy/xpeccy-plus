@@ -104,6 +104,9 @@ void snd_drop();
 // everything handed over is in the ring, the scope and the wav.
 void snd_q_flush();
 void snd_sync_wait();
+// the chip whose state is heard: the sound thread's copy when it mixes the machine
+// itself (the levels, peaks and envelope the debugger shows), else the machine's
+aymChip* snd_heard_chip(Computer*, int);
 // fn(arg) runs on the sound thread, after the sub-samples queued so far
 void snd_q_call(void (*fn)(long long), long long arg);
 int snd_queued_bytes();		// handed over, not yet in the ring

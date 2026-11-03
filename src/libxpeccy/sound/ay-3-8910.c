@@ -322,12 +322,15 @@ void ay_env_shape(int form, unsigned char* out, int len) {
 // Write a register as a port write would, so everything derived from it is set
 // too. curReg is put back: the machine may be halfway through its own
 // select-then-write pair.
+void (*ay_log)(aymChip*, int, int, int) = NULL;
+
 void ay_poke_reg(aymChip* chip, int reg, int val) {
 	ay_flush(chip);
 	unsigned char was = chip->curReg;
 	chip->curReg = reg & 0xff;
 	ay_set_reg(chip, val & 0xff);
 	chip->curReg = was;
+	if (ay_log) ay_log(chip, AYL_POKE, reg & 0xff, val & 0xff);
 }
 
 // A level through a DAC table, which is the only thing the two chips do

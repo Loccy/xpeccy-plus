@@ -129,6 +129,11 @@ struct HardWare {
 	int contLazy;		// cont walks the ray itself, when it needs it (comp_cont_hw leaves it)
 	cbHwMemView memView;	// cpu-visible memory behind overlays (NULL: Memory.map is the view)
 	cbHwDisasm disasm;	// instruction preview with paging across its M1 cycles
+	// The sound split in two (NULL: vol does it all on the emulation thread): what the
+	// machine itself does at a sample and gathers for the mix there, and the mix of
+	// that, which can run on a copy of the devices (sound.cpp's mirror)
+	void (*sndtake)(Computer*, sndMix*);
+	sndPair (*sndmix)(sndMix*, sndVolume*);
 };
 typedef struct HardWare HardWare;
 

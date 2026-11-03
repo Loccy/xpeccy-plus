@@ -79,6 +79,7 @@ int nx_snd_in(Computer*, int);
 void nx_snd_out(Computer*, int, int, long long);
 void nx_snd_fe(Computer*, int);
 sndPair nx_vol(Computer*, sndVolume*);
+void nx_snd_take(Computer*, sndMix*);
 int nx_snd_late(Computer*);
 
 // interrupts, CTC, NMI, Multiface (zxnext_int.c)

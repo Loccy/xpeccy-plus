@@ -50,6 +50,7 @@ void chip_set_type(aymChip* chip, int id) {
 	// 4294967.296 is 2^32 / 1000 (see tickFx)
 	chip->tickFx = (long long)(chip->frq * 2 * 4294967.296);
 	chip->tickAcc = 0;
+	if (ay_log) ay_log(chip, AYL_TYPE, 0, 0);
 }
 
 // A chip's clock against an AY's: the SSG half of a YM2203 divides its own by two.

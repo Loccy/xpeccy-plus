@@ -158,11 +158,11 @@ void zx_keyr(Computer* comp, keyEntry* ent) {
 // The tape and the beeper, as a sound mix sees them
 void snd_mix_take_wire(sndMix* m, Computer* comp) {
 	Tape* tap = comp->tape;
-	m->tapeRec = tap->rec;
-	m->tapeLevRec = tap->levRec;
-	m->tapeMute = tap->mute;
-	m->tapeVolPlay = tap->volPlay;
-	m->beep = comp->beep->val;
+	m->in.tapeRec = tap->rec;
+	m->in.tapeLevRec = tap->levRec;
+	m->in.tapeMute = tap->mute;
+	m->in.tapeVolPlay = tap->volPlay;
+	m->in.beep = comp->beep->val;
 }
 
 // Every device is mixed here, and each has a dc blocker of its own on the way in.
@@ -180,7 +180,7 @@ sndPair zx_mix(sndMix* m, sndVolume* sv) {
 	int lev = snd_tape_level(m, sv);
 	// 2:beeper. The tape reaches the speaker on the same wire and is one level
 	// with it here, so the two share a blocker as well
-	lev += bc_level_of(m->beep, sv->beep);
+	lev += bc_level_of(m->in.beep, sv->beep);
 	svol.left = lev;
 	svol.right = lev;
 	vol = snd_dc(&m->dc[0], svol, dc);

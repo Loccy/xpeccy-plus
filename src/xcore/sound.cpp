@@ -9,6 +9,7 @@
 #include "rewind.h"
 
 #include <atomic>
+#include <climits>
 #include <condition_variable>
 #include <iostream>
 #include <mutex>
@@ -140,7 +141,7 @@ static sndPair smpBuf[SND_FIR_TAPS * 2] = {{0,0}};
 // sound thread makes - the bench's hash, the video recording, the scope of a
 // held machine, the wav - wait for it to catch up first (snd_sync_wait).
 typedef struct {
-	int l, r;		// the mix as hw->vol gave it
+	int l, r;		// the mix as hw->vol gave it; with the mirror on, adv and late
 } sndSub;
 
 #define SND_Q_SIZE	0x4000		// sub-samples, about 12 ms at 44100
@@ -172,13 +173,21 @@ alignas(64) static std::atomic<long long> sqTail(0);	// what it has taken
 
 // What has to happen between two sub-samples, in order with them: `at` is the
 // count of sub-samples queued before it.
-enum {SND_T_DROP, SND_T_RESET, SND_T_PUT, SND_T_NS, SND_T_CALL};
+// The mirror's (see "the machine's mix on the sound thread" below) carry adv, the
+// devices' time since the item before them.
+enum {SND_T_DROP, SND_T_RESET, SND_T_PUT, SND_T_NS, SND_T_CALL,
+	SND_T_SEED, SND_T_UNMIRROR, SND_T_ADV, SND_T_POKE, SND_T_RETUNE, SND_T_IN};
 typedef struct {
 	long long at;
 	int kind;
 	sndPair lev;		// SND_T_PUT
 	long long val;		// SND_T_NS, SND_T_CALL's argument
 	void (*fn)(long long);	// SND_T_CALL
+	long long adv;		// the mirror's
+	int chip, what, a, b;	// SND_T_POKE: chip 0..2, AYL_ and its two; SND_T_RETUNE: chip, type in a
+	double frq;		// SND_T_RETUNE
+	sndMixIn in;		// SND_T_IN
+	void* blob;		// SND_T_SEED: a sndSeedCopy, the sound thread's to free
 } sndTok;
 
 #define SND_T_SIZE	0x2000
@@ -283,9 +292,10 @@ static void snd_q_publish() {
 }
 
 
-// A token goes in after what is queued. The sound thread is not woken for it - the
-// cycle's end does that (snd_q_flush): rewind puts one in for every sample it plays
-static void snd_tok(int kind, sndPair lev = sndPair(), long long val = 0, void (*fn)(long long) = NULL) {
+// A token goes in after what is queued: taken (snd_tok_new), filled, handed over
+// (snd_tok_put). The sound thread is not woken for it - the cycle's end does that
+// (snd_q_flush): rewind puts one in for every sample it plays
+static sndTok* snd_tok_new(int kind) {
 	snd_q_publish();
 	long long h = stHead.load(std::memory_order_relaxed);
 	while ((h - stTail.load(std::memory_order_acquire) >= SND_T_SIZE) && !sndQuit.load()) {
@@ -295,11 +305,21 @@ static void snd_tok(int kind, sndPair lev = sndPair(), long long val = 0, void (
 	sndTok* t = &sndT[h & SND_T_MASK];
 	t->at = sp.put;
 	t->kind = kind;
+	t->adv = 0;
+	return t;
+}
+
+static void snd_tok_put() {
+	stHead.store(stHead.load(std::memory_order_relaxed) + 1);
+	sp.dropAt = -1;
+}
+
+static void snd_tok(int kind, sndPair lev = sndPair(), long long val = 0, void (*fn)(long long) = NULL) {
+	sndTok* t = snd_tok_new(kind);
 	t->lev = lev;
 	t->val = val;
 	t->fn = fn;
-	stHead.store(h + 1);
-	sp.dropAt = -1;
+	snd_tok_put();
 }
 
 // Fast mode asks for a drop on every step: one already queued at this point, with
@@ -310,7 +330,7 @@ void snd_drop() {
 	sp.dropAt = sp.put;
 }
 
-static void snd_q_push(sndPair lev) {
+static void snd_q_push(int l, int r) {
 	while (sp.put - sp.tailSeen >= SND_Q_SIZE) {
 		sp.tailSeen = sqTail.load(std::memory_order_acquire);
 		if ((sp.put - sp.tailSeen < SND_Q_SIZE) || sndQuit.load()) break;
@@ -319,8 +339,8 @@ static void snd_q_push(sndPair lev) {
 		std::this_thread::yield();
 	}
 	sndSub* q = &sndQ[sp.put & SND_Q_MASK];
-	q->l = lev.left;
-	q->r = lev.right;
+	q->l = l;
+	q->r = r;
 	sp.put++;
 	if (sp.put - sp.pub >= SND_Q_BATCH) {
 		snd_q_publish();
@@ -333,6 +353,176 @@ static void snd_q_push(sndPair lev) {
 
 void snd_q_call(void (*fn)(long long), long long arg) {
 	snd_tok(SND_T_CALL, sndPair(), arg, fn);
+}
+
+// --- the machine's mix on the sound thread (the mirror)
+//
+// A machine whose sound is split (hw->sndtake, hw->sndmix) is not mixed here: at
+// every sub-sample it does what is its own (the Next: the copper, the AYs' clock, the
+// DACs' queue) and gathers what its mix hears; the sound thread holds a copy of its
+// chips and mixes. The copy follows the machine's: its time (TSound.advNs, handed
+// over with every item), the registers written (ay_log), the tuning; what the mix
+// hears goes over when it changed. A state put back or replaced (Computer.sndSeed)
+// is copied over whole. Run-ahead's frames send nothing: they are thrown away, and
+// TSound.advNs goes back with the state. A chip whose state is not all in its
+// struct (the YM2203's fm half) is not copied: such a machine is mixed here.
+
+// the copy to start from
+typedef struct {
+	TSound ts;
+	aymChip chip[4];
+	sndPair (*mix)(sndMix*, sndVolume*);
+} sndSeedCopy;
+
+// the producer's
+static struct alignas(64) {
+	Computer* comp;		// the machine the sound thread holds a copy of; NULL: none
+	sndMix take;		// what its take gathered at this sub-sample
+	sndMixIn sent;		// ...and what the sound thread was told last
+} mp;
+
+// the sound thread's
+static struct {
+	int on;
+	sndMix m;
+	TSound ts;
+	aymChip chip[4];
+	sndPair (*mix)(sndMix*, sndVolume*);
+} sm;
+
+static aymChip* snd_ts_chip(TSound* ts, int i) {
+	return (i == 0) ? ts->chipA : (i == 1) ? ts->chipB : (i == 2) ? ts->chipC : ts->chipD;
+}
+
+// can the sound thread mix this machine itself
+static int snd_mirror_fits(Computer* comp) {
+	if (!comp->hw->sndtake || !comp->hw->sndmix) return 0;
+	for (int i = 0; i < 4; i++)
+		if (snd_ts_chip(comp->ts, i)->type == SND_YM2203) return 0;
+	return 1;
+}
+
+// the devices' time handed over with an item
+static long long snd_mirror_adv(Computer* comp) {
+	long long adv = comp->ts->advNs;
+	comp->ts->advNs = 0;
+	return adv;
+}
+
+static void snd_mirror_seed(Computer* comp) {
+	TSound* ts = comp->ts;
+	sndSeedCopy* c = new sndSeedCopy;
+	c->ts = *ts;
+	for (int i = 0; i < 4; i++) {
+		aymChip* chip = snd_ts_chip(ts, i);
+		// as it stands, its time not yet counted left in it: the samples still to
+		// come in this step were due before its end (late), and they count up to
+		// there, not to the end
+		c->chip[i] = *chip;
+	}
+	c->mix = comp->hw->sndmix;
+	ts->advNs = 0;
+	sndTok* t = snd_tok_new(SND_T_SEED);
+	t->blob = c;
+	snd_tok_put();
+	memset(&mp.sent, 0xff, sizeof(mp.sent));	// what the mix hears goes over at the sample
+	mp.comp = comp;
+	comp->sndSeed = 0;
+}
+
+static void snd_mirror_off() {
+	mp.comp = NULL;
+	snd_tok(SND_T_UNMIRROR);
+}
+
+// a chip's register written (ay_poke_reg), its envelope counter set (the Next), its
+// type or clock set (chip_set_type: the machine's clock moved, the Next's AYs retuned)
+static void snd_ay_log(aymChip* chip, int what, int a, int b) {
+	if ((chip >= &sm.chip[0]) && (chip < &sm.chip[4])) return;	// the copy's own, on the sound thread
+	Computer* comp = mp.comp;
+	if (!comp || (comp != conf.zx) || x_runahead) return;	// not the machine there is a copy of
+	int i;
+	for (i = 0; (i < 3) && (snd_ts_chip(comp->ts, i) != chip); i++);
+	if (i > 2) return;
+	if (what == AYL_TYPE) {
+		sndTok* t = snd_tok_new(SND_T_RETUNE);
+		t->adv = snd_mirror_adv(comp);
+		t->chip = i;
+		t->a = chip->type;
+		t->frq = chip->frq;
+		snd_tok_put();
+		return;
+	}
+	sndTok* t = snd_tok_new(SND_T_POKE);
+	t->adv = snd_mirror_adv(comp);
+	t->chip = i;
+	t->what = what;
+	t->a = a;
+	t->b = b;
+	snd_tok_put();
+}
+
+// one sub-sample of a mirrored machine; scope: the debugger's step, heard by the scope only
+static void snd_mirror_sample(Computer* comp, int scope) {
+	if ((mp.comp != comp) || comp->sndSeed) snd_mirror_seed(comp);
+	comp->hw->sndtake(comp, &mp.take);
+	if (memcmp(&mp.take.in, &mp.sent, sizeof(mp.sent))) {
+		memcpy(&mp.sent, &mp.take.in, sizeof(mp.sent));
+		sndTok* t = snd_tok_new(SND_T_IN);
+		memcpy(&t->in, &mp.take.in, sizeof(t->in));
+		snd_tok_put();
+	}
+	long long adv = snd_mirror_adv(comp);
+	if (adv > INT_MAX) {			// fast mode ran on: a time too long for an item
+		sndTok* t = snd_tok_new(SND_T_ADV);
+		t->adv = adv;
+		snd_tok_put();
+		adv = 0;
+	}
+	int late = mp.take.late;
+	snd_q_push((int)adv, scope ? (-1 - late) : late);
+}
+
+// --- the sound thread's side of it
+
+// The time goes to the chips in pieces a chip's int count takes: it settles only past
+// 1 << 30 (ay_sync_ns), so a piece of that size on top of one would wrap it
+static void snd_mirror_time(long long ns) {
+	while (ns > 0) {
+		int k = (ns > (1 << 29)) ? (1 << 29) : (int)ns;
+		tsSync(&sm.ts, k);
+		ns -= k;
+	}
+}
+
+static void snd_mirror_take_seed(sndSeedCopy* c) {
+	sm.ts = c->ts;
+	aymChip* was[4] = {c->ts.chipA, c->ts.chipB, c->ts.chipC, c->ts.chipD};
+	for (int i = 0; i < 4; i++) {
+		sm.chip[i] = c->chip[i];
+		// its ports are the machine's: a write here goes nowhere
+		sm.chip[i].xrd = NULL;
+		sm.chip[i].xwr = NULL;
+		sm.chip[i].xptr = NULL;
+	}
+	sm.ts.chipA = &sm.chip[0];
+	sm.ts.chipB = &sm.chip[1];
+	sm.ts.chipC = &sm.chip[2];
+	sm.ts.chipD = &sm.chip[3];
+	sm.ts.curChip = &sm.chip[0];
+	for (int i = 0; i < 4; i++)
+		if (c->ts.curChip == was[i]) sm.ts.curChip = &sm.chip[i];
+	sm.ts.advNs = 0;
+	sm.m.ts = &sm.ts;
+	sm.mix = c->mix;
+	sm.on = 1;
+	delete c;
+}
+
+// the debugger's view of a chip: the copy the sound thread mixes, when there is one
+aymChip* snd_heard_chip(Computer* comp, int i) {
+	if (sm.on && (mp.comp == comp) && (i >= 0) && (i < 4)) return &sm.chip[i];
+	return snd_ts_chip(comp->ts, i);
 }
 
 // the end of an emulation cycle: what it made goes to the sound thread
@@ -413,10 +603,22 @@ static inline sndPair snd_master(sndPair lev) {
 
 // one sub-sample through the scope and the window; every DISCRATE-th makes a sample
 static void snd_sub(const sndSub* q) {
-	scope_put((q->l + q->r) / 2);
 	sndPair lev;
-	lev.left = q->l;
-	lev.right = q->r;
+	if (sm.on) {			// the mirror mixes it: adv, late (a step's: -1 - late)
+		snd_mirror_time(q->l);
+		int late = q->r;
+		int scope = (late < 0);
+		sm.m.late = scope ? (-1 - late) : late;
+		lev = sm.mix(&sm.m, &conf.snd.vol);
+		if (scope) {
+			scope_put((lev.left + lev.right) / 2);
+			return;
+		}
+	} else {
+		lev.left = q->l;
+		lev.right = q->r;
+	}
+	scope_put((lev.left + lev.right) / 2);
 	lev = snd_master(lev);
 	// rewind's history, as it is heard; by emulated time, which the output is
 	// not at another speed
@@ -486,6 +688,30 @@ static void snd_do_tok(const sndTok* t) {
 		case SND_T_CALL:
 			t->fn(t->val);
 			break;
+		case SND_T_SEED:
+			snd_mirror_take_seed((sndSeedCopy*)t->blob);
+			break;
+		case SND_T_UNMIRROR:
+			sm.on = 0;
+			break;
+		case SND_T_ADV:
+			snd_mirror_time(t->adv);
+			break;
+		case SND_T_POKE:
+			snd_mirror_time(t->adv);
+			if (t->what == AYL_POKE)
+				ay_poke_reg(&sm.chip[t->chip], t->a, t->b);
+			else if (t->what == AYL_ECNT)
+				sm.chip[t->chip].chanE.cnt = t->a;
+			break;
+		case SND_T_RETUNE:
+			snd_mirror_time(t->adv);
+			sm.chip[t->chip].frq = t->frq;
+			chip_set_type(&sm.chip[t->chip], t->a);
+			break;
+		case SND_T_IN:
+			memcpy(&sm.m.in, &t->in, sizeof(sm.m.in));
+			break;
 	}
 }
 
@@ -538,6 +764,12 @@ static void snd_thread_run() {
 
 static void snd_thread_start() {
 	if (sndThread) return;
+	// what the mirror's mix keeps starts as the machine's own does (nx_vol)
+	sm.m.bVal = -1;
+	sm.m.bVol = -1;
+	sm.m.dOut = 0xffffffff;
+	sm.m.dVol = -1;
+	ay_log = snd_ay_log;
 	sndQuit = 0;
 	sndThread = new std::thread(snd_thread_run);
 }
@@ -574,14 +806,19 @@ int sndSync(Computer* comp) {
 		gsFlush(comp->gs);
 //		saaFlush(comp->saa);
 		if (!conf.emu.fast && !conf.emu.pause) {
-			sndPair lev = comp->hw->vol(comp, &conf.snd.vol);
 			// the time this sub-sample stands for, for rewind: it moves with
 			// the speed and with VSync's steer, so it goes along when it does
 			if (conf.emu.rewind.on && (nsPerSampleFixed != sp.rwNsSent)) {
 				sp.rwNsSent = nsPerSampleFixed;
 				snd_tok(SND_T_NS, sndPair(), sp.rwNsSent);
 			}
-			snd_q_push(lev);
+			if (snd_mirror_fits(comp)) {
+				snd_mirror_sample(comp, 0);
+			} else {
+				if (mp.comp) snd_mirror_off();
+				sndPair lev = comp->hw->vol(comp, &conf.snd.vol);
+				snd_q_push(lev.left, lev.right);
+			}
 			sp.subPos++;
 			if (((sp.subPos % DISCRATE) == 0) && (conf.snd.need > 0))
 				conf.snd.need--;
@@ -806,6 +1043,16 @@ void snd_pipe_reset() {
 // goes into the scope first.
 void snd_scope_step(Computer* comp, int ns) {
 	if ((ns <= 0) || !comp->hw->vol) return;
+	if (snd_mirror_fits(comp)) {	// the mirror mixes them for the scope
+		scopeNsFixed += NS_TO_FIXED(ns);
+		while (scopeNsFixed > nsPerSampleFixed) {
+			snd_mirror_sample(comp, 1);
+			scopeNsFixed -= nsPerSampleFixed;
+		}
+		snd_q_flush();
+		snd_sync_wait();
+		return;
+	}
 	snd_sync_wait();
 	std::lock_guard<std::recursive_mutex> lk(sndWork);
 	scopeNsFixed += NS_TO_FIXED(ns);
