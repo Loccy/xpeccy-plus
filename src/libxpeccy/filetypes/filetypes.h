@@ -194,6 +194,7 @@ typedef struct {
 } p3File;
 
 int p3_disk(Floppy*, p3Disk*);
+int p3_boots(Floppy*);		// the +3's Loader boots it: sector 1 of track 0 sums to 3
 int p3_catalog(Floppy*, p3Disk*, p3File*, int);
 int p3_read(Floppy*, p3Disk*, p3File*, unsigned char*, int);
 int p3_dir_raw(Floppy*, p3Disk*, unsigned char*, int);

@@ -95,6 +95,15 @@ int p3_disk(Floppy* flp, p3Disk* dsk) {
 	return ok && p3_dir_ok(flp, dsk);
 }
 
+int p3_boots(Floppy* flp) {
+	if (!flp->insert) return 0;
+	unsigned char* bs = diskGetSectorDataPtr(flp, 0, 1);
+	if (!bs) return 0;
+	int sum = 0;
+	for (int i = 0; i < 512; i++) sum += bs[i];
+	return (sum & 0xff) == 3;
+}
+
 // the directory as it is on the disk, for noticing a change
 int p3_dir_raw(Floppy* flp, p3Disk* dsk, unsigned char* buf, int max) {
 	int recs = dsk->dirblk * dsk->blklen / 128;

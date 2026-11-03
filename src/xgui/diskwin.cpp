@@ -383,6 +383,8 @@ void xDiskWin::fill() {
 		fillTRD(flp, buf, txt);
 	} else if (p3_disk(flp, &p3dsk)) {
 		fillP3(flp, txt);
+	} else if (p3_boots(flp)) {
+		txt.append("+3 boot disk, no +3DOS catalog: it starts from the Loader");
 	} else {
 		txt.append("Neither TR-DOS nor +3DOS: there is no catalog to show");
 	}
