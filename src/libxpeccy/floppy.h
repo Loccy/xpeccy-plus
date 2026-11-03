@@ -46,8 +46,13 @@ typedef struct {
 	unsigned char byte[TRKLEN_HD];
 	unsigned char field[TRKLEN_HD];
 	int map[256];		// position of sector n = 1+
-	flpWeak* weak;		// the track's weak sectors, dropped when it is written
+	// What an image file said of the track beyond its bytes, dropped once the
+	// track is written: its weak sectors, and its block as the file held it,
+	// to be saved back the same
+	flpWeak* weak;
 	int nweak;
+	unsigned char* raw;
+	int rawlen;
 } flpTrack;
 
 typedef struct {
@@ -111,8 +116,9 @@ void flpGetTrackFields(Floppy*,int,unsigned char*);
 
 void flpClearTrack(Floppy*,int);
 void flpClearDisk(Floppy*);
-void flp_drop_weak(Floppy*, int);	// the track was written: what it read before is gone
+void flp_track_written(Floppy*, int);	// what the image said beyond the track's bytes is gone
 int flp_add_weak(Floppy*, int tr, int pos, int len, int copies, const unsigned char* data);
+int flp_keep_raw(Floppy*, int tr, const unsigned char* data, int len);
 
 unsigned short getCrc(unsigned char*, int);
 

@@ -246,6 +246,8 @@ int dsk_read(Floppy* flp, const char* name) {
 			// they measured: such a track gets the gap +3DOS formats with
 			int gap3 = (tib->gap3Size == 0x4e) ? DSK_GAP3_P3 : tib->gap3Size;
 			dsk_form(flp, tr, secs, sc, gap3);
+			if (ext && (tr < 256) && (pos + rtlen <= len) && !cut)	// saved back as it came, until written
+				flp_keep_raw(flp, tr, buf + pos, (int)rtlen);
 			tr += (sidcnt == 1) ? 2 : 1;
 			pos += rtlen;
 		} else {
@@ -286,69 +288,98 @@ static void db_put(dskBuf* b, const void* src, size_t n) {
 	b->len += n;
 }
 
-static size_t dsk_save_track(Floppy* flp, int trk, int side, dskBuf* b) {
-	TrackInfBlock tinf;
-	Sector sdata[29];
-	size_t fpos = b->len;
-	int sec = 0;
-	int pos = 0;
-	int i, dsz, dps;
-	int mdsz = 0;
-	int rtrk = (trk << 1) | side;
-	side &= 1;
-	memset(&tinf, 0, sizeof(TrackInfBlock));
-	// scan track & collect sectors info & data
-	for (pos = 0; (pos < flp->trklen) && (sec < 29); pos++) {
-		if (flp->data[rtrk].field[pos] == 1) {			// sector info
-			sdata[sec].trk = flp->data[rtrk].byte[pos++];	// C
-			sdata[sec].head = flp->data[rtrk].byte[pos++];	// H
-			sdata[sec].sec = flp->data[rtrk].byte[pos++];	// R
-			sdata[sec].sz = flp->data[rtrk].byte[pos++] & 7;// N
-			pos += 2;					// skip crc
-			if (sdata[sec].sz > mdsz)			// max N
-				mdsz = sdata[sec].sz;
-			dsz = 128 << sdata[sec].sz;			// sector data size
-			if (dsz > 0x1800)
-				dsz = 0x1800;
-			dps = flp->data[rtrk].map[sdata[sec].sec];	// position of sector data
-			if (dps > 0)
-				sdata[sec].type = flp->data[rtrk].byte[dps - 1];	// sector data type (FB | F8)
-			memcpy(sdata[sec].data, flp->data[rtrk].byte + dps, dsz);	// copy sector data
-			sec++;
-		}
+// the first data byte of the field after an ID that ends at pos, 0: none before the next ID
+static int dsk_data_after(flpTrack* t, int pos, int tlen) {
+	for (int i = pos; (i < pos + 60) && (i < tlen); i++) {
+		int f = t->field[i];
+		if (f == 1) return 0;
+		if (((f == 2) || (f == 3)) && (t->field[i - 1] != f)) return i;
 	}
-	if (sec < 1)		// no sectors found, no data written, size = 0
-		return 0;
-	// fill track info
+	return 0;
+}
+
+static int dsk_crc_bad(flpTrack* t, int st, int len, int tlen) {
+	if (st + len + 2 > tlen) return 1;
+	unsigned short crc = getCrc(t->byte + st, len);
+	return crc != ((t->byte[st + len] << 8) | t->byte[st + len + 1]);
+}
+
+// A track the way the image file had it, while nothing wrote it; else what is
+// on it: every ID in track order, ST1/ST2 from what its marks and CRCs say, a
+// data field cut by the index stored up to it (6K at most), a weak sector's reads
+static size_t dsk_save_track(Floppy* flp, int trk, int side, dskBuf* b) {
+	int rtrk = (trk << 1) | (side & 1);
+	flpTrack* t = &flp->data[rtrk];
+	if (t->raw) {
+		db_put(b, t->raw, t->rawlen);
+		return t->rawlen;
+	}
+	TrackInfBlock tinf;
+	SectorInfBlock* si = (SectorInfBlock*)tinf.sectorInfo;
+	const unsigned char* src[29];
+	int slen[29];
+	int tlen = flp->trklen;
+	int sec = 0;
+	int maxn = 0;
+	memset(&tinf, 0, sizeof(TrackInfBlock));
+	for (int pos = 4; (pos + 4 <= tlen) && (sec < 29); pos++) {
+		if ((t->field[pos] != 1) || (t->field[pos - 1] == 1)) continue;
+		SectorInfBlock* s = &si[sec];
+		s->track = t->byte[pos];
+		s->side = t->byte[pos + 1];
+		s->sector = t->byte[pos + 2];
+		s->size = t->byte[pos + 3];
+		if (dsk_crc_bad(t, pos - 4, 8, tlen)) s->sr1 |= 0x20;	// CRC error in the ID
+		if (s->size > maxn) maxn = s->size;
+		int dp = dsk_data_after(t, pos + 6, tlen);
+		int len = 0;
+		src[sec] = t->byte + dp;
+		if (!dp) {					// no data mark
+			s->sr1 |= 0x01;
+			s->sr2 |= 0x01;
+		} else {
+			if (t->field[dp] == 3) s->sr2 |= 0x40;	// deleted
+			int nom = dsk_nominal(s->size);
+			if (dp + nom + 2 > tlen) {		// the index cuts it: its CRC is never read
+				len = tlen - dp;
+				if (len > 0x1800) len = 0x1800;
+				s->sr1 |= 0x20;
+				s->sr2 |= 0x20;
+			} else {
+				len = nom;
+				if (dsk_crc_bad(t, dp - 4, nom + 4, tlen)) {
+					s->sr1 |= 0x20;
+					s->sr2 |= 0x20;
+				}
+			}
+			for (int i = 0; i < t->nweak; i++) {
+				if (t->weak[i].pos == dp) {	// all its reads
+					src[sec] = t->weak[i].data;
+					len = t->weak[i].len * t->weak[i].copies;
+				}
+			}
+		}
+		slen[sec] = len;
+		s->bslo = len & 0xff;
+		s->bshi = (len >> 8) & 0xff;
+		sec++;
+		pos += 5;
+	}
+	if (sec < 1) return 0;		// no sectors: not written, size 0
+	size_t fpos = b->len;
 	tinf.track = trk & 0xff;
 	tinf.side = side & 1;
-	tinf.secSize = mdsz & 7;		// 0 @ extend dsk ?
-	tinf.secCount = sec & 0xff;
-	tinf.gap3Size = 0x1a;
+	tinf.secSize = maxn;
+	tinf.secCount = sec;
+	tinf.gap3Size = 0x4e;		// what dumping tools write: no length measured
 	tinf.filler = 0xe5;
-	pos = 0;
-	for (i = 0; i < sec; i++) {
-		tinf.sectorInfo[pos] = sdata[i].trk;
-		tinf.sectorInfo[pos + 1] = sdata[i].head;
-		tinf.sectorInfo[pos + 2] = sdata[i].sec;
-		tinf.sectorInfo[pos + 3] = sdata[i].sz;
-		dsz = 128 << sdata[i].sz;
-		if (i == (sec - 1))				// end of cylinder
-			tinf.sectorInfo[pos + 4] = 0x80;
-		tinf.sectorInfo[pos + 6] = dsz & 0xff;
-		tinf.sectorInfo[pos + 7] = (dsz >> 8) & 0xff;
-		pos += 8;
-	}
-	// save track info block
 	db_put(b, "Track-Info\r\n", 12);
 	db_put(b, &tinf, sizeof(TrackInfBlock));
-	// save sectors data
-	for (i = 0; i < sec; i++) {
-		dsz = (128 << sdata[i].sz);
-		if (dsz > 0x1800)
-			dsz = 0x1800;
-		db_put(b, sdata[i].data, dsz);
-	}
+	for (int i = 0; i < sec; i++)
+		db_put(b, src[i], slen[i]);
+	static const unsigned char pad[0x100] = {0};
+	size_t sz = b->len - fpos;
+	if (sz & 0xff) db_put(b, pad, 0x100 - (sz & 0xff));	// the size table counts in 256s
 	return b->len - fpos;
 }
 

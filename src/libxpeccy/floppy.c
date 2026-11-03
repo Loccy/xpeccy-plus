@@ -28,19 +28,31 @@ Floppy* flpCreate(int id, cbflpirq cb, void* p) {
 
 void flpDestroy(Floppy* flp) {
 	for (int i = 0; i < 256; i++)
-		flp_drop_weak(flp, i);
+		flp_track_written(flp, i);
 	free(flp->path);
 	free(flp->data);
 	free(flp);
 }
 
-void flp_drop_weak(Floppy* flp, int tr) {
+void flp_track_written(Floppy* flp, int tr) {
 	flpTrack* t = &flp->data[tr & 0xff];
 	for (int i = 0; i < t->nweak; i++)
 		free(t->weak[i].data);
 	free(t->weak);
 	t->weak = NULL;
 	t->nweak = 0;
+	free(t->raw);
+	t->raw = NULL;
+	t->rawlen = 0;
+}
+
+int flp_keep_raw(Floppy* flp, int tr, const unsigned char* data, int len) {
+	flpTrack* t = &flp->data[tr & 0xff];
+	free(t->raw);
+	t->raw = (len > 0) ? (unsigned char*)malloc(len) : NULL;
+	t->rawlen = t->raw ? len : 0;
+	if (t->raw) memcpy(t->raw, data, len);
+	return t->rawlen;
 }
 
 int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsigned char* data) {
@@ -104,7 +116,7 @@ void flpWr(Floppy* flp, int hd, unsigned char val) {
 		flp->changed = 1;
 		x_media_writes++;
 		flpTrack* t = &flp->data[(flp->trk << 1) | hd];
-		if (t->nweak) flp_drop_weak(flp, (flp->trk << 1) | hd);
+		if (t->nweak || t->raw) flp_track_written(flp, (flp->trk << 1) | hd);
 		t->byte[flp->pos] = val;
 	}
 }
@@ -284,7 +296,7 @@ void flpPrev(Floppy* flp, int fdcSide) {
 }
 
 void flpClearTrack(Floppy* flp,int tr) {
-	flp_drop_weak(flp, tr);
+	flp_track_written(flp, tr);
 	memset(flp->data[tr].byte, 0, TRKLEN_HD);
 	memset(flp->data[tr].field, 0, TRKLEN_HD);
 }
@@ -303,7 +315,7 @@ void flpFillFields(Floppy* flp,int tr, int flag) {
 	unsigned char scn = 0;		// sector number (1+)
 	unsigned char sct = 1;		// sector size code
 	if (tr > 255) return;
-	flp_drop_weak(flp, tr);		// the track is laid out anew
+	flp_track_written(flp, tr);	// the track is laid out anew
 	for (i = 0; i < 256; i++) {
 		flp->data[tr].map[i] = 0;
 	}
