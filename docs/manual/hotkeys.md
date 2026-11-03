@@ -162,6 +162,7 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 | Action | Modern | Classic |
 |---|---|---|
 | Open | F3, Ctrl+O | F3 |
+| Recent Files | - | - |
 | Reload | - | - |
 | Add to Favorites | - | - |
 | Save | F2, Ctrl+S | F2 |
