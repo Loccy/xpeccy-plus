@@ -301,6 +301,19 @@ static inline int vid_clock(Video* vid, long long nsFixed) {
 // Steps of nsFixed each, the step's ns of each worked out as vid_step_ns() would
 // (vid->stepFixed with the first): the first one whose ns take the sum past room,
 // max if none does, -1 when the clock is not in a state to say. Nothing moves.
+// Taken one step at a time the dots and the whole ns add up to what the time of
+// all k steps at once gives: the dots are floor((clk + T) / p) and the whole ns
+// floor(owed + dots) - the remainders carried are what those floors leave. So the
+// sum after k steps is one formula, growing with k. The room is most often a few
+// steps (the next sub-sample): those are counted off; past them k is found by
+// doubling, then halving.
+#define VID_COUNT_STEPS	8
+static inline long long vid_clock_sum(const Video* vid, long long nsFixed, long long k) {
+	long long t = vid->stepFixed + k * nsFixed;		// the time of k steps
+	long long p = vid->nsPerDotFixed;
+	long long owed = vid->nsOwedFixed + (vid->tickWhole ? t : ((vid->clkFixed + t) / p) * p);
+	return NS_TO_FIXED(FIXED_TO_NS(owed));
+}
 static inline int vid_clock_count(const Video* vid, long long nsFixed, long long room, int max) {
 	long long p = vid->nsPerDotFixed;
 	long long c = vid->clkFixed;
@@ -308,7 +321,8 @@ static inline int vid_clock_count(const Video* vid, long long nsFixed, long long
 	long long add = vid->stepFixed + nsFixed;
 	long long sum = 0;
 	if ((nsFixed < 0) || (add < 0) || (c < 0) || (c >= p)) return -1;
-	for (int k = 1; k <= max; k++) {
+	int few = (max < VID_COUNT_STEPS) ? max : VID_COUNT_STEPS;
+	for (int k = 1; k <= few; k++) {
 		if (vid->tickWhole) {
 			owed += add;
 		} else {
@@ -323,7 +337,25 @@ static inline int vid_clock_count(const Video* vid, long long nsFixed, long long
 		if (sum > room) return k;
 		add = nsFixed;
 	}
-	return max;
+	if (max <= VID_COUNT_STEPS) return max;
+	int lo = VID_COUNT_STEPS, hi = 2 * VID_COUNT_STEPS;	// the sum after lo steps is not past room
+	if (hi > max) hi = max;
+	while ((hi < max) && (vid_clock_sum(vid, nsFixed, hi) <= room)) {
+		lo = hi;
+		hi = (hi < max / 2) ? hi * 2 : max;
+	}
+	if (hi >= max) {
+		hi = max;
+		if (vid_clock_sum(vid, nsFixed, max) <= room) return max;
+	}
+	while (hi - lo > 1) {		// past room after hi, not after lo
+		int mid = lo + (hi - lo) / 2;
+		if (vid_clock_sum(vid, nsFixed, mid) > room)
+			hi = mid;
+		else
+			lo = mid;
+	}
+	return hi;
 }
 // the step's ns, and the next step starts from nothing; vid->time keeps them for
 // the snapshot, which has always had the field

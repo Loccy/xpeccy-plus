@@ -47,6 +47,8 @@ class xThread : public QThread {
 		// a fetch/IRQ hit that stopped nothing, to be stepped over at this
 		// tickTotal: a cycle can end between the hit and that step
 		long long skipTick = -1;
+		long long haltRoom(Computer*);
+		long long lateNoTick = -(1LL << 62);	// where haltRoom last found the mix may not sample late
 		void tap_catch_load(Computer*, int, int base = LD_ROM_BASE, int dir = 1);
 		void tap_hand_over(Computer*, int blk, int base, int dir);
 		void tap_catch_save(Computer*);

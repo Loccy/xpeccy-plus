@@ -235,6 +235,16 @@ static void snd_start_playback() {
 		sndOutput->play();
 }
 
+// A sample is made at every DISCRATE-th sub-sample (sndSync), and the need is met
+// with the need-th of them from here: a run that takes its sub-samples after it
+// stops there at most, and the cycle ends on the step it would have
+long long snd_need_room(long long acc) {
+	int need = conf.snd.need;
+	if (conf.emu.fast || (need <= 0)) return nsPerSampleFixed - acc;
+	long long j = (DISCRATE - (sb_pos % DISCRATE)) + (long long)(need - 1) * DISCRATE;
+	return j * nsPerSampleFixed - acc;
+}
+
 // return 1 when buffer is full
 // NOTE: need sync|flush devices if debug
 int sndSync(Computer* comp) {

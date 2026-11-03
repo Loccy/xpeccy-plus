@@ -290,6 +290,18 @@ void next_audio(Computer* comp, int* l, int* r, int* env) {
 	*env = comp->ts->chipA->chanE.vol;
 }
 
+// hwQuiet.sndLate: nx_vol hears the AYs and the DACs at the sample's own time, and
+// in a HALT run-on nothing writes them; the beeper settled and a tape standing still
+// read the same at any time. The run may then pass the samples. Not with the copper
+// running: nx_vol runs it up to the time it is called, and a late sample would see
+// the mixer's nextregs the copper writes after its own time
+int nx_snd_late(Computer* comp) {
+	if ((NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN) return 0;
+	bitChan* bc = comp->beep;
+	if ((bc->val != (bc->lev ? bc->hi : bc->lo)) || (bc->perH && bc->perL)) return 0;
+	return !comp->tape->on;
+}
+
 // The mix (audio_mixer.vhd 83-103): ear + mic + the AYs + 4 x the DACs (+ the Pi's
 // I2S, a constant 512 while it is off), each side 13 bits unsigned. Each part takes
 // its own volume from the options and its own dc blocker, as zx_vol does.

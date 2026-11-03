@@ -2848,7 +2848,7 @@ static void nx_halt_done(Computer* comp, int adr, long long t0, long long n, int
 	nxHaltLast.tick = t0 + n * t;
 }
 
-static const hwQuiet nx_quiet = {HWQ_ACK_NEXT, NULL, NULL, zx_devs_sync, NULL, 0, nx_halt, nx_halt_done};
+static const hwQuiet nx_quiet = {HWQ_ACK_NEXT, NULL, NULL, zx_devs_sync, NULL, 0, nx_halt, nx_halt_done, nx_snd_late};
 
 // An SZX has put xNextState back over a machine reset for it (filetypes/szx_ext.c):
 // what is worked out of the state, again. The clock comes back after this.

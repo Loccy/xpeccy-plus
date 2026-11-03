@@ -89,6 +89,10 @@ typedef struct {
 	// puts back (0: step), and the step start the last one has to stay short of
 	int (*halt)(Computer*, int adr, long long* until);
 	void (*haltDone)(Computer*, int adr, long long t0, long long n, int t);
+	// The real-time HALT run-on may pass the sound's samples, taken after it: what the
+	// machine's mix reads stands still meanwhile or is read at the sample's own time
+	// (comp->sndAgo). NULL or 0: the run stops at every sample
+	int (*sndLate)(Computer*);
 } hwQuiet;
 
 struct HardWare {
