@@ -11,6 +11,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Changed
 
+- **File > Recent opens a file with one click or its number key**, a game with saves too
+  (its saves are under the arrow). A new **Recent Files** hotkey, unset at first, opens the
+  list over the picture.
 - **The ZX Spectrum Next takes much less of the host CPU**: idle in NextBASIC or the
   NextZXOS menu about a third of what it took, and games and demos up to 11 % less, with the
   same picture and sound. A frame in which nothing on screen changes is not drawn again.
