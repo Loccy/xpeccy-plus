@@ -111,26 +111,27 @@ static void nxv_hset(nxvHist* h, int v) {
 }
 
 static int nxv_hnew(nxvHist* h) {
-	return h->n ? h->v[(h->head + h->n - 1) % NXV_HIST] : h->v0;
+	return h->n ? h->v[(h->head + h->n - 1) & (NXV_HIST - 1)] : h->v0;
 }
 
 static void nxv_hpush(nxvHist* h, long long t, int v) {
 	if (nxv_hnew(h) == v) return;
 	if (h->n == NXV_HIST) {
 		h->v0 = h->v[h->head];		// the oldest goes
-		h->head = (h->head + 1) % NXV_HIST;
+		h->head = (h->head + 1) & (NXV_HIST - 1);
 		h->n--;
 	}
-	int i = (h->head + h->n) % NXV_HIST;
+	int i = (h->head + h->n) & (NXV_HIST - 1);
 	h->t[i] = t;
 	h->v[i] = v;
 	h->n++;
 }
 
-// the value a flop clocked at t takes: the last change before t
+// the value a flop clocked at t takes: the last change before t (most often the
+// newest, asked first)
 static int nxv_hat(nxvHist* h, long long t) {
 	for (int k = h->n - 1; k >= 0; k--) {
-		int i = (h->head + k) % NXV_HIST;
+		int i = (h->head + k) & (NXV_HIST - 1);
 		if (h->t[i] < t) return h->v[i];
 	}
 	return h->v0;
@@ -143,15 +144,17 @@ void nxv_memw(Computer* comp, int key, int old, long long w) {
 	e->w = w;
 	e->key = key;
 	e->old = old;
-	V.wrHead = (V.wrHead + 1) % NXV_WRQ;
+	V.wrHead = (V.wrHead + 1) & (NXV_WRQ - 1);
 }
 
-// the byte at key as a read at CLK_28 r saw it: writes after r undone
+// the byte at key as a read at CLK_28 r saw it: writes after r undone. The writes
+// come in time order, so most often the newest is before r and there is none to undo
 static int nxv_mem(Computer* comp, int key, long long r) {
 	int v = (key >= NXV_SHADOW) ? NX.shadow[key - NXV_SHADOW] : comp->mem->ramData[key];
 	int i = V.wrHead;
+	if (V.wr[(i - 1) & (NXV_WRQ - 1)].w <= r) return v;
 	for (int k = 0; k < NXV_WRQ; k++) {
-		i = (i + NXV_WRQ - 1) % NXV_WRQ;
+		i = (i - 1) & (NXV_WRQ - 1);
 		nxvWrite* e = &V.wr[i];
 		if (e->w <= r) break;
 		if (e->key == key) v = e->old;
