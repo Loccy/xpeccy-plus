@@ -57,13 +57,19 @@ line. Whether a tape or a disk is run or only mounted is explained in
 To choose Run or Mount for one file only, hold Shift as you drop it, or as you click
 **Open** in the open dialog. A small menu asks: **Run** or **Mount**.
 
-**File > Recent** lists the last 10 files opened, newest first. Hold the mouse over an item
+**File > Recent** lists the last 10 files opened, newest first. Click a file to open it, or
+press its number: **1** to **9**, and **0** for the tenth. Hold the mouse over an item
 to see where the file is. A file that no longer exists is reported and taken off the list.
 A file of a type Xpeccy+ does not know is reported as **Unknown file type** and does not
 go on the list.
-**Clear** empties the list. A file whose game has saves opens a menu: **Open** opens it as
-the item would, and under it are the game's saves, newest first, to load (see
-[Quick saves](#quick-saves)).
+**Clear** empties the list. A file whose game has saves has an arrow: hold the mouse over it
+to see the game's saves, newest first, and click one to load it (see
+[Quick saves](#quick-saves)). On macOS that menu also starts with **Open**, which opens the
+file.
+
+The **Recent Files** hotkey opens the list over the picture, so a file can be opened with
+two keys: the hotkey, then the file's number. It has no key at first; set one on the
+[Hotkeys page](hotkeys.md).
 
 **File > Reload** opens the last file again, the way it was opened: into the same drive,
 run or mounted. If you loaded a labels file in the Debugger, it is read again too.

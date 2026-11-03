@@ -2477,12 +2477,15 @@ class xRootMenu : public xMenu {
 	public:
 		// byPress: opened by a press of the right button, see mouseReleaseEvent
 		xRootMenu(QWidget* p = nullptr, bool byPress = true) : xMenu(p), byPress(byPress) {}
+		xRootMenu(const QString& title, QWidget* p, bool byPress) : xMenu(title, p), byPress(byPress) {}
 		void addRoot(QMenu* sub) {roots.insert(sub->menuAction());}
+		void reset();
 	protected:
 		void showEvent(QShowEvent*) override;
 		void mousePressEvent(QMouseEvent*) override;
 		void mouseReleaseEvent(QMouseEvent*) override;
 		void keyPressEvent(QKeyEvent*) override;
+		void fire(QAction*);
 	private:
 		bool clickRoot(QAction*);
 		QSet<QAction*> roots;
@@ -2490,12 +2493,48 @@ class xRootMenu : public xMenu {
 		bool pressed = false;
 };
 
+// for a menu refilled on every show: its submenus go with their items
+void xRootMenu::reset() {
+	foreach(QAction* act, actions()) {
+		if (act->menu() && (act->menu()->parent() == this))
+			act->menu()->deleteLater();
+	}
+	clear();
+	roots.clear();
+}
+
 bool xRootMenu::clickRoot(QAction* act) {
 	if (!roots.contains(act)) return false;
-	act->menu()->hide();		// it may already be open under the cursor
-	hide();
-	act->trigger();
+	fire(act);
 	return true;
+}
+
+// every menu up goes, the submenu under the cursor and the File menu over this
+// one too, as when any item is picked
+void xRootMenu::fire(QAction* act) {
+	while (QWidget* pop = QApplication::activePopupWidget()) {
+		if (!pop->close()) break;
+	}
+	act->trigger();
+}
+
+// File > Recent: a digit opens its image, as a click on it does
+class xRecentMenu : public xRootMenu {
+	public:
+		xRecentMenu(const QString& title, QWidget* p) : xRootMenu(title, p, false) {}
+	protected:
+		void keyPressEvent(QKeyEvent*) override;
+};
+
+void xRecentMenu::keyPressEvent(QKeyEvent* ev) {
+	int key = ev->key();
+	if ((key >= Qt::Key_0) && (key <= Qt::Key_9) && !(ev->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
+		int idx = (key == Qt::Key_0) ? 9 : key - Qt::Key_1;
+		QAction* act = actions().value(idx);
+		if (act && act->property("xRecent").toBool()) fire(act);
+		return;
+	}
+	xRootMenu::keyPressEvent(ev);
 }
 
 // MainWin::mousePressEvent pops this menu up on the press of the right button, so
@@ -2783,7 +2822,7 @@ void MainWin::initMenuBar() {
 	fileMenu = new xMenu(this);
 	fileMenu->setTitle("File");
 	cutAction(fileMenu, "Open...", XCUT_LOAD, "fileopen");
-	recentMenu = new xMenu("Recent", this);
+	recentMenu = new xRecentMenu("Recent", this);
 	recentMenu->setToolTipsVisible(true);		// the item says the name, the tip where it is
 	fileMenu->addMenu(recentMenu);
 	cutAction(fileMenu, "Reload", XCUT_RELOAD, "refresh");
@@ -2942,7 +2981,8 @@ void MainWin::initMenuBar() {
 	act = help->addAction(QGuiApplication::windowIcon(), "About " XPRODUCT, this, &MainWin::showAbout);
 	act->setMenuRole(QAction::AboutRole);
 
-	foreach(QMenu* menu, QList<QMenu*>() << fileMenu << bookmarkMenu << viewMenu << help)
+	// Recent is watched for its hotkey, which pops it up alone
+	foreach(QMenu* menu, QList<QMenu*>() << fileMenu << recentMenu << bookmarkMenu << viewMenu << help)
 		menuWatch(menu);
 	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::syncActions);
 	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::fillRecent);
@@ -3162,10 +3202,31 @@ void MainWin::popupUserMenu(const QPoint& pos) {
 	}
 }
 
-// the images opened last; one that is gone is said so and taken off the list
+// the Recent Files hotkey: the list at the pointer when it is over the window,
+// else at the picture's corner
+void MainWin::popupRecent() {
+	fillRecent();
+	QPoint pos = QCursor::pos();
+	if (!rect().contains(mapFromGlobal(pos)))
+		pos = mapToGlobal(QPoint(0, 0));
+	auto show = [this, pos]() {
+		recentMenu->popup(pos);
+		recentMenu->setFocus();
+	};
+	if (fsCompose(true)) {
+		QTimer::singleShot(FS_SETTLE, this, show);
+	} else {
+		show();
+	}
+}
+
+// The images opened last; one that is gone is said so and taken off the list.
+// A click on an item or its digit opens the image, one with saves too: those
+// are its menu, opened by hovering.
 void MainWin::fillRecent() {
 	resumeAct->setEnabled(!conf.saves.last.isEmpty() && QFileInfo::exists(conf.saves.last));
-	recentMenu->clear();
+	xRecentMenu* menu = static_cast<xRecentMenu*>(recentMenu);
+	menu->reset();
 	int n = 0;
 	foreach(QString path, conf.recentList) {
 		n++;
@@ -3180,19 +3241,24 @@ void MainWin::fillRecent() {
 			openMedia(path, FG_ALL, 0, conf.autorun);
 			setFocus();
 		};
-		// an image with saves: a menu of them, under the item that opens it
+		QAction* act;
 		QString dir = saves_folder_of(path);
 		if (!dir.isEmpty() && !saves_list(dir).isEmpty()) {
 			QMenu* sub = recentMenu->addMenu(text);
 			sub->setToolTipsVisible(true);
-			sub->menuAction()->setToolTip(QDir::toNativeSeparators(path));
+			act = sub->menuAction();
+			connect(act, &QAction::triggered, this, open);
+			menu->addRoot(sub);
+#ifdef __APPLE__	// the system's menu cannot pick a root: the image gets an item of its own
 			sub->addAction(QIcon(":/images/fileopen.png"), "Open", this, open);
 			sub->addSeparator();
+#endif
 			recentSaves(sub, dir);
-			continue;
+		} else {
+			act = recentMenu->addAction(text, this, open);
 		}
-		QAction* act = recentMenu->addAction(text, this, open);
 		act->setToolTip(QDir::toNativeSeparators(path));
+		act->setProperty("xRecent", true);
 	}
 	if (conf.recentList.isEmpty()) {
 		recentMenu->addAction("empty")->setEnabled(false);

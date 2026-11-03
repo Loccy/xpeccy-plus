@@ -499,6 +499,7 @@ static xShortcut short_tab[] = {
 	{SCG_MAIN, XCUT_WAV_OUT, "key.write.wav", "Record Sound to WAV", {}},
 	{SCG_MAIN, XCUT_RELOAD_SHD, "key.reload.shader", "Reload Shader", {}},
 	{SCG_MAIN, XCUT_RELOAD, "key.reload", "Reload", {}},
+	{SCG_MAIN, XCUT_RECENT, "key.recent", "Recent Files", {}},
 	{SCG_MAIN, XCUT_FAVORITE, "key.favorite.add", "Add to Favorites", {}},
 	{SCG_MAIN, XCUT_QUICKSAVE, "key.quick.save", "Quick Save", {}},
 	{SCG_MAIN, XCUT_QUICKLOAD, "key.quick.load", "Quick Load", {}},

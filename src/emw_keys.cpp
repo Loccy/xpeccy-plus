@@ -338,6 +338,9 @@ void MainWin::xkey_press(int xkey, bool cmd) {
 			case XCUT_QUICKUNDO:
 				quickUndo();
 				break;
+			case XCUT_RECENT:
+				popupRecent();
+				break;
 			case XCUT_RESUME:
 				resumeLast();
 				break;
