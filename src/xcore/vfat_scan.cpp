@@ -48,15 +48,59 @@ static int vfh_mkdir(void*, const char* path) {
 	return QDir().mkdir(vfh_str(path)) ? 0 : -1;
 }
 
+#ifdef _WIN32
+// Qt takes any path ending in ".lnk" for a shell shortcut and answers for its target, even with
+// no file there: whether a file exists, its size and time, and renames are asked of Windows.
+// The \\?\ form keeps paths past MAX_PATH working, as Qt has them.
+static std::wstring vfh_wide(const QString& path) {
+	QString p = QDir::toNativeSeparators(QDir::cleanPath(path));
+	if (p.startsWith("\\\\") && !p.startsWith("\\\\?\\")) p = "\\\\?\\UNC\\" + p.mid(2);
+	else if ((p.size() > 2) && (p[1] == ':') && (p[2] == '\\')) p = "\\\\?\\" + p;
+	return p.toStdWString();
+}
+
+static bool vfh_attr(const QString& path, WIN32_FILE_ATTRIBUTE_DATA* d) {
+	return GetFileAttributesExW(vfh_wide(path).c_str(), GetFileExInfoStandard, d) != 0;
+}
+
+// in seconds, cut as QFileInfo::lastModified() gives them: a host file's time is compared
+// with the one the scan took
+static long long vfh_mtime(const WIN32_FILE_ATTRIBUTE_DATA& d) {
+	unsigned long long t = ((unsigned long long)d.ftLastWriteTime.dwHighDateTime << 32) | d.ftLastWriteTime.dwLowDateTime;
+	return ((long long)(t / 10000) - 11644473600000LL) / 1000;
+}
+
+// a ".lnk" Qt calls a link that is a plain file on the disk - a link NextZXOS made, or a
+// Windows shortcut: on the card it is the file it is
+static bool vfs_lnk_file(const QFileInfo& inf, long long* size, long long* mtime) {
+	WIN32_FILE_ATTRIBUTE_DATA d;
+	if (!inf.fileName().endsWith(".lnk", Qt::CaseInsensitive) || !vfh_attr(inf.absoluteFilePath(), &d)) return false;
+	if (d.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) return false;
+	*size = ((long long)d.nFileSizeHigh << 32) | d.nFileSizeLow;
+	*mtime = vfh_mtime(d);
+	return true;
+}
+#endif
+
 static int vfh_kind(void*, const char* path) {
+#ifdef _WIN32
+	WIN32_FILE_ATTRIBUTE_DATA d;
+	if (!vfh_attr(vfh_str(path), &d)) return 0;
+	return (d.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 2 : 1;
+#else
 	QFileInfo inf(vfh_str(path));
 	if (!inf.exists() && !inf.isSymLink()) return 0;
 	return inf.isDir() ? 2 : 1;
+#endif
 }
 
 static int vfh_rename(void* ctx, const char* from, const char* to) {
 	if (vfh_kind(ctx, to)) return -1;		// a plain rename() would take its place
+#ifdef _WIN32
+	return MoveFileW(vfh_wide(vfh_str(from)).c_str(), vfh_wide(vfh_str(to)).c_str()) ? 0 : -1;
+#else
 	return QDir().rename(vfh_str(from), vfh_str(to)) ? 0 : -1;
+#endif
 }
 
 static int vfh_replace(void*, const char* from, const char* to) {
@@ -106,10 +150,17 @@ static void vfh_settime(void*, const char* path, unsigned int mtime) {
 }
 
 static int vfh_stat(void*, const char* path, long long* size, long long* mtime) {
+#ifdef _WIN32
+	WIN32_FILE_ATTRIBUTE_DATA d;
+	if (!vfh_attr(vfh_str(path), &d)) return -1;
+	*size = (d.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 0 : (((long long)d.nFileSizeHigh << 32) | d.nFileSizeLow);
+	*mtime = vfh_mtime(d);
+#else
 	QFileInfo inf(vfh_str(path));
 	if (!inf.exists()) return -1;
 	*size = inf.size();
 	*mtime = inf.lastModified().toMSecsSinceEpoch() / 1000;	// as the scan takes it
+#endif
 	return 0;
 }
 
@@ -190,7 +241,9 @@ static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, co
 	for (int q = 0; q < queue.size(); q++) {
 		vfsDir cur = queue[q];			// a copy: appending moves the list
 		QString curReal = real_dir(cur.path);
-		QFileInfoList list = QDir(cur.path).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name | QDir::DirsFirst);
+		// links are left out by hand, not by QDir::NoSymLinks: a ".lnk" file Qt calls one is
+		// let through (System lets in what Qt takes for a link to nothing)
+		QFileInfoList list = QDir(cur.path).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::System, QDir::Name | QDir::DirsFirst);
 		foreach(QFileInfo inf, list) {
 			if (vf->nodes >= VFS_MAXNODES) {
 				drop.count = true;
@@ -202,10 +255,19 @@ static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, co
 				inf = QFileInfo(QDir(cur.path).filePath(QString::fromUtf8(back)));
 				free(back);
 			}
-			unsigned int mtime = inf.lastModified().toMSecsSinceEpoch() / 1000;
+			long long lsize = 0, ltime = 0;
+			bool lnk = false;
+			if (inf.isSymLink()) {
+#ifdef _WIN32
+				lnk = vfs_lnk_file(inf, &lsize, &ltime);
+#endif
+				if (!lnk) continue;
+			}
+			unsigned int mtime = lnk ? (unsigned int)ltime : inf.lastModified().toMSecsSinceEpoch() / 1000;
+			unsigned long long size = lnk ? (unsigned long long)lsize : (unsigned long long)inf.size();
 			QByteArray name = inf.fileName().toUtf8();
 			int idx;
-			if (inf.isDir()) {
+			if (!lnk && inf.isDir()) {
 				if (cur.depth >= VFS_MAXDEPTH) {
 					drop.deep++;
 					continue;
@@ -221,14 +283,14 @@ static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, co
 				seen.insert(real);
 				idx = vfat_add(vf, cur.idx, name.constData(), 0, mtime, 1);
 				if (idx >= 0) queue.append({idx, inf.absoluteFilePath(), cur.depth + 1});
-			} else if (inf.isFile()) {
+			} else if (lnk || inf.isFile()) {
 				if ((cur.depth == 1) && !writable && vfs_hidden(inf)) continue;
-				if (inf.size() > VF_MAXFILE) {
+				if (size > VF_MAXFILE) {
 					drop.big++;
 					continue;
 				}
-				idx = vfat_add(vf, cur.idx, name.constData(), inf.size(), mtime, 0);
-				if (idx >= 0) drop.bytes += inf.size();
+				idx = vfat_add(vf, cur.idx, name.constData(), (unsigned int)size, mtime, 0);
+				if (idx >= 0) drop.bytes += size;
 			} else {
 				continue;
 			}
