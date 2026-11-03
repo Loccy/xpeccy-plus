@@ -1,0 +1,52 @@
+#pragma once
+
+// What a machine's mix reads, gathered out of the machine. A machine's vol function
+// fills one from its own devices and mixes from it (zx_mix, nx_mix, alf_mix); the mix
+// itself looks at nothing else, so it can as well be run from a copy of these devices
+// kept somewhere else. What the mix keeps from one sample to the next - the dc
+// blockers, the levels it worked out last - is in here too.
+
+#include "sndcommon.h"
+#include "ayym.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct {
+	// every machine
+	int beep;		// the beeper's level, bitChan.val
+	int tapeRec;		// the tape: recording, and the level it records
+	int tapeLevRec;
+	int tapeMute;		// ...or playing, unless muted, at this level
+	int tapeVolPlay;
+	TSound* ts;		// the PSGs
+	// zx_vol's other devices, as their own volume functions give them
+	sndPair gs;
+	sndPair sdrv;
+	sndPair saa;
+	// the Next (nx_mix)
+	unsigned char nr06, nr08, nr09;	// the mixer's nextregs: AY or YM table, TurboSound, ACB, mono
+	unsigned char pan[3];	// each chip's L/R enables
+	int sel;		// the chip selected, the one heard with TurboSound off
+	unsigned char dac[4];	// the DACs' outputs
+	int late;		// ns before the chips' time the sample is due
+	// kept by the mix
+	sndDC dc[5];
+	int bVal, bVol, bLev;	// the beeper's share, for the val and volume it was worked out for
+	unsigned int dOut;	// the DACs' share, likewise
+	int dVol, dL, dR;
+} sndMix;
+
+// the tape's share of a sample, in the beeper's units: what both mixes start from
+static inline int snd_tape_level(const sndMix* m, const sndVolume* sv) {
+	if (m->tapeRec)
+		return (m->tapeLevRec ? 0x800 : -0x800) * sv->tape / 100;
+	if (!m->tapeMute)
+		return ((m->tapeVolPlay - 0x80) << 8) * sv->tape / 1600;
+	return 0;
+}
+
+#ifdef __cplusplus
+}
+#endif
