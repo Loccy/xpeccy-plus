@@ -8,9 +8,18 @@
 #define F_COM_MF	0x40
 #define F_COM_SK	0x20
 
+#define F_SR0_AT	0x40	// abnormal termination
+#define F_SR1_EN	0x80	// end of cylinder
+#define F_SR1_DE	0x20	// CRC error
 #define F_SR1_OR	0x10	// data lost
 #define F_SR1_ND	0x04	// no data
 #define F_SR1_NW	0x02	// write protect
+#define F_SR1_MA	0x01	// missing address mark
+#define F_SR2_CM	0x40	// the other data mark than the command reads
+#define F_SR2_DD	0x20	// CRC error in the data field
+#define F_SR2_WC	0x10	// wrong cylinder
+#define F_SR2_BC	0x02	// bad cylinder (C = FF)
+#define F_SR2_MD	0x01	// no data mark
 
 #ifdef ISDEBUG
 #define DBGOUT(args...) xlog(XLG_DISK, XLL_DEBUG, args)
@@ -82,41 +91,25 @@ void uSetDrive(FDC* fdc) {
 	fdc->sr0 |= fdc->comBuf[0] & 7;	// hd & drive
 }
 
+// The next byte off the track into tmp and the CRC. 0: turbo still waits for
+// the CPU to take the last one. A byte the CPU did not take in time sets OR.
 int uGetByte(FDC* fdc) {
-	int res = 0;
+	if (turbo && !fdc->mr && fdc->drq && !fdc->dma && (fdc->tns <= fdc->bytedelay)) {
+		fdc->wait = 1;
+		return 0;
+	}
+	if (fdc->drq && !fdc->dma && !fdc->mr)
+		fdc->sr1 |= F_SR1_OR;
+	fdc->tmp = flpRd(fdc->flp, fdc->side);
+	flpNext(fdc->flp, fdc->side);
+	add_crc_16(fdc, fdc->tmp);
+	fdc->tns = 0;
 	if (turbo) {
-		if (fdc->mr) {		// TC occured: read data, but don't output
-			fdc->tmp = flpRd(fdc->flp, fdc->side);
-			fdc->tns = 0;
-			res = 1;
-		} else if (fdc->drq && !fdc->dma) {
-			if (fdc->tns > fdc->bytedelay) {
-				// prev.data lost
-				fdc->sr1 |= 0x10;
-				// and get next byte
-				fdc->tmp = flpRd(fdc->flp, fdc->side);
-				flpNext(fdc->flp, fdc->side);
-				fdc->tns = 0;
-				res = 1;
-			}
-		} else {			// data is ready
-			fdc->tmp = flpRd(fdc->flp, fdc->side);
-			flpNext(fdc->flp, fdc->side);
-			fdc->tns = 0;
-			res = 1;
-		}
 		fdc->wait = 1;
 	} else {
-		if (fdc->drq && !fdc->dma) {
-			fdc->sr1 |= 0x10;		// data lost
-		}
-		fdc->tmp = flpRd(fdc->flp, fdc->side);
-		flpNext(fdc->flp, fdc->side);
 		fdc->wait += fdc->bytedelay;
-		fdc->tns = 0;
-		res = 1;
 	}
-	return res;
+	return 1;
 }
 
 static fdcCall utermTab[] = {&ustp, &unothing};
@@ -285,12 +278,16 @@ void urda01(FDC* fdc) {
 	int res = seekADR(fdc);
 	if (res == 2) {
 		fdc->cnt--;
-		if (fdc->cnt == 0) {
-			fdc->sr1 |= 0x01;	// missed ADR
-			fdc->sr0 |= 0x40;	// exit code 01
+		if (fdc->cnt == 0) {		// no ID in two index holes
+			fdc->sr1 |= F_SR1_MA | F_SR1_ND;
+			fdc->sr0 |= F_SR0_AT;
 			fdc->pos++;
 		}
 	} else if (res == 1) {
+		if (fdc->crc != fdc->fcrc) {	// the first ID there is, its CRC wrong
+			fdc->sr1 |= F_SR1_DE | F_SR1_ND;
+			fdc->sr0 |= F_SR0_AT;
+		}
 		fdc->pos++;
 	}
 }
@@ -301,16 +298,31 @@ static fdcCall uReadID[] = {&uwargs,&urda00,&urda01,&urdaRS,&uTerm};
 // MT.MF.SK.01000 [xxxxx.HD.DRV:2,C,H,R,N,EOT,GPL,DTL] R [SR0,SR1,SR2,C,H,R,N]
 // read [deleted] data
 
+// The ID registers as the command left them: C, H and N as given (H flipped by
+// MT), R the sector it stopped at
 void ureadRS(FDC* fdc) {
 	fdc->resBuf[0] = fdc->sr0;
 	fdc->resBuf[1] = fdc->sr1;
 	fdc->resBuf[2] = fdc->sr2;
-	fdc->resBuf[3] = fdc->flp->trk;
-	fdc->resBuf[4] = fdc->side;
+	fdc->resBuf[3] = fdc->comBuf[1];
+	fdc->resBuf[4] = fdc->comBuf[2];
 	fdc->resBuf[5] = fdc->sec;
-	fdc->resBuf[6] = fdc->buf[3];
+	fdc->resBuf[6] = fdc->comBuf[4];
 	uResp(fdc, 7, 1);
 	fdc->pos++;
+}
+
+void rdFCRC(FDC*);	// wd1793.c: the two CRC bytes off the track into fcrc
+
+// what a size code reads: past 7 the chip's counter stops at 16K
+static int u_seclen(int n) {
+	return (n > 7) ? 0x4000 : (0x80 << n);
+}
+
+// the ID just read is the one the command names, C, H, R and N alike
+static int u_match(FDC* fdc) {
+	return (fdc->buf[0] == fdc->comBuf[1]) && (fdc->buf[1] == fdc->comBuf[2])
+		&& (fdc->buf[2] == fdc->sec) && (fdc->buf[3] == fdc->comBuf[4]);
 }
 
 // wait ADR
@@ -318,18 +330,48 @@ void uread01(FDC* fdc) {
 	int res = seekADR(fdc);
 	if (res == 2) {
 		fdc->cnt--;
-		if (fdc->cnt < 1) {
-			fdc->sr0 |= 0x40;	// error
-			fdc->sr1 |= 0x04;	// no data
+		if (fdc->cnt < 1) {		// two index holes: the sector is not there
+			fdc->sr0 |= F_SR0_AT;
 			ureadRS(fdc);
 			uTerm(fdc);
 		}
 	} else if (res == 1) {
-		if (fdc->sec == fdc->buf[2]) {		// compare sec.nr
-			fdc->cnt = 52;
-			fdc->pos++;
+		fdc->sr1 &= ~F_SR1_MA;		// the track has ID marks
+		if (u_match(fdc)) {
+			fdc->sr1 &= ~F_SR1_ND;
+			fdc->sr2 &= ~(F_SR2_WC | F_SR2_BC);
+			if (fdc->crc != fdc->fcrc) {	// the ID's own CRC is wrong
+				fdc->sr0 |= F_SR0_AT;
+				fdc->sr1 |= F_SR1_DE;
+				ureadRS(fdc);
+				uTerm(fdc);
+			} else {
+				fdc->cnt = 52;
+				fdc->pos++;
+			}
+		} else if (fdc->buf[0] != fdc->comBuf[1]) {
+			fdc->sr2 |= (fdc->buf[0] == 0xff) ? (F_SR2_WC | F_SR2_BC) : F_SR2_WC;
 		}
 	}
+}
+
+// After an ID: its data mark within the gap, either kind. 0: still looking,
+// 1: found, tmp holds the mark and the head is on the first data byte, the
+// CRC counted that far; 2: none (MA + MD).
+static int u_find_dam(FDC* fdc) {
+	fdc->tmp = flpRd(fdc->flp, fdc->side);
+	flpNext(fdc->flp, fdc->side);
+	fdc->wait += turbo ? TRBBYTE : fdc->bytedelay;
+	if ((fdc->flp->field == 2) || (fdc->flp->field == 3)) {
+		fdc->crc = 0xcdb4;		// A1 A1 A1 counted
+		add_crc_16(fdc, fdc->tmp);
+		return 1;
+	}
+	if (--fdc->cnt > 0) return 0;
+	fdc->sr0 |= F_SR0_AT;
+	fdc->sr1 |= F_SR1_MA;
+	fdc->sr2 |= F_SR2_MD;
+	return 2;
 }
 
 int ureadCHK(FDC* fdc, int rt, int wt) {
@@ -348,36 +390,50 @@ int ureadCHK(FDC* fdc, int rt, int wt) {
 	return 2;
 }
 
-void uread02(FDC* fdc) {		// for read data
-	int res = (fdc->com & 0x08) ? ureadCHK(fdc,3,2) : ureadCHK(fdc,2,3);
-	if (res == 1) {
-		fdc->pos++;
-		fdc->wait = 1;
-	} else if ((res == 2) || fdc->mr) {
+// the data mark: the other kind than the command reads sets CM, and with SK
+// the sector is passed over unread
+void uread02(FDC* fdc) {
+	int res = u_find_dam(fdc);
+	if (res == 2) {
 		ureadRS(fdc);
 		uTerm(fdc);
+	} else if (res == 1) {
+		int deleted = (fdc->tmp & 0xfe) == 0xf8;
+		if (deleted != ((fdc->com & 0x1f) == 0x0c)) {
+			fdc->sr2 |= F_SR2_CM;
+			if (fdc->com & F_COM_SK) {
+				fdc->pos = 5;		// uread05: on to the next sector
+				return;
+			}
+		}
+		fdc->pos++;
+		fdc->wait = 1;
 	}
 }
 
+// The field is read whole, 128 << N bytes off the track whatever its own
+// length, then its CRC; N 0 hands over DTL bytes of the 128
 void uread03(FDC* fdc) {
-	// TODO: check this moment (data size)
-	if (fdc->comBuf[4] & 3) {
-		fdc->cnt = 0x80 << (fdc->comBuf[4] & 3);	// N
-	} else {
-		fdc->cnt = fdc->comBuf[7] + 1;			// DTL
-	}
+	int n = fdc->comBuf[4];
+	fdc->cnt = u_seclen(n);
+	fdc->xfer = (n || (fdc->comBuf[7] > 0x80)) ? fdc->cnt : fdc->comBuf[7];
 	fdc->drq = 0;
 	fdc->dir = 1;
 	fdc->tns = 0;
-	fdc->wait = fdc->bytedelay; // turbo ? TRBBYTE : fdc->bytedelay;
+	fdc->wait = fdc->bytedelay;
 	fdc->pos++;
-	// fdc->brk = 1;
-	// printf("combuf: %.2X",fdc->com); for (int i = 0; i < 8; i++) {printf(" %.2X",fdc->comBuf[i]);} printf("\n");
 }
 
 void uread04(FDC* fdc) {
 	if (!uGetByte(fdc)) return;
-	if (!fdc->mr) {
+	if (fdc->sr1 & F_SR1_OR) {		// the CPU let a byte go by: the command ends
+		fdc->sr0 |= F_SR0_AT;
+		ureadRS(fdc);
+		uTerm(fdc);
+		return;
+	}
+	if (!fdc->mr && (fdc->xfer > 0)) {
+		fdc->xfer--;
 		fdc->data = fdc->tmp;
 		fdc->drq = 1;
 		if (fdc->dma) {
@@ -387,33 +443,70 @@ void uread04(FDC* fdc) {
 		}
 	}
 	fdc->cnt--;
-	if (fdc->cnt < 1) {
+	if (fdc->cnt < 1)
 		fdc->pos++;
-		fdc->wait = fdc->bytedelay; // turbo ? TRBBYTE : fdc->bytedelay;
+}
+
+// The CRC bytes come off the disk while the CPU takes the field's last byte.
+// Turbo has no such time of its own: it waits for the CPU as it does for any byte.
+static int u_last_taken(FDC* fdc) {
+	if (turbo && fdc->drq && !fdc->dma && (fdc->tns <= fdc->bytedelay)) {
+		fdc->wait = 1;
+		return 0;
+	}
+	return 1;
+}
+
+// the data field's CRC: wrong -> DE + DD; ends a read, not a read track
+static int u_data_crc(FDC* fdc) {
+	unsigned short crc = fdc->crc;
+	rdFCRC(fdc);
+	fdc->wait += turbo ? 1 : (2 * fdc->bytedelay);
+	if (crc == fdc->fcrc) return 1;
+	fdc->sr1 |= F_SR1_DE;
+	fdc->sr2 |= F_SR2_DD;
+	return 0;
+}
+
+void uread04c(FDC* fdc) {
+	if (!u_last_taken(fdc)) return;
+	if (u_data_crc(fdc)) {
+		fdc->pos++;
+	} else {
+		fdc->sr0 |= F_SR0_AT;
+		ureadRS(fdc);
+		uTerm(fdc);
 	}
 }
 
-// check EOT, MT
+// The sector is done: the next one, or the end. With no TC (the +3 has none)
+// a read stops at EOT with EN, or after a sector of the other mark (SK 0).
 void uread05(FDC* fdc) {
-	fdc->sec++;
-	if (fdc->mr || (fdc->sr2 & 0x40)) {				// SR2:CM flag set - not right sector & SK=0... or TC
+	if (fdc->mr || ((fdc->sr2 & F_SR2_CM) && !(fdc->com & F_COM_SK))) {
 		fdc->pos++;
-	} else if (fdc->sec > fdc->comBuf[5]) {				// check EOT
-		if ((fdc->com & F_COM_MT) && !fdc->side) {		// multitrack (side 0->1 only)
+		return;
+	}
+	if (fdc->sec == fdc->comBuf[5]) {		// EOT
+		if ((fdc->com & F_COM_MT) && !(fdc->comBuf[2] & 1)) {	// on to side 1
+			fdc->comBuf[2] |= 1;
 			fdc->side = 1;
-			fdc->cnt = 2;
+			fdc->sr0 |= 0x04;
 			fdc->sec = 1;
-			fdc->pos = 0;
 		} else {
+			fdc->sr0 |= F_SR0_AT;
+			fdc->sr1 |= F_SR1_EN;
 			fdc->pos++;
+			return;
 		}
 	} else {
-		fdc->cnt = 2;
-		fdc->pos = 0;
+		fdc->sec++;
 	}
+	fdc->sr1 |= F_SR1_ND;
+	fdc->cnt = 2;
+	fdc->pos = 0;
 }
 
-static fdcCall uReadD01[] = {&uread01,&uread02,&uread03,&uread04,&uread05,&ureadRS,&uTerm};
+static fdcCall uReadD01[] = {&uread01,&uread02,&uread03,&uread04,&uread04c,&uread05,&ureadRS,&uTerm};
 
 void uread00(FDC* fdc) {
 	uSetDrive(fdc);
@@ -424,6 +517,7 @@ void uread00(FDC* fdc) {
 		ureadRS(fdc);		// prepare resp
 		uTerm(fdc);		// terminate
 	} else {
+		fdc->sr1 = F_SR1_MA | F_SR1_ND;	// until an ID mark, and the sector, turn up
 		fdc->cnt = 2;
 		fdc->wait += turbo ? TRBBYTE : fdc->hlt;	// load head
 		fdc->pos++;
@@ -440,30 +534,20 @@ static fdcCall uRdData[] = {&uwargs,&uread00,&uread00a};
 // 0.MF.SK.00010 [xxxxx.HD.DRV:2,C,H,R,N,EOT,GPL,DTL] R [SR0,SR1,SR2,C,H,R,N]
 // read track
 
-void urdtrkRS(FDC* fdc) {
-	if (!(fdc->flp->insert && fdc->flp->door))
-		fdc->sr0 |= 0x08;
-	fdc->resBuf[0] = fdc->sr0;
-	fdc->resBuf[1] = fdc->sr1;
-	fdc->resBuf[2] = fdc->sr2;
-	fdc->resBuf[3] = fdc->flp->trk;
-	fdc->resBuf[4] = fdc->side;
-	fdc->resBuf[5] = fdc->sec;
-	fdc->resBuf[6] = fdc->buf[3];
-	uResp(fdc, 7, 1);
-	fdc->pos++;
-}
+// From the index hole on, every sector in the order the track holds them, read
+// as N says and handed over whole, CRC errors and all; EOT sectors and it ends
+// (EN), or the index comes round again first. ND: the named ID was not among them.
 
 void urdtrk00(FDC* fdc) {
 	uSetDrive(fdc);
 	fdc->sec = fdc->comBuf[3];		// R, sec.num
 	if (!(fdc->flp->insert && fdc->flp->door)) {
 		fdc->sr0 |= 0x48;	// not ready
-		urdtrkRS(fdc);		// prepare resp
+		ureadRS(fdc);		// prepare resp
 		uTerm(fdc);		// terminate
 	} else {
-		fdc->sec = 0;
-		fdc->sr1 |= 0x05;	// MA (reset on 1st found sector), ND (reset if specified sector found)
+		fdc->scnt = 0;		// sectors read
+		fdc->sr1 = F_SR1_MA | F_SR1_ND;
 		fdc->pos++;
 		fdc->wait = 0;
 	}
@@ -478,46 +562,54 @@ void urdtrk01(FDC* fdc) {
 // find ADR
 void urdtrk02(FDC* fdc) {
 	int res = seekADR(fdc);
-	if (res == 2) {				// 2nd IDX
-		if (fdc->sr1 & 0x01)		// if no ADR was found, error
-			fdc->sr0 |= 0x40;
-		urdtrkRS(fdc);
+	if (res == 2) {				// round again short of EOT
+		fdc->sr0 |= F_SR0_AT;
+		ureadRS(fdc);
 		uTerm(fdc);
 	} else if (res == 1) {
-		fdc->sr1 &= ~0x01;			// reset MA
-		if (fdc->buf[2] == fdc->comBuf[3]) {	// if specified sector found, reset ND
-			fdc->sr1 &= ~0x04;
-		}
-		fdc->cnt = 53;
+		fdc->sr1 &= ~F_SR1_MA;
+		if (fdc->crc != fdc->fcrc) fdc->sr1 |= F_SR1_DE;
+		if (u_match(fdc)) fdc->sr1 &= ~F_SR1_ND;	// the named ID was among them
+		fdc->cnt = 52;
 		fdc->pos++;
 	}
 }
 
 // find DATA
 void urdtrk03(FDC* fdc) {
-	int res = ureadCHK(fdc,2,3);
-	if (res == 2) {				// IDX : end
-		urdtrkRS(fdc);
+	int res = u_find_dam(fdc);
+	if (res == 2) {
+		ureadRS(fdc);
 		uTerm(fdc);
-	} else {
+	} else if (res == 1) {
 		fdc->pos++;
-		fdc->wait = 0;
+		fdc->wait = 1;
 	}
 }
 
 // uread03: prepare to data transfer
 // uread04: transfer data FDD->FDC->CPU
-// go next sector
 void urdtrk04(FDC* fdc) {
-	fdc->sec++;
-	if (fdc->sec >= fdc->comBuf[5]) {	// EOT
+	if (!u_last_taken(fdc)) return;
+	u_data_crc(fdc);		// a CRC error is flagged, the read goes on
+	fdc->pos++;
+}
+
+// go next sector
+void urdtrk05(FDC* fdc) {
+	fdc->scnt++;
+	if (fdc->mr || (fdc->scnt >= fdc->comBuf[5])) {	// EOT
+		if (!fdc->mr) {
+			fdc->sr0 |= F_SR0_AT;
+			fdc->sr1 |= F_SR1_EN;
+		}
 		fdc->pos++;
 	} else {
 		fdc->pos = 3;
 	}
 }
 
-static fdcCall uRdTrk[] = {&uwargs, &urdtrk00, &urdtrk01, &urdtrk02, &urdtrk03, &uread03, &uread04, &urdtrk04, &urdtrkRS, &uTerm};
+static fdcCall uRdTrk[] = {&uwargs, &urdtrk00, &urdtrk01, &urdtrk02, &urdtrk03, &uread03, &uread04, &urdtrk04, &urdtrk05, &ureadRS, &uTerm};
 
 // MT.MF.SK.10001 [xxxxx.HD.DRV:2,C,H,R,N,EOT,GPL,STP] R [SR0,SR1,SR2,C,H,R,N]	scan equal
 // MT.MF.SK.11001 [xxxxx.HD.DRV:2,C,H,R,N,EOT,GPL,STP] R [SR0,SR1,SR2,C,H,R,N]	scan low or equal
@@ -628,9 +720,12 @@ void uwrdat01(FDC* fdc) {
 			uTerm(fdc);
 		}
 	} else if (res == 1) {			// found
-		if (fdc->sec == fdc->buf[2]) {	// same sector
+		if (u_match(fdc)) {		// same sector
+			fdc->sr2 &= ~(F_SR2_WC | F_SR2_BC);
 			fdc->cnt = 52;
 			fdc->pos++;
+		} else if (fdc->buf[0] != fdc->comBuf[1]) {
+			fdc->sr2 |= (fdc->buf[0] == 0xff) ? (F_SR2_WC | F_SR2_BC) : F_SR2_WC;
 		}
 	}
 }
@@ -705,25 +800,29 @@ void uwrdat04(FDC* fdc) {
 
 // check eot/mt
 void uwrdat05(FDC* fdc) {
-	fdc->sec++;
 	if (fdc->mr) {					// TC
 		fdc->pos++;
-	} else if (fdc->sec > fdc->comBuf[5]) {		// check EOT
-		if ((fdc->com & F_COM_MT) && !fdc->side) {		// multitrack (side 0->1 only)
+		return;
+	}
+	if (fdc->sec == fdc->comBuf[5]) {		// EOT
+		if ((fdc->com & F_COM_MT) && !(fdc->comBuf[2] & 1)) {	// on to side 1
+			fdc->comBuf[2] |= 1;
 			fdc->side = 1;
-			fdc->cnt = 2;
+			fdc->sr0 |= 0x04;
 			fdc->sec = 1;
-			fdc->pos = 2;	// to uwrdat01
-			fdc->drq = 1;
-			fdc->dir = 0;
-		} else {
+		} else {				// no TC on the +3: EN ends it
+			fdc->sr0 |= F_SR0_AT;
+			fdc->sr1 |= F_SR1_EN;
 			fdc->pos++;
+			return;
 		}
 	} else {
-		fdc->pos = 2;	// to uwrdat01
-		fdc->drq = 1;
-		fdc->dir = 0;
+		fdc->sec++;
 	}
+	fdc->cnt = 2;
+	fdc->pos = 2;	// to uwrdat01
+	fdc->drq = 1;
+	fdc->dir = 0;
 }
 
 static fdcCall uWrData[] = {&uwargs,&uwrdat00,&uwrdat01,&uwrdat02,&uwrdat03,&uwrdat04,&uwrdat05,&ureadRS,&uTerm};

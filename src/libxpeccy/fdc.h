@@ -95,6 +95,7 @@ struct FDC {
 	unsigned char resBuf[8]; // uPD765 response
 	int resCnt;
 	int resPos;
+	int xfer;		// uPD765: bytes of the field still to hand to the CPU
 	unsigned char sr0,sr1,sr2,sr3;	// status registers
 
 	Sector slst[64];
