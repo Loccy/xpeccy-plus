@@ -74,7 +74,12 @@ written back is in [A folder as a disk](folder-as-disk.md) of Under the Hood.
   past 65536 in one folder, and anything past 200000 entries in all. The message
   **folder: not all of it fits** says when something was left out.
 - A link to a folder (a junction on Windows) is followed once: one that leads back into
-  the folder, or to a place already shown, is left out.
+  the folder, or to a place already shown, is left out. A Windows shortcut (`.lnk`) is a
+  file like any other; files your system hides are left out.
+- A folder is not a whole disk: attributes, dates other than the last write and sectors
+  outside files last only until the folder is read again (see
+  [What a folder cannot do](folder-as-disk.md#what-a-folder-cannot-do)). For full
+  compatibility, use an image.
 - On a hard disk, a folder that holds NedoOS with its `ZXLDR` file in the top level can
   boot NedoOS.
 

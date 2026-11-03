@@ -99,6 +99,9 @@ The **SD Card** menu has the same items as on the ZX Evolution: **Open Image...*
 **Writing.** A card made here takes what NextZXOS writes, with no question. A folder of
 your own follows the **Folder as a disk** settings and asks the first time (see
 [Writing to a folder](sd-hdd.md#writing-to-a-folder)); an image is written to directly.
+A folder keeps files, not everything a card holds (see
+[What a folder cannot do](folder-as-disk.md#what-a-folder-cannot-do)): for full
+compatibility, use an image card.
 
 The card's `config.ini` and `menu.ini` choose the ROMs, and `config.ini`'s `timing=` the
 video timing, VGA 0 or VGA 1. Its other settings are not read.
