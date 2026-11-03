@@ -348,6 +348,7 @@ static void nxs_attr_moved(Computer* comp) {
 
 // nextreg 0x34-0x39, 0x75-0x79, latched on edge w
 void nxs_nr(Computer* comp, int r, int v, long long w) {
+	nxv_touch(comp);			// the attributes or the mirror: a still frame ends
 	if (r == 0x34) {
 		nxs_mirror_set(comp, v, w);
 		return;
@@ -361,6 +362,7 @@ void nxs_nr(Computer* comp, int r, int v, long long w) {
 
 // a port write whose iowr is first seen on edge w
 void nxs_out(Computer* comp, int port, int v, long long w) {
+	nxv_touch(comp);
 	int lo = port & 0xff;
 	if (lo == 0x57) {
 		nxs_run(comp, 2 * w + 1);

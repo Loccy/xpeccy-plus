@@ -214,6 +214,7 @@ int xstate_save(xState* st, Computer* comp) {
 	if (!st) return 0;
 	st->m.count = 0;
 	if (comp->ts) ts_state_capture(comp->ts);
+	if (comp->vid->still) nxv_settle(comp);	// a still frame's FLASH count, up to the ray
 	int count = xst_build(comp, st->m.chunk);
 	if (count < 0) {
 		xlog(XLG_CORE, XLL_WARN, "state: the machine has more parts than the snapshot holds");
@@ -305,6 +306,9 @@ int xstate_load(xState* st, Computer* comp) {
 	comp->vid->rcut = rcut;
 	comp->vid->vsze = vsze;
 	comp->vid->brdmode = brdmode;
+	// the buffers are not in the snapshot: the picture is drawn again from the ray
+	comp->vid->still = 0;
+	comp->vid->stillBreak = 1;
 	comp->flgBRKMEM = brkMem;
 	comp->flgBRKIO = brkIO;
 	comp->flgIBRK = brkIrq;

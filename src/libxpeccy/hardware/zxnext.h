@@ -46,6 +46,10 @@ static inline long long nx_fdiv(long long a, long long b) {
 }
 
 void nx_cop_run(Computer*, long long);
+// the copper runs (or has a write still to make)
+static inline int nx_cop_on(Computer* comp) {
+	return (NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN;
+}
 
 // the picture (zxnext_vid.c)
 void nxv_reset(Computer*);
@@ -54,6 +58,7 @@ void nxv_pal(Computer*, int, int, long long);
 void nxv_memw(Computer*, int, int, long long);
 int nxv_float(Computer*, long long);
 void nxv_retime(Computer*, long long, int);
+void nxv_touch(Computer*);		// something the picture reads moved: a still frame ends
 
 // the board's CLK_28 against 28 MHz, as a period: 1 at VGA 0 (zxnext.c, NR 11)
 double nx_clk_scale(Computer*);
@@ -74,6 +79,7 @@ int nx_snd_in(Computer*, int);
 void nx_snd_out(Computer*, int, int, long long);
 void nx_snd_fe(Computer*, int);
 sndPair nx_vol(Computer*, sndVolume*);
+int nx_snd_late(Computer*);
 
 // interrupts, CTC, NMI, Multiface (zxnext_int.c)
 void nx_hold_note(Computer*, long long, int);

@@ -283,6 +283,7 @@ static xMnem dasm_mnem(Computer* comp, int adr, char* buf, QByteArray* bytes = N
 
 void dasmwr(Computer* comp, int adr, int bt) {
 	rzx_rec_touch();
+	vid_still_break(comp->vid);
 	adr &= comp->mem->busmask;
 	switch(mode) {
 		case XVIEW_CPU:

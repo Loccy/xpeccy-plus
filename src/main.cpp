@@ -127,6 +127,7 @@ void help() {
 	printf("--bench-save FILE\ta snapshot at the end, in the format its extension names\n");
 	printf("--bench-state FILE\tthe raw machine state at the end, sizes of its parts in FILE.idx\n");
 	printf("--bench-nodraw\t\tdraw no picture\n");
+	printf("--bench-nostill\t\tdraw every frame, the still ones too\n");
 	printf("--bench-hash-every N\tonly every Nth frame goes into the frames hash\n");
 	printf("--bench-draw-every N\tthe same, and the frames between are not drawn\n");
 	printf("--bench-heat\t\tcollect the memory heat map, hashed with --bench-hash\n");
@@ -803,6 +804,8 @@ int main(int ac,char** av) {
 			bnHash = 1;
 		} else if (!strcmp(parg,"--bench-nodraw")) {
 			bnNodraw = 1;
+		} else if (!strcmp(parg,"--bench-nostill")) {
+			vid_still_on = 0;
 		} else if (!strcmp(parg,"--bench-heat")) {
 			bnHeat = 1;
 		} else if (!strcmp(parg,"--bench-split")) {

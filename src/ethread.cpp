@@ -288,6 +288,7 @@ void xThread::tap_hand_over(Computer* comp, int blk, int base, int dir) {
 	// each. Where it leaves sets PC.
 	CPU* cpu = comp->cpu;
 	int load = cpu->regFa & 1;		// carry in F': LOAD, else VERIFY
+	if (load) vid_still_break(comp->vid);	// written past the machine's own writes
 	unsigned char flag = blkData[0];
 	unsigned char h = flag;
 	unsigned char l = flag;
@@ -717,8 +718,26 @@ static int tape_hook_at(Computer* comp) {
 	return -1;
 }
 
+// How far a HALT runs on in real time (comp_halt_skip_rt): to the next sample, or -
+// where the machine's mix takes its samples after their time (hwQuiet.sndLate) - to
+// the one that meets the pacer's need. A no is held for LATE_NO_HOLD T rather than
+// asked at every sub-sample: a no kept too long only leaves the run as short as it
+// always was
+#define LATE_NO_HOLD	4096
+long long xThread::haltRoom(Computer* comp) {
+	long long held = comp->tickTotal - lateNoTick;		// < 0: the machine was reset since
+	if ((held >= 0) && (held < LATE_NO_HOLD)) return nsPerSampleFixed - sndNsFixed;
+	const hwQuiet* q = comp->hw->quiet;
+	if (q->sndLate && !comp->gs->enable) {
+		if (q->sndLate(comp)) return snd_need_room(sndNsFixed);
+		lateNoTick = comp->tickTotal;
+	}
+	return nsPerSampleFixed - sndNsFixed;
+}
+
 void xThread::emuCycle(Computer* comp) {
 	int tm;
+	long long room;
 	// the step over a hit the last cycle left, if the machine has not moved since
 	int brkskip = (skipTick == comp->tickTotal) ? 1 : 0;
 	skipTick = -1;
@@ -799,12 +818,13 @@ void xThread::emuCycle(Computer* comp) {
 					}
 				}
 			} else if (comp->cpu->flgHALT
-					&& (nsPerSampleFixed - sndNsFixed >= 4 * comp->nsPerTickFixed)
-					&& comp->hw->quiet && comp->hw->quiet->halt && !conf.emu.fast && !brk_cond_n
+					&& comp->hw->quiet && comp->hw->quiet->halt && !conf.emu.fast
+					&& ((room = haltRoom(comp)) >= 4 * comp->nsPerTickFixed) && !brk_cond_n
 					&& !fastload_on && !vrecWatch.load(std::memory_order_relaxed) && (tape_hook_at(comp) < 0)
 					&& !(tape_flash() && (comp->tape->ldBase >= 0))
-					&& comp_halt_skip_rt(comp, &tm, nsPerSampleFixed - sndNsFixed)) {
-				// a HALT run on to the step the next sample follows, taken below as ever
+					&& comp_halt_skip_rt(comp, &tm, room)) {
+				// a HALT run on to the step the next sample follows, or past it
+				// (haltRoom), and the samples taken below as ever
 			} else {
 				tm = compExec(comp);			// TODO: it exits when fetch-brk is occured, pc doesn't changed
 			}
@@ -1218,6 +1238,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 			} else if ((poke > 500) && !benchRecJoin && (rzx_rec_frames(comp) >= poke) && comp->cpu->flgIFF1) {
 				fprintf(stdout, "rzx rec: poke at frame %i, iff1 %i\n", rzx_rec_frames(comp), comp->cpu->flgIFF1 ? 1 : 0);
 				memWr(comp->mem, 0x5800, 0x47);
+				vid_still_break(comp->vid);
 				rzx_rec_touch();
 				poke = 0;
 			}

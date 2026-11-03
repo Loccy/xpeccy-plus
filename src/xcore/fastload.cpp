@@ -658,6 +658,11 @@ int fast_ffwd_frame() {
 
 void fast_picture_frame(Computer* comp) {
 	Video* vid = comp->vid;
+	// A still frame keeps the last picture and leaves the dots undrawn: not while
+	// something may stop the machine mid-frame and look at the picture to the ray,
+	// or writes memory past the machine's own writes (the tape's loaders)
+	vid->stillOk = !fp_watched(comp) && !rewind_active() && !rzx_seeking() && !autostart_busy()
+		&& !fastload_busy() && !comp->tape->on;
 	int drawn = (bufSwaps != fp_swaps);	// the frame that just ended swapped a picture in
 	fp_swaps = bufSwaps;
 	fp_last = drawn;

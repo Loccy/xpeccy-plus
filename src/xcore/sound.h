@@ -92,6 +92,9 @@ void setOutput(const char*);
 
 void sndClose();
 int sndSync(Computer*);
+// the fixed ns from acc (the time made since the last sub-sample) past which the
+// sub-sample that meets the pacer's need is due; the next one's when nothing is owed
+long long snd_need_room(long long acc);
 void snd_put(sndPair);
 // what is queued to play is not what comes next: the machine's time ran on
 // unheard, or it was loaded or reset. Emulation thread, or under emu_lock.

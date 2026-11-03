@@ -70,6 +70,18 @@ set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -O2 ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG ${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DISDEBUG ${CMAKE_CXX_FLAGS_DEBUG}")
 
+# Functions and loops start on cache lines: the emulation's speed then holds from
+# build to build, where a change anywhere else could move it by up to 5 %
+include(CheckCCompilerFlag)
+foreach(flag -falign-functions=64 -falign-loops=32 -falign-jumps=32)
+	string(MAKE_C_IDENTIFIER "HAVE${flag}" var)
+	check_c_compiler_flag(${flag} ${var})
+	if (${var})
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${flag}")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flag}")
+	endif()
+endforeach()
+
 # OS-depended section
 
 set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
