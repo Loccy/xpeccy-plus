@@ -254,11 +254,19 @@ static void nx_ay_mix(Computer* comp, int late, int* l, int* r) {
 	int acb = nr[0x08] & 0x20;
 	int al = 0, ar = 0;
 	// their clock comes off CLK_28 too: the machine's AY clock at VGA 0, faster with
-	// the video timing (Options set the first; the second only the board knows)
-	double want = ((comp->ts->frq > 0) ? comp->ts->frq : comp->cpuFrq / 2) / nx_clk_scale(comp);
+	// the video timing (Options set the first; the second only the board knows).
+	// Worked out again only when one of those moves: this runs at every sub-sample
+	static double wantTs = -1, wantCpu = -1, want = 0;
+	static int wantMode = -1;
+	if ((comp->ts->frq != wantTs) || (comp->cpuFrq != wantCpu) || (NX.vmode != wantMode)) {
+		wantTs = comp->ts->frq;
+		wantCpu = comp->cpuFrq;
+		wantMode = NX.vmode;
+		want = ((comp->ts->frq > 0) ? comp->ts->frq : comp->cpuFrq / 2) / nx_clk_scale(comp);
+	}
 	for (int i = 0; i < 3; i++) {
 		aymChip* chip = nx_ay(comp, i);
-		double f = want * chip_frq_mul(chip->type);
+		double f = want * ((chip->type == SND_YM2203) ? 2 : 1);	// chip_frq_mul()
 		if (chip->frq != f) {
 			chip->frq = f;
 			chip_set_type(chip, chip->type);
@@ -325,7 +333,15 @@ sndPair nx_vol(Computer* comp, sndVolume* sv) {
 	} else if (!comp->tape->mute) {
 		lev = ((comp->tape->volPlay - 0x80) << 8) * sv->tape / 1600;
 	}
-	lev += comp->beep->val * 640 * NX_GAIN / 255 * sv->beep / 100;
+	// the beeper's share and the DACs' below move only with what they are made of:
+	// worked out again then, not at every sub-sample
+	static int bVal = -1, bVol = -1, bLev = 0;
+	if ((comp->beep->val != bVal) || (sv->beep != bVol)) {
+		bVal = comp->beep->val;
+		bVol = sv->beep;
+		bLev = bVal * 640 * NX_GAIN / 255 * bVol / 100;
+	}
+	lev += bLev;
 	part.left = part.right = lev;
 	res = snd_dc(&dcBeep, part, dc);
 	// the AYs, at the time the sample was due (comp->sndAgo)
@@ -342,8 +358,17 @@ sndPair nx_vol(Computer* comp, sndVolume* sv) {
 		if (comp->sndAgo > 0) t -= comp->sndAgo * 4 / comp->vid->nsPerDotFixed;
 		nx_dac_play(comp, t);
 	}
-	part.left = (SND.out[0] + SND.out[1] - 0x100) * 4 * NX_GAIN * sv->sdrv / 100;
-	part.right = (SND.out[2] + SND.out[3] - 0x100) * 4 * NX_GAIN * sv->sdrv / 100;
+	static unsigned int dOut = 0xffffffff;
+	static int dVol = -1, dL = 0, dR = 0;
+	unsigned int out = SND.out[0] | (SND.out[1] << 8) | (SND.out[2] << 16) | ((unsigned int)SND.out[3] << 24);
+	if ((out != dOut) || (sv->sdrv != dVol)) {
+		dOut = out;
+		dVol = sv->sdrv;
+		dL = (SND.out[0] + SND.out[1] - 0x100) * 4 * NX_GAIN * dVol / 100;
+		dR = (SND.out[2] + SND.out[3] - 0x100) * 4 * NX_GAIN * dVol / 100;
+	}
+	part.left = dL;
+	part.right = dR;
 	part = snd_dc(&dcDac, part, dc);
 	res.left += part.left;
 	res.right += part.right;
