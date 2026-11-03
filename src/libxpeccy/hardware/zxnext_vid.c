@@ -534,22 +534,28 @@ static void nxv_tm_group(Computer* comp, int K, int w80, int wvc, long long t) {
 	int ay = (sy + wvc) & 0xff;
 	int yi = ay & 7;
 	int row = (ay >> 3) * (W >> 3);
-	for (int i = 0; i < 8; i++) {
-		int ax = ((sx + K * 8 + i) % W + W) % W;
+	int ax = ((sx + K * 8) % W + W) % W;
+	// all the reads are at t: a cell or a pattern byte read again gives the same
+	int cell0 = -1, tile = 0, attr = 0;
+	int pa0 = -1, b = 0;
+	for (int i = 0; i < 8; i++, ax = (ax + 1 == W) ? 0 : ax + 1) {
 		int xi = ax & 7;
 		int cell = row + (ax >> 3);
-		int tile, attr;
-		if (strip) {
-			tile = nxv_tm_byte(comp, mapb, cell, t);
-			attr = defa;
-		} else {
-			tile = nxv_tm_byte(comp, mapb, cell * 2, t);
-			attr = nxv_tm_byte(comp, mapb, cell * 2 + 1, t);
+		if (cell != cell0) {
+			cell0 = cell;
+			if (strip) {
+				tile = nxv_tm_byte(comp, mapb, cell, t);
+				attr = defa;
+			} else {
+				tile = nxv_tm_byte(comp, mapb, cell * 2, t);
+				attr = nxv_tm_byte(comp, mapb, cell * 2 + 1, t);
+			}
 		}
 		int t9 = ((m512 & attr) << 8) | tile;
 		int pix;
 		if (text) {
-			int b = nxv_tm_byte(comp, tileb, (t9 << 3) | yi, t);
+			int pa = (t9 << 3) | yi;
+			if (pa != pa0) b = nxv_tm_byte(comp, tileb, pa0 = pa, t);
 			pix = (attr & 0xfe) | (((b << xi) >> 7) & 1);
 		} else {
 			int mx = ((attr >> 3) ^ (attr >> 1)) & 1;
@@ -557,7 +563,8 @@ static void nxv_tm_group(Computer* comp, int K, int w80, int wvc, long long t) {
 			int ey = (attr & 4) ? 7 - yi : yi;
 			int u = (attr & 2) ? ey : ex;
 			int v = (attr & 2) ? ex : ey;
-			int b = nxv_tm_byte(comp, tileb, (t9 << 5) | (v << 2) | (u >> 1), t);
+			int pa = (t9 << 5) | (v << 2) | (u >> 1);
+			if (pa != pa0) b = nxv_tm_byte(comp, tileb, pa0 = pa, t);
 			pix = (attr & 0xf0) | ((u & 1) ? (b & 15) : (b >> 4));
 		}
 		int below = ((attr & 1) | m512) & !ontop;
@@ -570,9 +577,8 @@ static void nxv_tm_group(Computer* comp, int K, int w80, int wvc, long long t) {
 // The half of the line buffer on show holds what the fetch latched at the start of
 // the period before; 40/80 columns (tm_mode) is taken at every 8th whc pixel, so the
 // first period after a switch shows the other mode's 8 pixels in this one's addressing.
-static int nxv_tm_pixel(Computer* comp, long long D, int whc, int wvc, int h) {
-	unsigned short* f = V.f;
-	if ((whc >= 320) || (wvc >= 256)) return 0;
+// nxv_tm_pixel in two: the group of dot D latched (both halves share it), its w80 given
+static int nxv_tm_load(Computer* comp, long long D, int whc, int wvc) {
 	int w80 = (nxv_hat(&V.hTmCtl, (D - (whc & 7)) * 4) >> 6) & 1;
 	int start = w80 ? (whc & ~3) : (whc & ~7);		// this period's first whc pixel
 	int m = w80;
@@ -586,10 +592,21 @@ static int nxv_tm_pixel(Computer* comp, long long D, int whc, int wvc, int h) {
 		nxv_tm_group(comp, K, m, wvc, t);
 		V.tmKey = t;
 	}
+	return w80;
+}
+
+// and the pixel of half h, by the fields as they are
+static inline int nxv_tm_pick(Computer* comp, int w80, int whc, int wvc, int h) {
+	const unsigned short* f = V.f;
 	int p = V.tmPix[(w80 ? (whc << 1) | h : whc) & 7];
 	int en = (whc >= (f[NXF_TCX1] << 1)) && (whc <= ((f[NXF_TCX2] << 1) | 1)) && (wvc >= f[NXF_TCY1]) && (wvc <= f[NXF_TCY2]);
 	if (en && !(p & 0x200) && ((p & 15) == f[NXF_TMTR])) en = 0;
 	return p | (en << 10);
+}
+
+static int nxv_tm_pixel(Computer* comp, long long D, int whc, int wvc, int h) {
+	if ((whc >= 320) || (wvc >= 256)) return 0;
+	return nxv_tm_pick(comp, nxv_tm_load(comp, D, whc, wvc), whc, wvc, h);
 }
 
 // == the mixer ==
@@ -890,6 +907,10 @@ static void nxv_draw_dot(Computer* comp, unsigned int* ptr, long long D, int phc
 		}
 	}
 	int uclip = !(inwin || bad) && !lpen;
+	// the tilemap's group, for both halves
+	int tmw80 = -1;
+	if ((f[NXF_TMEN] || f[NXF_TMENB]) && (whc < 320) && (wvc < 256))
+		tmw80 = nxv_tm_load(comp, D, whc, wvc);
 	for (int h = 0; h < 2; h++) {
 		int attr = V.ula[ui].attr[h];
 		int pix = (bits >> h) & 1;
@@ -931,7 +952,7 @@ static void nxv_draw_dot(Computer* comp, unsigned int* ptr, long long D, int phc
 		int u_t = umix_t || !f[NXF_ULAEN];
 		int u = u_t ? 0 : urgb;
 		// the tilemap
-		int tp = (f[NXF_TMEN] || f[NXF_TMENB]) ? nxv_tm_pixel(comp, D, whc, wvc, h) : 0;
+		int tp = (tmw80 >= 0) ? nxv_tm_pick(comp, tmw80, whc, wvc, h) : 0;
 		int tm = V.pal[g->tmpal][tp & 0xff] & 0x1ff;
 		int tm_t = !(tp & 0x400) || ((tp & 0x200) && ((tm >> 1) == tr)) || !f[NXF_TMEN];
 		if (tm_t) tm = 0;
