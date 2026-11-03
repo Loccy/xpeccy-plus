@@ -292,6 +292,79 @@ static void weak(void) {
 	printf("  all three differ: %s\n", ((copy[0] != copy[1]) && (copy[1] != copy[2]) && (copy[0] != copy[2])) ? "yes" : "no");
 }
 
+// ---- saving back
+
+static unsigned char* read_all(const char* path, long* len) {
+	FILE* f = fopen(path, "rb");
+	if (!f) return NULL;
+	fseek(f, 0, SEEK_END);
+	*len = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	unsigned char* buf = malloc(*len > 0 ? *len : 1);
+	if (fread(buf, 1, *len, f) != (size_t)*len) *len = 0;
+	fclose(f);
+	return buf;
+}
+
+// The image saved against the file, past the creator's name and the track count
+// (42 or 84 when saved): "same", or where it first differs and in which track.
+// derived: what is on the tracks alone, the blocks kept from the file dropped.
+static void compare(Floppy* flp, const unsigned char* file, long flen, int derived, char* out, size_t osz) {
+	if (derived) {
+		for (int i = 0; i < 256; i++) {
+			free(flp->data[i].raw);
+			flp->data[i].raw = NULL;
+			flp->data[i].rawlen = 0;
+		}
+	}
+	size_t len = 0;
+	unsigned char* img = dsk_build(flp, &len);
+	if (!img) {
+		snprintf(out, osz, "not built");
+		return;
+	}
+	long n = ((long)len < flen) ? (long)len : flen;
+	long at = -1;
+	for (long i = 0x31; i < n; i++) {
+		if (img[i] != file[i]) {
+			at = i;
+			break;
+		}
+	}
+	if ((at < 0) && ((long)len != flen)) at = n;
+	if (at < 0) {
+		snprintf(out, osz, "same");
+	} else {
+		int trk = -1;
+		long pos = 0x100;
+		for (int t = 0; (t < 0xcc) && (pos <= at); t++) {
+			long sz = file[0x34 + t] << 8;
+			if ((at >= pos) && (at < pos + sz)) trk = t;
+			pos += sz;
+		}
+		snprintf(out, osz, "differs at %lX (track %d), %ld bytes against %ld", at, trk, (long)len, flen);
+	}
+	free(img);
+}
+
+static void roundtrip(const char* path, const char* name) {
+	long flen = 0;
+	unsigned char* file = read_all(path, &flen);
+	char res[2][128];
+	for (int k = 0; k < 2; k++) {
+		Floppy* flp = flpCreate(0, dummy_irq, NULL);
+		dsk_read(flp, path);
+		compare(flp, file, flen, k, res[k], sizeof(res[k]));
+		flpDestroy(flp);
+	}
+	if (name) {
+		printf("== roundtrip\n  kept: %s\n  derived: %s\n", res[0], res[1]);
+	} else {
+		printf("%s\tkept: %s\tderived: %s\n", path, res[0], res[1]);
+	}
+	free(file);
+}
+
 static void start(const char* path) {
 	fdcFlag = 0;
 	dif = difCreate(DIF_P3DOS, dummy_irq, NULL);
@@ -345,6 +418,7 @@ static int cases(const char* tmp) {
 	cmd("turbo-overrun", 0x46, 0, 0, 0, 1, 2, 9, 0xff, 100);
 	fdcFlag = 0;
 	difDestroy(dif);
+	roundtrip(tmp, "bench");
 	remove(tmp);
 	return 0;
 }
@@ -355,6 +429,10 @@ int main(int ac, char** av) {
 	if (!tdir) tdir = "/tmp";
 	char tmp[1024];
 	snprintf(tmp, sizeof(tmp), "%s/dsk-bench-%d.dsk", tdir, (int)(sizeof(void*)));
-	(void)ac; (void)av;
+	if ((ac > 1) && !strcmp(av[1], "-sweep")) {
+		for (int i = 2; i < ac; i++)
+			roundtrip(av[i], NULL);
+		return 0;
+	}
 	return cases(tmp);
 }

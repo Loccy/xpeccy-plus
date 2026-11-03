@@ -96,3 +96,6 @@
   cmd 46: C00 H00 R01 N02 EOT09 DTLFF
   result 40 10 00 00 00 01 02
   data 100: T0R1
+== roundtrip
+  kept: same
+  derived: same
