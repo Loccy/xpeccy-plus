@@ -64,6 +64,13 @@ xPortDsc pl3_port_tab[] = {
 };
 
 void plusRes(Computer*);
+
+// The uPD765's US1 is not wired on the +3: units 2 and 3 are drives A and B
+static void pl3_init(Computer* comp) {
+	zx_init(comp);
+	dif_align_flps(comp->dif, comp->dif->fdc, 0, 1, 0, 1);
+}
+
 HardWare pl3_hw_core = {HW_PLUS3,"Plus3","Spectrum +3",MEM_128K,1.0,NULL,pl3_port_tab,
-			zx_init,pl2MapMem,pl3Out,pl3In,asicMRd,asicMWr,zx_irq,zx_ack,plusRes,zx_sync,zx_keyp,zx_keyr,zx_vol,
+			pl3_init,pl2MapMem,pl3Out,pl3In,asicMRd,asicMWr,zx_irq,zx_ack,plusRes,zx_sync,zx_keyp,zx_keyr,zx_vol,
 			NULL,NULL,&hwq_zx, .sndtake = zx_snd_take, .sndmix = zx_mix};
