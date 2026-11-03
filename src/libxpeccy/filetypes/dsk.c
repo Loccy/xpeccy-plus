@@ -152,6 +152,77 @@ static void dsk_form(Floppy* flp, int tr, dskSec* s, int n, int gap3) {
 	}
 }
 
+static int dsk_is_mark(const unsigned char* p, int fe) {
+	return (p[0] == 0xa1) && (p[1] == 0xa1) && (p[2] == 0xa1)
+		&& (fe ? (p[3] == 0xfe) : (((p[3] & 0xfe) == 0xf8) || ((p[3] & 0xfe) == 0xfa)));
+}
+
+// How many of the track's other IDs a sector's dumped data holds: read with a
+// large N, a sector of a track whose sectors overlap brings the rest along
+static int dsk_ids_in(const dskSec* x, const dskSec* s, int n) {
+	int cnt = 0;
+	if (x->copies > 1) return 0;
+	for (int i = 0; i + 8 <= x->len; i++) {
+		if (!dsk_is_mark(x->data + i, 1)) continue;
+		for (int k = 0; k < n; k++) {
+			if ((&s[k] != x) && !memcmp(x->data + i + 4, &s[k].c, 4)) {
+				cnt++;
+				break;
+			}
+		}
+	}
+	return cnt;
+}
+
+// The marks on a track laid out byte by byte: an ID's four bytes and CRC, a data
+// field up to the sync before the next mark
+static void dsk_mark_fields(flpTrack* t, int len) {
+	memset(t->field, 0, TRKLEN_HD);
+	memset(t->map, 0, sizeof(t->map));
+	int r = -1;
+	for (int i = 0; i + 4 <= len; i++) {
+		if (!dsk_is_mark(t->byte + i, 1) && !dsk_is_mark(t->byte + i, 0)) continue;
+		t->field[i] = 0x80;
+		t->field[i + 1] = t->field[i + 2] = t->field[i + 3] = 0x0f;
+		if (t->byte[i + 3] == 0xfe) {
+			for (int k = 4; (k < 10) && (i + k < len); k++)
+				t->field[i + k] = (k < 8) ? 1 : 4;
+			r = (i + 6 < len) ? t->byte[i + 6] : -1;
+			i += 9;
+		} else {
+			int f = ((t->byte[i + 3] & 0xfe) == 0xf8) ? 3 : 2;
+			int st = i + 4, end = st;
+			while ((end + 3 <= len) && !((t->byte[end] == 0xa1) && (t->byte[end + 1] == 0xa1) && (t->byte[end + 2] == 0xa1)))
+				end++;
+			end = (end + 3 <= len) ? end - DSK_SYNC : len;
+			for (int k = st; k < end; k++)
+				t->field[k] = f;
+			if ((r >= 0) && !t->map[r]) t->map[r] = st;
+			r = -1;
+			i = (end > i) ? end - 1 : i + 3;
+		}
+	}
+}
+
+// A track whose sectors overlap: the sector whose dumped data holds the others is
+// laid down with its own ID in front, and its bytes are the rest of the track as
+// they came off the disk - IDs, gaps and CRCs of the others included
+static void dsk_form_stream(Floppy* flp, int tr, dskSec* x) {
+	dskPen p = {&flp->data[tr], 0, flp->trklen};
+	memset(p.t->byte, 0x4e, TRKLEN_HD);
+	int st = pen_mark(&p, 0xfe);
+	pen_put(&p, x->c, 0);
+	pen_put(&p, x->h, 0);
+	pen_put(&p, x->r, 0);
+	pen_put(&p, x->n, 0);
+	pen_crc(&p, st, (x->st1 & 0x20) && !(x->st2 & 0x20));
+	pen_run(&p, 0x4e, DSK_GAP2);
+	pen_mark(&p, (x->st2 & 0x40) ? 0xf8 : 0xfb);
+	for (int k = 0; k < x->len; k++)
+		pen_put(&p, x->data[k], 0);
+	dsk_mark_fields(p.t, p.len);
+}
+
 static unsigned char* dsk_file(const char* name, long* len) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return NULL;
@@ -245,7 +316,19 @@ int dsk_read(Floppy* flp, const char* name) {
 			// 4E is what the dumping tools put there for any track, not a length
 			// they measured: such a track gets the gap +3DOS formats with
 			int gap3 = (tib->gap3Size == 0x4e) ? DSK_GAP3_P3 : tib->gap3Size;
-			dsk_form(flp, tr, secs, sc, gap3);
+			int whole = -1, most = 1;
+			for (int k = 0; k < sc; k++) {
+				int m = dsk_ids_in(&secs[k], secs, sc);
+				if (m > most) {
+					whole = k;
+					most = m;
+				}
+			}
+			if ((whole >= 0) && (tr < 256)) {
+				dsk_form_stream(flp, tr, &secs[whole]);
+			} else {
+				dsk_form(flp, tr, secs, sc, gap3);
+			}
 			if (ext && (tr < 256) && (pos + rtlen <= len) && !cut)	// saved back as it came, until written
 				flp_keep_raw(flp, tr, buf + pos, (int)rtlen);
 			tr += (sidcnt == 1) ? 2 : 1;
