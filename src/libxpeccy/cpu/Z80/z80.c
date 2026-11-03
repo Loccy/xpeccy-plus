@@ -135,9 +135,7 @@ int z80_int(CPU* cpu) {
 			cpu->regPC++;
 			cpu->flgHALT = 0;
 		}
-		if (cpu->flgRetBRK) {		// it is a call, so the debugger counts it
-			cpu->regCallCnt++;
-		}
+		z80_count_call(cpu);		// it is a call, so the debugger counts it
 		cpu->t = 5;
 		z80_push(cpu, cpu->regPC);
 		cpu->regPC = 0x0066;
@@ -183,8 +181,7 @@ int z80_int(CPU* cpu) {
 					z80_call(cpu, 0x38);	// +3 +3 execution. 13 total
 					break;
 				case 2:
-					if (cpu->flgRetBRK)
-						cpu->regCallCnt++;
+					z80_count_call(cpu);
 					cpu->regR++;
 					cpu->t = 7;
 					z80_push(cpu, cpu->regPC);			// +3 (10) +3 (13)
@@ -520,11 +517,11 @@ void z80_set_r(CPU* cpu, int v) {cpu->regR = v; cpu->regR7 = v & 0x80;}
 void z80_set_ir(CPU* cpu, int v) {cpu->regI = (v >> 8) & 0xff; z80_set_r(cpu, v & 0xff);}
 void z80_set_wz(CPU* cpu, int v) {cpu->regWZ = v;}
 void z80_set_im(CPU* cpu, int v) {cpu->regIM = (v & 2) ? 2 : v & 1;}
-// as EI and DI do: inten follows IFF1
+// IFF1 on lifts DI's mask as EI does; off leaves it, IFF1 alone stops INT (as
+// after taking one), so a RETN that copies IFF2 back still lets INT in
 void z80_set_iff1(CPU* cpu, int v) {
 	cpu->flgIFF1 = !!v;
 	if (v) cpu->inten |= Z80_INT;
-	else cpu->inten &= ~Z80_INT;
 }
 void z80_set_iff2(CPU* cpu, int v) {cpu->flgIFF2 = !!v;}
 void z80_set_fa(CPU* cpu, int v) {cpu->regFa = v;}

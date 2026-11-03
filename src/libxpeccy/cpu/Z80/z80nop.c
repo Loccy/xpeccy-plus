@@ -41,13 +41,7 @@ void z80_call(CPU* cpu, unsigned short a) {
 	cpu->regWZ = a;
 	z80_push(cpu, cpu->regPC);
 	cpu->regPC = cpu->regWZ;
-	if (cpu->flgRetBRK) {
-		if (cpu->regCallCnt < 65000) {
-			cpu->regCallCnt++;
-		} else {
-			cpu->flgRetBRK = 0;
-		}
-	}
+	z80_count_call(cpu);
 }
 
 void z80_ret(CPU* cpu) {

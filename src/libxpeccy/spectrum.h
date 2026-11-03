@@ -753,7 +753,11 @@ enum {
 	// the map as it stands, for the machine's own accesses. Without it, while the
 	// debugger holds the machine, a divMMC paging armed by the last fetch is shown
 	// as done: the next fetch, wherever it is, does it (8 is the Next's own)
-	MEM_VIEW_LIVE = 16
+	MEM_VIEW_LIVE = 16,
+	// the listing's: any address in the map the fetch at PC sees (TR-DOS or a
+	// divMMC paged in from #3Dxx), as the row at PC shows it. The Next's view
+	// pages per fetch: there it is a read
+	MEM_VIEW_PC = 32
 };
 
 // Physical memory by the names people use for it (labels, breakpoints, MEMMAP):

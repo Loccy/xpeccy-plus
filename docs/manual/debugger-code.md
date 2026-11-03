@@ -52,9 +52,11 @@ The row the CPU will run next, at PC, has its own color. Rows with a breakpoint 
 text in the breakpoint color, and a selected block has its own color too. The colors are
 set on the **Debugger** page of **Options**.
 
-Each row shows the bytes the CPU would run there. Where fetching a row pages other memory
-in, the row shows that memory: the rows at `3D00`-`3DFF` show the TR-DOS ROM of a Beta Disk
-interface, or the ROM of a [divMMC](divmmc.md), while the BASIC ROM is in.
+The rows show memory as the fetch at PC pages it. With PC at `3D00`-`3DFF` and the BASIC ROM
+in, the whole listing shows the TR-DOS ROM of a Beta Disk interface, or the ROM of a
+[divMMC](divmmc.md); with PC in RAM, the BASIC ROM, since TR-DOS is paged out there. A divMMC
+entry point such as `0008` pages the board in for the fetch after it, so the listing shows the
+board after the step from `0008`.
 
 The last column says more about the instruction at PC:
 

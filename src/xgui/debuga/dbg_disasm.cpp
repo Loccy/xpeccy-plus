@@ -20,7 +20,7 @@ extern int blockEnd;
 static int mode = XVIEW_CPU;
 static int page = 0;
 
-static xAdr dasm_xadr(Computer* comp, int adr, int access = MEM_VIEW_READ) {
+static xAdr dasm_xadr(Computer* comp, int adr, int access = MEM_VIEW_PC) {
 	if (mode == XVIEW_CPU) return comp_get_xadr(comp, adr, access);
 	xAdr xadr;
 	xadr.type = (mode == XVIEW_ROM) ? MEM_ROM : MEM_RAM;
@@ -235,7 +235,7 @@ int dasmrd(int adr, void* ptr) {
 	unsigned char res = 0xff;
 	switch (mode) {
 		case XVIEW_CPU:
-			res = comp_peek(comp, adr, MEM_VIEW_READ, NULL);
+			res = comp_peek(comp, adr, MEM_VIEW_PC, NULL);
 			break;
 		case XVIEW_RAM:
 			res = comp->mem->ramData[((adr & 0x3fff) | (page << 14)) & comp->mem->ramMask];
@@ -247,7 +247,8 @@ int dasmrd(int adr, void* ptr) {
 	return res;
 }
 
-// The listing shows memory as it is now. Only the row at PC is the instruction
+// The listing shows memory as the fetch at PC sees it: TR-DOS (or a divMMC)
+// paged in from #3Dxx is there in every row. The row at PC is the instruction
 // the CPU will run, with whatever its own fetch pages in (a divMMC trap, the
 // Multiface's NMI entry) - stepping runs exactly that row.
 static bool dasm_is_pc(Computer* comp, int adr) {
@@ -255,7 +256,7 @@ static bool dasm_is_pc(Computer* comp, int adr) {
 }
 
 static int dasm_access(Computer* comp, int adr) {
-	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_READ;
+	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_PC;
 }
 
 static xMnem dasm_mnem(Computer* comp, int adr, char* buf, QByteArray* bytes = NULL) {
@@ -1336,8 +1337,8 @@ void xDisasmTable::keyPressEvent(QKeyEvent* ev) {
 				bpt = 0;
 			} else {
 				bpr = BRK_MEMCELL;
-				int access = (key == XCUT_SETBRK_WR) ? MEM_VIEW_WRITE
-					: ((key == XCUT_SETBRK) ? MEM_VIEW_FETCH : MEM_VIEW_READ);
+				// the cell the row shows; a write goes where writes go
+				int access = (key == XCUT_SETBRK_WR) ? MEM_VIEW_WRITE : dasm_access(comp, adr);
 				xadr = dasm_xadr(comp, adr, access);
 				switch(xadr.type) {
 					case MEM_RAM: bpt = MEM_BRK_RAM;
