@@ -583,6 +583,7 @@ class MainWin : public QWidget {
 		bool fsHeld();
 		bool fsCovers();
 		void popupUserMenu(const QPoint&);
+		void popupRecent();
 		void placeWindow();
 		QTimer fsLinger;	// the bars over the top, the pointer gone from them
 		void fsReveal(int y);
