@@ -9,6 +9,12 @@ before that point is upstream's history and is not repeated here.
 
 ## Unreleased
 
+### Changed
+
+- **The ZX Spectrum Next takes much less of the host CPU**: idle in NextBASIC or the
+  NextZXOS menu about a third of what it took, and games and demos up to 11 % less, with the
+  same picture and sound. A frame in which nothing on screen changes is not drawn again.
+
 ### Fixed
 
 - **Breakpoints follow the CPU's bus cycles**: Read no longer stops on an opcode fetch;
