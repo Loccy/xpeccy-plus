@@ -119,3 +119,9 @@ libxpeccy as a static library and the benches in `core/` against it, into
   padding, every way a trainer goes bad), then pokes going in and out of a 16K, a 48K and
   a 128K: the original check, a page poked while another is paged in, undo, a rollback.
   `pok-bench -sweep <files>` prints one line a file, for a run over a collection.
+- **dsk** - an EXTENDED DSK the bench writes, with what copy-protected +3 disks carry: a
+  deleted data mark, CRC errors in an ID and in the data, C not the track's and C = FF, an
+  ID with no data field, N 1 on a track of N 2, a weak sector of three reads, N 6 running
+  to the index, an unformatted track. The uPD765 is asked for them through the +3's ports,
+  the CPU taking each byte in time or letting one go: the result bytes, and which sector each
+  block of data came from.
