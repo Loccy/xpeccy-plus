@@ -27,6 +27,8 @@ RD: operands and data, no fetches: ok
 a #3Dxx fetch is seen in TR-DOS, the map left as it was: ok
 Fetch on TR-DOS #3D2F from BASIC: ok
 heat of a #3Dxx fetch in TR-DOS: ok
+listing at PC #3D13 in TR-DOS, at PC in RAM in BASIC: ok
+listing with a divMMC: #3Dxx at once, RST 8 after its fetch: ok
 == hits
 PUSH HL: both bytes, each with its value: ok
 cpu address and cell on one byte: both, the byte read: ok

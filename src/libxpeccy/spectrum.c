@@ -74,6 +74,13 @@ static xAdr comp_view_xadr(Computer* comp, int start, int adr, int mode) {
 
 static void comp_mem_view_at(Computer* comp, int start, int adr, int mode, int* value, xAdr* xadr) {
 	adr &= comp->mem->busmask;
+	if (mode & MEM_VIEW_PC) {
+		mode &= ~MEM_VIEW_PC;
+		if (!comp->hw->memView) {
+			start = cpu_get_pc(comp->cpu);
+			mode |= MEM_VIEW_FETCH;
+		}
+	}
 	if (comp->hw->memView) {
 		comp->hw->memView(comp, adr, mode, value, xadr);
 		return;
@@ -118,7 +125,7 @@ static void comp_mem_view(Computer* comp, int adr, int mode, int* value, xAdr* x
 
 int comp_peek(Computer* comp, int adr, int access, xAdr* xadr) {
 	int value = 0xff;
-	comp_mem_view(comp, adr, access & MEM_VIEW_FETCH, &value, xadr);
+	comp_mem_view(comp, adr, access & (MEM_VIEW_FETCH | MEM_VIEW_PC), &value, xadr);
 	return value & 0xff;
 }
 

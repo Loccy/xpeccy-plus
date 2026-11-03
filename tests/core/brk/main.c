@@ -368,6 +368,51 @@ int main(void) {
 			&& (comp->heatRom.ex[0x7d2f] == 1) && !comp->heatRom.ex[0x3d2f] && !comp->heatRom.rd[0x3d2f]);
 		compDestroy(comp);
 	}
+	{
+		// the listing: every row in the map the fetch at PC sees
+		Computer* comp = machine();
+		difSetHW(comp->dif, DIF_BDI);
+		comp->mem->romData[0x3d14] = 0x11;		// BASIC
+		comp->mem->romData[0x7d14] = 0x22;		// TR-DOS
+		comp->mem->romData[0x0100] = 0x33;
+		comp->mem->romData[0x4100] = 0x44;
+		comp->hw->mapMem(comp);
+		comp->cpu->regPC = 0x3d13;
+		ok = (comp_peek(comp, 0x3d14, MEM_VIEW_PC, NULL) == 0x22) && (comp_peek(comp, 0x0100, MEM_VIEW_PC, NULL) == 0x44);
+		ok &= (comp_get_xadr(comp, 0x0100, MEM_VIEW_PC).abs == 0x4100) && (comp_peek(comp, 0x0100, MEM_VIEW_READ, NULL) == 0x33);
+		ok &= !comp->flgDOS;
+		comp->flgDOS = 1;		// in TR-DOS, PC in RAM: its fetch pages TR-DOS out
+		comp->hw->mapMem(comp);
+		comp->cpu->regPC = 0x8000;
+		ok &= (comp_peek(comp, 0x0100, MEM_VIEW_PC, NULL) == 0x33) && (comp_peek(comp, 0x0100, MEM_VIEW_READ, NULL) == 0x44);
+		ok &= comp->flgDOS;
+		check("listing at PC #3D13 in TR-DOS, at PC in RAM in BASIC", ok);
+		compDestroy(comp);
+	}
+	{
+		// a divMMC: the board from #3Dxx at once, after an entry point's fetch only
+		Computer* comp = machine();
+		div_set_model(comp->div, DIV_MMC, 16);
+		div_out(comp->div, 0xe3, 0x00);		// the automapper alone
+		comp->div->data[0x0009] = 0x5a;
+		comp->div->data[0x0100] = 0x5b;
+		comp->mem->romData[0x0009] = 0xa5;
+		comp->mem->romData[0x0100] = 0xa6;
+		comp->flgDBG = 1;
+		comp->cpu->regPC = 0x0008;
+		ok = (comp_peek(comp, 0x0009, MEM_VIEW_PC, NULL) == 0xa5);
+		div_m1(comp->div, 0x0008);		// RST 8 fetched there
+		comp->cpu->regPC = 0x0009;
+		ok &= (comp_peek(comp, 0x0009, MEM_VIEW_PC, NULL) == 0x5a);
+		div_m1(comp->div, 0x1ff8);		// off for the fetch after #1FF8
+		div_m1(comp->div, 0x8000);
+		ok &= !comp->div->automap;
+		comp->cpu->regPC = 0x3d00;
+		ok &= (comp_peek(comp, 0x0100, MEM_VIEW_PC, NULL) == 0x5b) && (comp_peek(comp, 0x0100, MEM_VIEW_READ, NULL) == 0xa6);
+		comp->flgDBG = 0;
+		check("listing with a divMMC: #3Dxx at once, RST 8 after its fetch", ok);
+		compDestroy(comp);
+	}
 
 	printf("== hits\n");
 	{
