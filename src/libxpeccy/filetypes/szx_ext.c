@@ -745,7 +745,10 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 	sb_put(b, szx_ext_tag, sizeof(szx_ext_tag));
 	// the Next's picture walks the counted dots with the board's state: done before
 	// any of it is taken (VID below does the same for every machine)
-	if (ext_is_next(comp)) vid_unlazy(comp->vid);
+	if (ext_is_next(comp)) {
+		vid_unlazy(comp->vid);
+		nxv_settle(comp);		// a still frame's FLASH count, up to the ray
+	}
 
 	rec_begin(b, XR_MACH, &mark);
 	ext_put_string(b, comp->hw->name);

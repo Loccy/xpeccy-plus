@@ -207,6 +207,7 @@ void nx_uart_line(Computer*, int uart, long long edge, int level);	// a level ch
 void nx_uart_cts(Computer*, int uart, int cts_n);
 void nx_uart_cfg(Computer*, int uart, long* presc, int* frame, int* rtr_n);
 long long nx_now(Computer*);
+void nxv_settle(Computer*);	// a still frame: flash_cnt counted up to the ray, for a snapshot
 extern long long next_log_at;	// a copper write being logged: its CLK_28 edge (-1: the cpu's)
 extern long long next_log_t;	// a DMA i/o write being logged: the CLK_28 time standing for the ray (-1: none)...
 extern long long next_log_cyc;	// ...and its cpu clock count

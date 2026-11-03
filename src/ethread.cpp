@@ -288,6 +288,7 @@ void xThread::tap_hand_over(Computer* comp, int blk, int base, int dir) {
 	// each. Where it leaves sets PC.
 	CPU* cpu = comp->cpu;
 	int load = cpu->regFa & 1;		// carry in F': LOAD, else VERIFY
+	if (load) vid_still_break(comp->vid);	// written past the machine's own writes
 	unsigned char flag = blkData[0];
 	unsigned char h = flag;
 	unsigned char l = flag;
@@ -1237,6 +1238,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 			} else if ((poke > 500) && !benchRecJoin && (rzx_rec_frames(comp) >= poke) && comp->cpu->flgIFF1) {
 				fprintf(stdout, "rzx rec: poke at frame %i, iff1 %i\n", rzx_rec_frames(comp), comp->cpu->flgIFF1 ? 1 : 0);
 				memWr(comp->mem, 0x5800, 0x47);
+				vid_still_break(comp->vid);
 				rzx_rec_touch();
 				poke = 0;
 			}

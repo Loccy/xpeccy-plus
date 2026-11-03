@@ -542,12 +542,15 @@ static long long nx_wr_time(Computer* comp) {
 static void nx_mem_wr(Computer* comp, int adr, int val, long long w) {
 	nxAccess a = nx_decode(comp, adr, 1);
 	switch (a.kind) {
+		// a byte written as it was changes nothing a read could see: not logged
 		case NXM_SRAM:
 		case NXM_BRAM:
+			if (comp->mem->ramData[a.adr] == (unsigned char)val) break;
 			nxv_memw(comp, a.adr, comp->mem->ramData[a.adr], w);
 			comp->mem->ramData[a.adr] = val;
 			break;
 		case NXM_SHADOW:
+			if (NX.shadow[a.adr] == (unsigned char)val) break;
 			nxv_memw(comp, 0x200000 + a.adr, NX.shadow[a.adr], w);
 			NX.shadow[a.adr] = val;
 			break;
@@ -643,6 +646,7 @@ static void nx_mem_view(Computer* comp, int adr, int mode, int* value, xAdr* xad
 	if (!value) return;
 	if (edit) {
 		if (!(mode & MEM_VIEW_ROM_WRITE) && !nx_edit_ok(comp, adr, &a)) return;
+		vid_still_break(comp->vid);		// no write log: the picture is drawn again
 		switch (a.kind) {
 			case NXM_SRAM:
 			case NXM_BRAM:
@@ -914,7 +918,7 @@ static long long nx_irq_quiet_until(Computer* comp, long long s) {
 	if (NX.pulseE >= 0) return s;
 	long long chain = nx_int_req_until(comp, s);	// a device in service holds INT off
 	if (chain <= s) return s;
-	int cop = (NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN;
+	int cop = nx_cop_on(comp);
 	if (cop && (NX.copN || (NX.copWake <= s))) return s;
 	const nxTiming* t = nx_tim(comp);
 	int L = t->L;

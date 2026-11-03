@@ -489,6 +489,14 @@ typedef struct {
 	unsigned char i2cScl, i2cSda;	// the bit-banged I2C master's lines, 1 released (ports 103B, 113B)
 	nxUart uart[2];			// ESP, Pi
 	unsigned char uartSel;		// uart_select_r: which one the ports reach
+	// still frames (zxnext_vid.c): left out of an SZX, which loads over the reset's values
+	struct {
+		long long flashDot;	// the dot flash_cnt last counted at, -1: none seen
+		long long frameDots;	// the raster's dots a frame then
+		int clean;		// frames in a row nothing the picture reads moved in
+		unsigned char dirty;	// something moved in this one
+		unsigned char waking;	// nxv_wake is walking the dots counted
+	} still;
 } xNextState;
 
 typedef struct Computer {

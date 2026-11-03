@@ -91,6 +91,7 @@ static void comp_mem_view_at(Computer* comp, int start, int adr, int mode, int* 
 	// a debugger edit: RAM always, ROM with "write to ROM", divMMC where the board
 	// lets the CPU write (not bank 3 under MAPRAM, the EEPROM only when enabled)
 	if (mode & MEM_VIEW_WRITE) {
+		vid_still_break(comp->vid);
 		switch (xa.type) {
 			case MEM_RAM:
 				comp->mem->ramData[xa.abs & comp->mem->ramMask] = *value & 0xff;
@@ -265,6 +266,7 @@ int comp_cell_poke(Computer* comp, int area, int page, int ofs, int val, int rom
 	unsigned char* ptr = comp_cell_ptr(comp, area, page, ofs);
 	if (!ptr) return 0;
 	*ptr = val & 0xff;
+	vid_still_break(comp->vid);		// past the Next's write log: drawn again
 	if ((area == CELL_DIVROM) && comp->div && !comp_is_next(comp)) comp->div->eeDirty = 1;
 	return 1;
 }

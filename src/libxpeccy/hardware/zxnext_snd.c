@@ -304,7 +304,7 @@ void next_audio(Computer* comp, int* l, int* r, int* env) {
 // running: nx_vol runs it up to the time it is called, and a late sample would see
 // the mixer's nextregs the copper writes after its own time
 int nx_snd_late(Computer* comp) {
-	if ((NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN) return 0;
+	if (nx_cop_on(comp)) return 0;
 	bitChan* bc = comp->beep;
 	if ((bc->val != (bc->lev ? bc->hi : bc->lo)) || (bc->perH && bc->perL)) return 0;
 	return !comp->tape->on;
@@ -315,11 +315,10 @@ int nx_snd_late(Computer* comp) {
 // its own volume from the options and its own dc blocker, as zx_vol does.
 sndPair nx_vol(Computer* comp, sndVolume* sv) {
 	static sndDC dcBeep, dcAy, dcDac;
-	unsigned char* nr = NX.nr;
 	// the copper writes the DACs and the mixer's nextregs: its moves up to the dot under
 	// the ray count here, as the video, which runs it, may not have walked that far yet
 	// (the clock counted from the T says when it is still asleep, without the ray)
-	if ((nr[0x62] & 0xc0) || NX.copLast || NX.copN) {
+	if (nx_cop_on(comp)) {
 		long long ts = comp->tickTotal + comp->cpu->t;
 		if (NX.copN || (NX.refT < 0) || (NX.refC + (ts - NX.refT) * (8 >> NX.speed) + 8 >= NX.copWake))
 			nx_cop_run(comp, nx_now(comp) & ~3LL);

@@ -339,6 +339,7 @@ void vid_upd_layout(Video* vid) {
 }
 
 void vid_set_layout(Video* vid, vLayout* lay) {
+	vid_still_break(vid);
 	vid_unlazy(vid);
 	vid->full = lay->full;
 	vid->bord = lay->bord;
@@ -421,6 +422,7 @@ static unsigned char nxtatr = 0;
 
 void vid_dark_tail(Video* vid) {
 	if (vid->tail) return;				// no filling while current fill is active (till end of frame)
+	vid_still_break(vid);				// the picture up to the ray is the mode's own again
 	vid_unlazy(vid);				// the dots counted are drawn first
 	// from where the picture stops: on the Next its mixer's own pointer, a few dots
 	// behind the ray - ray.ptr stays at the line's start there, and darkening from it
@@ -839,7 +841,7 @@ int vid_float_bus(Video* vid, int* age) {
 // An undrawn frame moves the ray and nothing else: every mode's dots leave the
 // machine nothing but the border latch and what its latch kind says (VL_*)
 static inline int vid_skips(Video* vid) {
-	return vid->nodraw && vid->cb;
+	return (vid->nodraw || vid->still) && vid->cb;
 }
 
 // The dot the ray passed last, and the frame it was in: back 1 is the one before
@@ -961,6 +963,21 @@ static void vid_nodraw_to(Video* vid, int on) {
 	if (on == vid->nodraw) return;
 	vid_latch_at(vid);
 	vid->nodraw = on;
+	if (on) vid->stillBreak = 1;		// the buffers fall behind the machine
+}
+
+int vid_still_on = 1;
+
+void vid_still_end(Video* vid) {
+	if (!vid->still) return;
+	if (vid->cb && vid->cb->wake)
+		vid->cb->wake(vid);
+	vid->still = 0;
+}
+
+void vid_still_break(Video* vid) {
+	vid_still_end(vid);
+	vid->stillBreak = 1;
 }
 
 long long vid_quiet_dots(Video* vid, int lineInt) {
@@ -1671,6 +1688,8 @@ void vts_hblk(Video*);
 void nxv_dot(Video*);
 int nxv_run(Video*, int);
 unsigned char* nxv_drawn(Video*);
+void nxv_frm(Video*);
+void nxv_wake(Video*);
 void vts_line(Video*);
 void vts_frame(Video*);
 void vidDrawTSLNormal(Video*);
@@ -1699,7 +1718,7 @@ static xVideoMode vidModeTab[] = {
 	{VID_TSL_TEXT, NULL, vidDrawTSLText, vts_hblk, vts_line, NULL, vts_frame, NULL, VL_NONE},
 	{VID_PRF_MC, NULL, vidProfiScr, NULL, NULL, NULL, NULL, NULL, VL_NONE},
 	{VID_PRF_MONO, NULL, vidProfiMono, NULL, NULL, NULL, NULL, NULL, VL_NONE},
-	{VID_NEXT, NULL, nxv_dot, NULL, NULL, NULL, NULL, nxv_run, VL_NONE, nxv_drawn},
+	{VID_NEXT, NULL, nxv_dot, NULL, NULL, NULL, nxv_frm, nxv_run, VL_NONE, nxv_drawn, nxv_wake},
 
 
 	{VID_UNKNOWN, NULL, vidDrawBorder, NULL, NULL, NULL, NULL, NULL, VL_NONE}
@@ -1712,6 +1731,7 @@ void vid_set_core(Video* vid, xVideoMode* xvm) {
 }
 
 void vid_set_mode(Video* vid, int mode) {
+	vid_still_break(vid);
 	vid_unlazy(vid);
 	vid_latch_at(vid);		// the old mode's bytes, where an undrawn frame keeps them
 	vid->vmode = mode;

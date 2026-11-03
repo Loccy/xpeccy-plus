@@ -103,6 +103,8 @@ typedef struct {
 	// where the picture really stops, for a mode that draws through a pointer of its
 	// own (VID_NEXT, behind the ray); NULL: at ray.ptr
 	unsigned char* (*drawn)(Video*);
+	// a still frame ends here (vid_still_end): the mode takes the drawing up at the ray
+	cbvid wake;
 } xVideoMode;
 
 // What a mode's dots leave behind that the machine can read: worked out from
@@ -136,6 +138,12 @@ struct Video {
 	unsigned hbrd:1;	// border.H
 	unsigned vbrd:1;	// border.V
 
+	// A still frame: nothing the picture reads has moved for two frames, so the mode
+	// left both buffers holding the last picture and skips the dots as an undrawn
+	// frame does, until something moves (VID_NEXT). Not machine state.
+	unsigned still:1;
+	unsigned stillOk:1;	// whoever runs the machine lets a frame go still (nothing looks mid-frame)
+	unsigned stillBreak:1;	// the picture was touched from outside (a layout, an edit, an undrawn frame)
 	int nodrawNext;		// nodraw for the next frame, taken as it starts; -1: keep
 	int latchFrm;		// where atrbyte/fntbyte were last taken in an undrawn frame:
 	int latchPos;		// fcnt and the dot (vid_latch)
@@ -433,6 +441,9 @@ void vid_set_dot_ns(Video*,double);
 void vid_set_mode(Video*,int);
 void vid_set_nodraw(Video*,int);
 void vid_set_nodraw_next(Video*,int);		// the same from the next frame start on
+void vid_still_end(Video*);			// a still frame drawn on from the ray
+void vid_still_break(Video*);			// ...and the picture touched from outside
+extern int vid_still_on;			// still frames at all (--bench-nostill: 0)
 void vid_sweep(Video*);				// the memory now as a whole frame, into bufimg
 void vid_set_int_frame(Video*, int);		// dots left of the frame INT pulse, 0: none
 void vid_set_ray(Video*, int);
