@@ -65,11 +65,17 @@ static qint64 paceRemainderNs = 0;
 // (added lag). Pull it back towards the target: make time run a touch fast when
 // the ring is running dry, a touch slow when it is over full. Nothing plays the
 // ring under the NULL device, so there is nothing to steer against there.
+// what is made and not played: the ring, and what the sound thread has still to
+// put into it
+static int snd_made_bytes() {
+	return sndGetRingDistance() + snd_queued_bytes();
+}
+
 static qint64 pace_trim(qint64 dtNs) {
 	if (!sndPlaybackActive()) return dtNs;
 	int target = sndGetRingTargetBytes();
 	if (target < 1) return dtNs;
-	int err = target - sndGetRingDistance();			// > 0: ring is running dry
+	int err = target - snd_made_bytes();			// > 0: ring is running dry
 	int ppm = toLimits(err * PACE_TRIM_PPM / target, -PACE_TRIM_PPM, PACE_TRIM_PPM);	// full trim one target away
 	return dtNs + dtNs * ppm / 1000000;
 }
@@ -103,7 +109,7 @@ static Uint32 pace_tick(Uint32 interval, void*) {
 		// the ring buffer is only drained by a device that plays it. the NULL
 		// device never does, so waiting for it to drain would stop the
 		// emulation for good - skip the check when nothing is playing.
-		int wait = sndPlaybackActive() && (sndGetRingDistance() >= SND_RING_HIGH_WATER);
+		int wait = sndPlaybackActive() && (snd_made_bytes() >= SND_RING_HIGH_WATER);
 		if ((samples > 0) && !wait) {
 			int maxNeed = conf.snd.rate * PACE_MAX_BACKLOG_MS / 1000;
 			conf.snd.need += (int)samples;
@@ -158,7 +164,7 @@ void pacing_vblank(long long ns) {
 	if (sndPlaybackActive()) {
 		int target = sndGetRingTargetBytes();
 		if (target > 0) {
-			lockErr += ((target - sndGetRingDistance()) - lockErr) / LOCK_TRIM_AVG;
+			lockErr += ((target - snd_made_bytes()) - lockErr) / LOCK_TRIM_AVG;
 			double e = lockErr / target;
 			if (e > 1.0) e = 1.0;
 			if (e < -1.0) e = -1.0;
@@ -167,7 +173,7 @@ void pacing_vblank(long long ns) {
 			if (xlog_on(XLG_SOUND, XLL_DEBUG) && ((told < 0) || (ns - told >= 10000000000LL))) {
 				told = ns;
 				xlog(XLG_SOUND, XLL_DEBUG, "vsync: the ring at %i of %i bytes, sound steered %+.0f ppm",
-					sndGetRingDistance(), target, -trim * 1e6);
+					snd_made_bytes(), target, -trim * 1e6);
 			}
 			// running dry: each sample spans less emulated time, so more of them
 			// are made for the same frame
@@ -182,7 +188,7 @@ void pacing_vblank(long long ns) {
 	int samples = (int)(lockOwedNs / per);
 	lockOwedNs -= samples * per;
 	// nothing plays what is made past the high water: no more of it
-	if (sndPlaybackActive() && (sndGetRingDistance() >= SND_RING_HIGH_WATER)) return;
+	if (sndPlaybackActive() && (snd_made_bytes() >= SND_RING_HIGH_WATER)) return;
 	int maxNeed = (int)(LOCK_MAX_FRAMES * comp->vid->nsPerFrame / per);
 	conf.snd.need += samples;
 	if (conf.snd.need > maxNeed) conf.snd.need = maxNeed;

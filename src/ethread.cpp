@@ -953,6 +953,8 @@ void xThread::emuCycle(Computer* comp) {
 		if (comp->flgCOND)
 			comp_brk_newstep(comp);
 	}
+	// what the cycle made goes to the sound thread
+	snd_q_flush();
 	// whoever looks next - the debugger, a snapshot, the gui - sees the ray where
 	// it stands, not the dots an undrawn frame has only counted
 	vid_unlazy(comp->vid);
@@ -1346,6 +1348,8 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 		sndNsFixed = 0;
 		snd_pipe_reset();
 	}
+	// the ring as the sound thread leaves it once it has what was made so far
+	snd_sync_wait();
 	int spos = snd_ring_fill_pos();
 	long long t0 = paceClockNs();
 	int tk0 = comp->tickCount;
@@ -1380,6 +1384,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 				for (int y = 0; y < vid->full.y; y++)
 					hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine, vid->full.x * 8);
 			}
+			snd_sync_wait();
 			int epos = snd_ring_fill_pos();
 			while (spos != epos) {
 				unsigned char b = snd_ring_byte(spos++);

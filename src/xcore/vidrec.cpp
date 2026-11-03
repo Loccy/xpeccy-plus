@@ -892,6 +892,9 @@ static void vr_push(vrJob* job) {
 
 void vrec_frame(Computer* comp) {
 	if (!vrOn.load(std::memory_order_acquire)) return;
+	// the frame's sound is made on the sound thread (vrec_sample): all of it first
+	snd_q_flush();
+	snd_sync_wait();
 	em_sync();
 	static int undrawn = 0;			// frames run since the last picture (fast forward draws one in so many)
 	if (bufSwaps == emSwaps) {		// nothing new drawn

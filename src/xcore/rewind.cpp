@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <deque>
+#include <mutex>
 #include <vector>
 
 #include "rewind.h"
@@ -36,7 +37,8 @@ typedef struct {
 	Tape tape;		// where the tape stood; put back only onto the same tape
 	int frame;		// rw_clock when it was taken
 	long long phase;	// see rewind_frame()
-	long long snd;		// rw_snd_w when it was taken
+	long long snd;		// rw_snd_w when it was taken, -1 until the sound thread says (rw_marks)
+	long long id;		// the take's number, for its mark
 } rwEntry;
 
 static std::deque<rwEntry> rw_ring;
@@ -56,6 +58,13 @@ static xState* rw_st = NULL;		// every save and every load goes through it
 // sub-samples are averaged into it by the time they cover, so a stretch of
 // fast forward or slow motion takes as much of it as the frames it holds, and a
 // snapshot's place in it is where its frames are. rw_snd_w counts every sample.
+//
+// The sound thread makes it (rewind_sound), from the sub-samples in the order the
+// machine made them. A snapshot puts a call in that order (rw_snd_mark), and the
+// sound thread answers with where the ring stood there - what rw_snd_w was when
+// the snapshot was taken. While the history plays back the machine makes no
+// sub-samples, so the ring is the emulation thread's to read then, once the sound
+// thread has caught up (rw_marks_settle).
 #define RW_SND_EXTRA	8	// seconds of sound over the history, since a snapshot waits for a safe frame
 typedef struct {
 	short left, right;	// already clipped to 16 bits
@@ -69,6 +78,40 @@ static struct {
 	long long ns;
 	int left, right, n;
 } rw_acc;
+static std::atomic<size_t> rw_snd_bytes(0);	// for the log, from the other thread
+
+// the sound thread's answers: a take's number and rw_snd_w there
+static std::mutex rw_mark_lock;
+static std::vector<std::pair<long long, long long>> rw_marks;
+static long long rw_takes = 0;
+
+static void rw_snd_mark(long long id) {
+	std::lock_guard<std::mutex> lk(rw_mark_lock);
+	rw_marks.push_back(std::make_pair(id, rw_snd_w));
+}
+
+// the answers come in, onto the snapshots still held; the newest are at the back
+static void rw_marks_apply() {
+	std::lock_guard<std::mutex> lk(rw_mark_lock);
+	for (const auto& m : rw_marks) {
+		for (auto it = rw_ring.rbegin(); it != rw_ring.rend(); ++it) {
+			if (it->id == m.first) {
+				it->snd = m.second;
+				break;
+			}
+			if (it->id < m.first) break;
+		}
+	}
+	rw_marks.clear();
+}
+
+// all of them: the sound thread takes what was queued before the call first
+static void rw_marks_settle() {
+	snd_q_flush();
+	snd_sync_wait();
+	rw_marks_apply();
+}
+
 // playing back: the stretch between the snapshot shown and the one before it,
 // read from pos down to lo, ratio samples to an output sample
 static struct {
@@ -138,7 +181,7 @@ static void rw_log_size(Computer* comp, size_t max, bool capped) {
 	if ((rw_ring.size() < max) && !capped) return;
 	size_t count = rw_ring.size();
 	size_t tables = count * (sizeof(rwEntry) + e.meta.size() + e.pages.size() * sizeof(rwPage*));
-	size_t sound = rw_snd.size() * sizeof(rwSample);
+	size_t sound = rw_snd_bytes;
 	size_t total = rw_mem + tables + sound + e.size;	// e.size: the scratch snapshot
 	if (rw_peak && (total < rw_peak + RW_LOG_STEP)) return;
 	rw_peak = total;
@@ -196,8 +239,11 @@ static void rw_take(Computer* comp, long long phase) {
 	e.tape = *comp->tape;
 	e.frame = rw_clock;
 	e.phase = phase;
-	e.snd = rw_snd_w;
+	e.snd = -1;
+	e.id = ++rw_takes;
 	rw_ring.push_back(std::move(e));
+	snd_q_call(rw_snd_mark, rw_takes);
+	rw_marks_apply();		// the ones in so far, so the list stays short
 	rw_trim(comp);
 }
 
@@ -231,6 +277,7 @@ void rewind_sound(sndPair lev, long long nsFixed) {
 		rw_snd_secs = conf.emu.rewind.secs;
 		rw_snd_per = NSD_TO_FIXED(1e9 / rw_snd_rate);
 		rw_snd.assign((size_t)(rw_snd_secs + RW_SND_EXTRA) * rw_snd_rate, rwSample());
+		rw_snd_bytes = rw_snd.size() * sizeof(rwSample);
 		rw_snd_w = 0;
 		rw_acc = {};
 	}
@@ -327,6 +374,7 @@ void rewind_frame(Computer* comp, long long* phase) {
 		rw_from = rw_clock;
 		rw_tenths = 0;
 		rw_smp = 0;
+		rw_marks_settle();		// the history's sound, to its end, before it stops taking it
 		rw_mode = RW_PLAY;
 		snd_drop();		// the machine's sound from before the key
 		return;

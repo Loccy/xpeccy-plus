@@ -99,6 +99,14 @@ void snd_put(sndPair);
 // what is queued to play is not what comes next: the machine's time ran on
 // unheard, or it was loaded or reset. Emulation thread, or under emu_lock.
 void snd_drop();
+// The sound thread makes the samples of what sndSync() queues. The emulation
+// thread hands its cycle's over at the end of it; snd_sync_wait() waits until
+// everything handed over is in the ring, the scope and the wav.
+void snd_q_flush();
+void snd_sync_wait();
+// fn(arg) runs on the sound thread, after the sub-samples queued so far
+void snd_q_call(void (*fn)(long long), long long arg);
+int snd_queued_bytes();		// handed over, not yet in the ring
 int sndGetRingDistance();
 int snd_ring_fill_pos();
 int snd_ring_byte(int);
@@ -109,7 +117,7 @@ void sndAutoTick(long long);
 int snd_wav_open(const char*);
 wavHead wav_prepare(unsigned int rate, unsigned short chans);
 void snd_wav_close();
-void snd_wav_write();
+void snd_wav_write(sndPair);
 
 std::string sndGetName();
 void sndDebug();

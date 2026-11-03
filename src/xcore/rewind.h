@@ -6,7 +6,7 @@
 
 // Rewind: a snapshot of the machine every few frames (conf.emu.rewind), kept
 // for a while and put back on request. Everything here runs on the emulation
-// thread, but rewind_clear().
+// thread, but rewind_clear() and rewind_sound().
 
 // at the end of every emulated frame. phase is where the next sound sample
 // falls (xThread::sndNsFixed): the chips are flushed on the samples, so it is
@@ -19,7 +19,7 @@ void rewind_frame(Computer*, long long* phase);
 // 1 for a sample, 2 for a sample and a new picture.
 int rewind_play(Computer*, long long* phase);
 // every sound sub-sample the machine makes and the emulated time it covers
-// (16.16 ns), for playing back
+// (16.16 ns), for playing back. On the sound thread, in the machine's order
 void rewind_sound(sndPair, long long nsFixed);
 // the key, down or up (any thread)
 void rewind_want(int);

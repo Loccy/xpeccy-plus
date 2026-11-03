@@ -9,7 +9,10 @@
 #include "rewind.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <iostream>
+#include <mutex>
+#include <thread>
 #include <QMutex>
 #include <QWaitCondition>
 
@@ -96,7 +99,6 @@ double sndNsPerOutSample() {
 }
 
 static int wavRate = 0;			// rate the open recording's header says
-static sndPair sndLev;
 
 OutSys* findOutSys(const char*);
 
@@ -113,8 +115,8 @@ OutSys* findOutSys(const char*);
 // that folds into 0..16 kHz drops from -7 dB to -83 dB. Fewer taps are not worth
 // having: at 128 that figure is -11 dB, no better than the average it replaces.
 //
-// The taps are fixed point (Q.SND_FIR_SHIFT) because the decimator runs on the
-// emulation thread; snd_init_filter() builds them once at startup, in double.
+// The taps are fixed point (Q.SND_FIR_SHIFT), so the result is the same on every
+// host and build; snd_init_filter() builds them once at startup, in double.
 // Measured, the filter costs about 1.5% of one core at 48 kHz against 0.08%
 // for the average.
 #define SND_FIR_TAPS	512
@@ -127,6 +129,57 @@ static int firTaps[SND_FIR_TAPS / 2] = {0};	// symmetric: half is enough
 // then has no wrapping in it and the compiler can take it apart.
 static int sb_pos = 0;
 static sndPair smpBuf[SND_FIR_TAPS * 2] = {{0,0}};
+
+// The sound thread. The emulation thread mixes the machine (hw->vol) at every
+// sub-sample and queues the level; everything after the mix - the scope, the
+// decimation, the wav, the ring - runs here, on a core of its own. The queue is
+// one producer, one consumer: the emulation thread, or whoever holds emu_lock.
+//
+// What does not wait for the queue stays with the producer: the pacer's count
+// (conf.snd.need, snd_need_room). Rewind's sound is made here too; a snapshot
+// marks its place in it with a call in the queue (snd_q_call). Those who read what the
+// sound thread makes - the bench's hash, the video recording, the scope of a
+// held machine, the wav - wait for it to catch up first (snd_sync_wait).
+typedef struct {
+	int l, r;		// the mix as hw->vol gave it
+} sndSub;
+
+#define SND_Q_SIZE	0x10000		// sub-samples, about 46 ms at 44100
+#define SND_Q_MASK	(SND_Q_SIZE - 1)
+#define SND_Q_BATCH	1024		// handed over at least this often
+static sndSub sndQ[SND_Q_SIZE];
+static long long sqPut = 0;				// producer: queued so far
+static std::atomic<long long> sqHead(0);	// what the consumer may take
+static std::atomic<long long> sqTail(0);	// what it has taken
+
+// What has to happen between two sub-samples, in order with them: `at` is the
+// count of sub-samples queued before it.
+enum {SND_T_DROP, SND_T_RESET, SND_T_PUT, SND_T_NS, SND_T_CALL};
+typedef struct {
+	long long at;
+	int kind;
+	sndPair lev;		// SND_T_PUT
+	long long val;		// SND_T_NS, SND_T_CALL's argument
+	void (*fn)(long long);	// SND_T_CALL
+} sndTok;
+
+#define SND_T_SIZE	0x2000
+#define SND_T_MASK	(SND_T_SIZE - 1)
+static sndTok sndT[SND_T_SIZE];
+static std::atomic<long long> stHead(0);
+static std::atomic<long long> stTail(0);
+
+// Never destroyed: a std::thread still running when the statics go would end the
+// process with terminate() on any way out that does not pass sndClose()
+static std::thread* sndThread = NULL;
+static std::atomic<int> sndQuit(0);
+static std::atomic<int> sndSleeping(0);
+static std::mutex sndWakeLock;
+static std::condition_variable sndWake;
+// held while the sound thread works: the output, the ring and the wav are not
+// to change under it (setOutput, snd_wav_open/close). Recursive: setOutput
+// falls back to NULL through itself.
+static std::recursive_mutex sndWork;
 
 #if defined(HAVESDL2)
 static SDL_AudioDeviceID sdldevid;
@@ -183,7 +236,7 @@ static int sndLogAuto = -1;
 // sit a block from running dry from then on - and fades from the frame it held
 // into the new sound. A pause drops nothing: the machine stood still, and what
 // is queued is just what comes next.
-static int sndDropWant = 0;			// emulation side, or under emu_lock
+static int sndDropWant = 0;			// the sound thread's (snd_drop queues it)
 static std::atomic<int> sndDropMark(-1);	// a ring position, -1 for none
 static std::atomic<int> sndDropBytes(0);	// dropped, for the pacer's tick to log
 static int sndRefill = 0;	// the callback is waiting for the ring to fill
@@ -193,9 +246,97 @@ static short sndFadeL = 0, sndFadeR = 0;	// ...and the one the fade starts from
 
 #define SND_FADE_MS	SND_BLOCK_MS
 
-void snd_drop() {
-	sndDropWant = 1;
+// --- the producer's side (the emulation thread, or under emu_lock)
+
+static int subPos = 0;		// sub-samples made since the start: sb_pos as the sound thread will have it
+
+static void snd_kick() {
+	if (sndSleeping.load()) {
+		std::lock_guard<std::mutex> lk(sndWakeLock);
+		sndWake.notify_one();
+	}
 }
+
+// what is queued becomes the sound thread's to take
+static void snd_q_publish() {
+	if (sqHead.load(std::memory_order_relaxed) == sqPut) return;
+	sqHead.store(sqPut);
+	snd_kick();
+}
+
+static long long dropAt = -1;	// where the last drop went in (snd_drop)
+
+// A token goes in after what is queued. The sound thread is not woken for it - the
+// cycle's end does that (snd_q_flush): rewind puts one in for every sample it plays
+static void snd_tok(int kind, sndPair lev = sndPair(), long long val = 0, void (*fn)(long long) = NULL) {
+	snd_q_publish();
+	long long h = stHead.load(std::memory_order_relaxed);
+	while ((h - stTail.load(std::memory_order_acquire) >= SND_T_SIZE) && !sndQuit.load()) {
+		snd_kick();
+		std::this_thread::yield();
+	}
+	sndTok* t = &sndT[h & SND_T_MASK];
+	t->at = sqPut;
+	t->kind = kind;
+	t->lev = lev;
+	t->val = val;
+	t->fn = fn;
+	stHead.store(h + 1);
+	dropAt = -1;
+}
+
+// Fast mode asks for a drop on every step: one already queued at this point, with
+// nothing put into the ring after it, says it all
+void snd_drop() {
+	if (dropAt == sqPut) return;
+	snd_tok(SND_T_DROP);
+	dropAt = sqPut;
+}
+
+static void snd_q_push(sndPair lev) {
+	while ((sqPut - sqTail.load(std::memory_order_acquire) >= SND_Q_SIZE) && !sndQuit.load()) {
+		snd_q_publish();
+		snd_kick();
+		std::this_thread::yield();
+	}
+	sndSub* q = &sndQ[sqPut & SND_Q_MASK];
+	q->l = lev.left;
+	q->r = lev.right;
+	sqPut++;
+	if (sqPut - sqHead.load(std::memory_order_relaxed) >= SND_Q_BATCH)
+		snd_q_publish();
+}
+
+void snd_q_call(void (*fn)(long long), long long arg) {
+	snd_tok(SND_T_CALL, sndPair(), arg, fn);
+}
+
+// the end of an emulation cycle: what it made goes to the sound thread
+void snd_q_flush() {
+	snd_q_publish();
+	if (stTail.load(std::memory_order_relaxed) != stHead.load(std::memory_order_relaxed))
+		snd_kick();
+}
+
+// Until the sound thread has taken what was handed over so far. Any thread; the
+// producer flushes first if what it has just made is to be waited for.
+void snd_sync_wait() {
+	if (!sndThread) return;
+	long long h = sqHead.load();
+	long long t = stHead.load();
+	while (((sqTail.load() < h) || (stTail.load() < t)) && !sndQuit.load()) {
+		snd_kick();
+		std::this_thread::yield();
+	}
+}
+
+// handed over and not yet made into samples: the pacer counts it as in the ring
+int snd_queued_bytes() {
+	long long n = sqHead.load(std::memory_order_relaxed) - sqTail.load(std::memory_order_relaxed);
+	return (n > 0) ? (int)(n / DISCRATE * 4) : 0;
+}
+
+// --- the sound thread's side
 
 static void snd_start_playback();
 
@@ -222,8 +363,7 @@ static void snd_ring_put(sndPair lev) {
 void snd_put(sndPair lev) {
 	if (conf.snd.need > 0)
 		conf.snd.need--;
-	if (!conf.snd.enabled) lev = sndPair();
-	snd_ring_put(lev);
+	snd_tok(SND_T_PUT, lev);
 }
 
 static void snd_start_playback() {
@@ -235,13 +375,169 @@ static void snd_start_playback() {
 		sndOutput->play();
 }
 
+// The master volume and the clip. Both ends: FM is signed, and a sample under
+// the low one wraps to the top of the range on the way into the ring
+static long long rwNs = 0;		// the time a sub-sample stands for, as rewind takes it
+
+static inline sndPair snd_master(sndPair lev) {
+	lev.left = lev.left * conf.snd.vol.master / 100;
+	lev.right = lev.right * conf.snd.vol.master / 100;
+	return snd_clip16(lev);
+}
+
+// one sub-sample through the scope and the window; every DISCRATE-th makes a sample
+static void snd_sub(const sndSub* q) {
+	scope_put((q->l + q->r) / 2);
+	sndPair lev;
+	lev.left = q->l;
+	lev.right = q->r;
+	lev = snd_master(lev);
+	// rewind's history, as it is heard; by emulated time, which the output is
+	// not at another speed
+	if (conf.emu.rewind.on)
+		rewind_sound(lev, rwNs);
+	smpBuf[sb_pos & SND_FIR_MASK] = lev;
+	smpBuf[(sb_pos & SND_FIR_MASK) + SND_FIR_TAPS] = lev;
+	sb_pos++;
+	if ((sb_pos % DISCRATE) != 0) return;
+	if (conf.snd.filter) {
+		// The window ends at the newest sample, so it starts SND_FIR_TAPS
+		// back - which is where sb_pos points now. The taps are symmetric,
+		// so the two ends of the window share one and half the multiplies
+		// go: measured, a third off the time, and the same answer.
+		long long accL = 0;
+		long long accR = 0;
+		const sndPair* win = smpBuf + (sb_pos & SND_FIR_MASK);
+		const sndPair* end = win + SND_FIR_TAPS - 1;
+		for (int i = 0; i < SND_FIR_TAPS / 2; i++) {
+			accL += (long long)(win[i].left + end[-i].left) * firTaps[i];
+			accR += (long long)(win[i].right + end[-i].right) * firTaps[i];
+		}
+		// the sinc overshoots a step a little, so the result can
+		// come out past what went in
+		lev.left = (int)(accL >> SND_FIR_SHIFT);
+		lev.right = (int)(accR >> SND_FIR_SHIFT);
+		lev = snd_clip16(lev);
+	} else {
+		int sumL = 0;
+		int sumR = 0;
+		int idx = (sb_pos - DISCRATE) & SND_FIR_MASK;
+		for (int i = 0; i < DISCRATE; i++) {
+			sumL += smpBuf[idx].left;
+			sumR += smpBuf[idx].right;
+			idx = (idx + 1) & SND_FIR_MASK;
+		}
+		lev.left = sumL / DISCRATE;
+		lev.right = sumR / DISCRATE;
+	}
+	if (!conf.snd.enabled) {
+		lev.left = 0;
+		lev.right = 0;
+	}
+	// the wav takes the sample here, where it is made. The old
+	// accumulator in ethread.cpp ran off its own 44100 Hz clock, a
+	// few ns per sample away from this one, and the two beat audibly.
+	if (conf.snd.wavout)
+		snd_wav_write(lev);
+	snd_ring_put(lev);
+}
+
+static void snd_do_tok(const sndTok* t) {
+	switch (t->kind) {
+		case SND_T_DROP:
+			sndDropWant = 1;
+			break;
+		case SND_T_RESET:
+			memset(smpBuf, 0, sizeof(smpBuf));
+			sb_pos = 0;
+			break;
+		case SND_T_PUT:
+			snd_ring_put(conf.snd.enabled ? t->lev : sndPair());
+			break;
+		case SND_T_NS:
+			rwNs = t->val;
+			break;
+		case SND_T_CALL:
+			t->fn(t->val);
+			break;
+	}
+}
+
+// what is there to take, sub-samples and tokens in their order. The head is read
+// before the tokens: a token seen is never one that should have come before a
+// sub-sample already taken
+static int snd_work() {
+	long long h = sqHead.load();
+	long long th = stHead.load();
+	long long pos = sqTail.load(std::memory_order_relaxed);
+	long long tt = stTail.load(std::memory_order_relaxed);
+	if ((pos == h) && (tt == th)) return 0;
+	std::lock_guard<std::recursive_mutex> lk(sndWork);
+	while (pos < h) {
+		while ((tt < th) && (sndT[tt & SND_T_MASK].at <= pos)) {
+			snd_do_tok(&sndT[tt & SND_T_MASK]);
+			tt++;
+		}
+		// up to the next token, or the end
+		long long stop = h;
+		if ((tt < th) && (sndT[tt & SND_T_MASK].at < stop))
+			stop = sndT[tt & SND_T_MASK].at;
+		while (pos < stop) {
+			snd_sub(&sndQ[pos & SND_Q_MASK]);
+			pos++;
+		}
+		sqTail.store(pos);
+		stTail.store(tt);
+	}
+	while ((tt < th) && (sndT[tt & SND_T_MASK].at <= pos)) {
+		snd_do_tok(&sndT[tt & SND_T_MASK]);
+		tt++;
+	}
+	stTail.store(tt);
+	return 1;
+}
+
+static void snd_thread_run() {
+	while (!sndQuit.load()) {
+		if (snd_work()) continue;
+		std::unique_lock<std::mutex> lk(sndWakeLock);
+		sndSleeping.store(1);
+		// asked again after saying so: a producer that queued meanwhile has seen
+		// the flag, or this sees its work
+		if ((sqTail.load() == sqHead.load()) && (stTail.load() == stHead.load()) && !sndQuit.load())
+			sndWake.wait(lk);
+		sndSleeping.store(0);
+	}
+}
+
+static void snd_thread_start() {
+	if (sndThread) return;
+	sndQuit = 0;
+	sndThread = new std::thread(snd_thread_run);
+}
+
+static void snd_thread_stop() {
+	if (!sndThread) return;
+	snd_sync_wait();
+	sndQuit = 1;
+	{
+		std::lock_guard<std::mutex> lk(sndWakeLock);
+		sndWake.notify_one();
+	}
+	sndThread->join();
+	delete sndThread;
+	sndThread = NULL;
+}
+
+// --- the emulation thread
+
 // A sample is made at every DISCRATE-th sub-sample (sndSync), and the need is met
 // with the need-th of them from here: a run that takes its sub-samples after it
 // stops there at most, and the cycle ends on the step it would have
 long long snd_need_room(long long acc) {
 	int need = conf.snd.need;
 	if (conf.emu.fast || (need <= 0)) return nsPerSampleFixed - acc;
-	long long j = (DISCRATE - (sb_pos % DISCRATE)) + (long long)(need - 1) * DISCRATE;
+	long long j = (DISCRATE - (subPos % DISCRATE)) + (long long)(need - 1) * DISCRATE;
 	return j * nsPerSampleFixed - acc;
 }
 
@@ -252,66 +548,18 @@ int sndSync(Computer* comp) {
 		gsFlush(comp->gs);
 //		saaFlush(comp->saa);
 		if (!conf.emu.fast && !conf.emu.pause) {
-			sndLev = comp->hw->vol(comp, &conf.snd.vol);
-			scope_put((sndLev.left + sndLev.right) / 2);
-			sndLev.left = sndLev.left * conf.snd.vol.master / 100;
-			sndLev.right = sndLev.right * conf.snd.vol.master / 100;
-			// both ends: FM is signed, and a sample under the low one
-			// wraps to the top of the range on the way into the ring
-			sndLev = snd_clip16(sndLev);
-			// by emulated time, which the output is not at another speed
-			rewind_sound(sndLev, nsPerSampleFixed);
-
-			smpBuf[sb_pos & SND_FIR_MASK] = sndLev;
-			smpBuf[(sb_pos & SND_FIR_MASK) + SND_FIR_TAPS] = sndLev;
-			sb_pos++;
-			if ((sb_pos % DISCRATE) == 0) {
-				if (conf.snd.filter) {
-					// The window ends at the newest sample, so it starts SND_FIR_TAPS
-					// back - which is where sb_pos points now. The taps are symmetric,
-					// so the two ends of the window share one and half the multiplies
-					// go: measured, a third off the time, and the same answer.
-					long long accL = 0;
-					long long accR = 0;
-					const sndPair* win = smpBuf + (sb_pos & SND_FIR_MASK);
-					const sndPair* end = win + SND_FIR_TAPS - 1;
-					for (int i = 0; i < SND_FIR_TAPS / 2; i++) {
-						accL += (long long)(win[i].left + end[-i].left) * firTaps[i];
-						accR += (long long)(win[i].right + end[-i].right) * firTaps[i];
-					}
-					// the sinc overshoots a step a little, so the result can
-					// come out past what went in
-					sndLev.left = (int)(accL >> SND_FIR_SHIFT);
-					sndLev.right = (int)(accR >> SND_FIR_SHIFT);
-					sndLev = snd_clip16(sndLev);
-				} else {
-					int sumL = 0;
-					int sumR = 0;
-					int idx = (sb_pos - DISCRATE) & SND_FIR_MASK;
-					for (int i = 0; i < DISCRATE; i++) {
-						sumL += smpBuf[idx].left;
-						sumR += smpBuf[idx].right;
-						idx = (idx + 1) & SND_FIR_MASK;
-					}
-					sndLev.left = sumL / DISCRATE;
-					sndLev.right = sumR / DISCRATE;
-				}
-
-				if (!conf.snd.enabled) {
-					sndLev.left = 0;
-					sndLev.right = 0;
-				}
-				if (conf.snd.need > 0)
-					conf.snd.need--;
-
-				// the wav takes the sample here, where it is made. The old
-				// accumulator in ethread.cpp ran off its own 44100 Hz clock, a
-				// few ns per sample away from this one, and the two beat audibly.
-				if (conf.snd.wavout)
-					snd_wav_write();
-
-				snd_ring_put(sndLev);
+			sndPair lev = comp->hw->vol(comp, &conf.snd.vol);
+			// the time this sub-sample stands for, for rewind: it moves with
+			// the speed and with VSync's steer, so it goes along when it does
+			static long long rwNsSent = -1;
+			if (conf.emu.rewind.on && (nsPerSampleFixed != rwNsSent)) {
+				rwNsSent = nsPerSampleFixed;
+				snd_tok(SND_T_NS, sndPair(), rwNsSent);
 			}
+			snd_q_push(lev);
+			subPos++;
+			if (((subPos % DISCRATE) == 0) && (conf.snd.need > 0))
+				conf.snd.need--;
 			smpCount++;
 		} else if (conf.emu.fast) {
 			snd_drop();		// the GS's flush is all fast mode runs here
@@ -338,7 +586,10 @@ std::string sndGetOutputName() {
 	return res;
 }
 
+static void snd_wav_close_now();
+
 void setOutput(const char* name) {
+	std::lock_guard<std::recursive_mutex> lk(sndWork);
 	if (sndOutput != NULL) {
 		sndOutput->close();
 	}
@@ -356,11 +607,12 @@ void setOutput(const char* name) {
 	// rather than play back at the wrong speed from this point on
 	if (conf.snd.wavfile && (conf.snd.rate != wavRate)) {
 		xlog(XLG_SOUND, XLL_INFO, "WAV output stopped: rate is now %i Hz", conf.snd.rate);
-		snd_wav_close();
+		snd_wav_close_now();
 	}
 }
 
 void sndClose() {
+	snd_thread_stop();
 	if (sndOutput != NULL)
 		sndOutput->close();
 }
@@ -405,7 +657,7 @@ static void snd_auto_step(int low) {
 	// answering that would climb to the ceiling on its own. So hold off until
 	// the ring has arrived, or a few seconds have passed - whichever is sooner,
 	// since a machine that never lets it arrive still has to be answered.
-	int arrived = (sndGetRingDistance() + block >= sndGetRingTargetBytes());
+	int arrived = (sndGetRingDistance() + snd_queued_bytes() + block >= sndGetRingTargetBytes());
 	if (arrived) sndAutoDryHold = 0;
 	else if (sndAutoDryHold > 0) sndAutoDryHold--;
 	int lat = conf.snd.latency;
@@ -513,18 +765,24 @@ double snd_scope_rate() {
 	return (double)conf.snd.rate * DISCRATE;
 }
 
+// the mixer's history, back to what a start leaves it at: here, and in order with
+// what is queued on the sound thread
+void snd_pipe_reset() {
+	subPos = 0;
+	smpCount = 0;
+	snd_tok(SND_T_RESET);
+	snd_q_flush();
+}
+
 // Carry the capture across ns of emulated time on a machine the debugger is holding.
 // Nothing is being played then - sndSync() is not even called - but the mixer still
 // has an output for every moment of it, which is the whole point of tracing a beeper.
-void snd_pipe_reset() {
-	memset(smpBuf, 0, sizeof(smpBuf));
-	sb_pos = 0;
-	smpCount = 0;
-	sndLev = sndPair();
-}
-
+// The machine is held, so nothing more is queued: what the sound thread still had
+// goes into the scope first.
 void snd_scope_step(Computer* comp, int ns) {
 	if ((ns <= 0) || !comp->hw->vol) return;
+	snd_sync_wait();
+	std::lock_guard<std::recursive_mutex> lk(sndWork);
 	scopeNsFixed += NS_TO_FIXED(ns);
 	while (scopeNsFixed > nsPerSampleFixed) {
 		sndPair lev = comp->hw->vol(comp, &conf.snd.vol);
@@ -814,6 +1072,7 @@ void sndInit() {
 	conf.snd.wavfile = NULL;
 	initNoise();
 	snd_init_filter();
+	snd_thread_start();
 }
 
 // output to wav
@@ -836,7 +1095,7 @@ wavHead wav_prepare(unsigned int rate, unsigned short chans) {
 	return hd;
 }
 
-void snd_wav_close() {
+static void snd_wav_close_now() {
 	if (conf.snd.wavfile) {
 		int sz = ftell(conf.snd.wavfile);			// file size
 		fseek(conf.snd.wavfile, 4, SEEK_SET);
@@ -849,10 +1108,18 @@ void snd_wav_close() {
 	}
 }
 
+// what was handed to the sound thread before the call goes in, nothing after it
+void snd_wav_close() {
+	snd_sync_wait();
+	std::lock_guard<std::recursive_mutex> lk(sndWork);
+	snd_wav_close_now();
+}
+
 int snd_wav_open(const char* path) {
 	int res = ERR_OK;
+	std::lock_guard<std::recursive_mutex> lk(sndWork);
 	wavHead hd = wav_prepare(conf.snd.rate, 2);
-	snd_wav_close();
+	snd_wav_close_now();
 	conf.snd.wavfile = fopen(path, "wb");
 	if (conf.snd.wavfile) {
 		fwrite(&hd, sizeof(wavHead), 1, conf.snd.wavfile);
@@ -864,11 +1131,11 @@ int snd_wav_open(const char* path) {
 	return res;
 }
 
-void snd_wav_write() {
+void snd_wav_write(sndPair lev) {
 	if (conf.snd.wavfile) {
 		// the same S16LE the live output gets, not just the top byte
-		fputw(sndLev.left & 0xffff, conf.snd.wavfile);
-		fputw(sndLev.right & 0xffff, conf.snd.wavfile);
+		fputw(lev.left & 0xffff, conf.snd.wavfile);
+		fputw(lev.right & 0xffff, conf.snd.wavfile);
 	}
 }
 
