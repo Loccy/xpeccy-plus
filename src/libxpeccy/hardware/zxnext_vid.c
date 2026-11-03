@@ -1225,6 +1225,35 @@ static void nxv_render(Computer* comp, long long end) {
 				D += k;
 			}
 			unsigned int* ptr = (unsigned int*)(scrimg + (V.ry - t->vblank) * bytesPerLine + (rx - 1 - t->hblank) * 8);
+			if (V.dirty) nxv_derive(comp);
+			if (!pent && V.dv.ulaOnly && !V.f[NXF_SPREN]) {
+				// The ULA alone and no sprites (an editor, a menu): nxv_draw_dot's first
+				// case, with what holds over the run taken once - no field moves in it
+				const nxvDerived* g = &V.dv;
+				const unsigned short* upal = V.pal[g->upal];
+				int tr = V.f[NXF_TR];
+				int fb9 = g->fb9;
+				int off = !V.f[NXF_ULAEN];
+				int fl = g->flashOn;
+				for (; rx < rxe; rx++, D++, ptr += 2) {
+					int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
+					int vc = (rx >= t->hact - 11) ? ln.vcA : ln.vcB;
+					int bad = (phc & 0x100) || nxv_vbord(vc);
+					int inwin = (phc >= g->ucx1) && (phc <= g->ucx2) && (vc >= g->ucy1) && (vc <= g->ucy2);
+					int clip = !(inwin || bad) || off;
+					int ui = (int)(D & (NXV_ULA - 1));
+					int bits = V.ula[ui].bits;
+					for (int h = 0; h < 2; h++) {
+						int attr = V.ula[ui].attr[h];
+						int pen = (((bits >> h) & 1) ^ ((attr >> 7) & fl)) & !bad;
+						int ink = attr & 7;
+						int paper = (attr >> 3) & 7;
+						int sidx = ((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | (paper ^ ((ink ^ paper) & -pen));
+						int urgb = upal[sidx] & 0x1ff;
+						ptr[h] = nxv_col[(((urgb >> 1) == tr) || clip) ? fb9 : urgb];
+					}
+				}
+			}
 			for (; rx < rxe; rx++, D++, ptr += 2) {
 				// as nxv_draw has them
 				int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
@@ -1273,20 +1302,28 @@ static void nxv_resync(Computer* comp, long long d, int h, int v) {
 	V.live = 1;
 }
 
-// the end of dot (h, v), the ray on it, hc_ula/vc_ula of it
-static inline void nxv_dot_at(Computer* comp, int h, int v, int hc, int vc) {
+// the copper stopped: nx_cop_run's own shortcut, its edges counted up to the end of dot d
+static inline void nxv_cop_idle(Computer* comp, long long d) {
+	if (NX.copT < d * 4 + 4) {
+		NX.copT = d * 4 + 4;
+		NX.copDout = 0;
+	}
+}
+
+static inline int nxv_cop_on(Computer* comp) {
+	return (NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN;
+}
+
+// the end of dot (h, v), the ray on it, hc_ula/vc_ula of it. cop: the copper runs;
+// stopped, nothing in a run of dots starts it, and its edges are counted at the end
+static inline void nxv_dot_at(Computer* comp, int h, int v, int hc, int vc, int cop) {
 	long long d = NX.frameBase + h;
 	if (!V.live || (d != V.lastDot + 1))
 		nxv_resync(comp, d, h, v);
 	if ((hc & 1) || ((hc & 7) == 4))	// an even dot other than n = 4, C does nothing
 		nxv_fetch(comp, &V.fe, d, hc, vc, 0);
-	// the copper's edges up to the end of this dot; stopped, nx_cop_run's own shortcut
-	if ((NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN) {
-		nx_cop_run(comp, d * 4 + 4);
-	} else if (NX.copT < d * 4 + 4) {
-		NX.copT = d * 4 + 4;
-		NX.copDout = 0;
-	}
+	// the copper's edges up to the end of this dot
+	if (cop) nx_cop_run(comp, d * 4 + 4);
 	nxs_run_to(comp, d * 8 + 8);		// the sprite pass too
 	if (!hc && !vc) {
 		// flash_cnt counts at the end of (0, 0); pixel_en uses it from the next half-pixel on
@@ -1325,7 +1362,9 @@ void nxv_dot(Video* vid) {
 	int h, v, hc, vc;
 	nxv_ray_hv(comp, vid, &h, &v);
 	nx_ula(comp, h, v, &hc, &vc, NULL);
-	nxv_dot_at(comp, h, v, hc, vc);
+	int cop = nxv_cop_on(comp);
+	nxv_dot_at(comp, h, v, hc, vc, cop);
+	if (!cop) nxv_cop_idle(comp, V.lastDot);
 	nxv_catch_up(comp);
 }
 
@@ -1336,6 +1375,9 @@ int nxv_run(Video* vid, int k) {
 	int h = 0, v = 0, hc = 0, vc = 0;
 	int x = vid->ray.x;
 	int r0 = nx_tim(comp)->hact - 11;	// hc_ula 0, where vc_ula steps: nx_ula again there
+	// a copper running may stop itself in the run (nx_cop_run then counts its edges as
+	// the stopped one does); a stopped one is not started by anything here
+	int cop = nxv_cop_on(comp);
 	for (int i = 0; i < k; i++) {
 		// the fetch writes 8 dots ahead into a ring of NXV_ULA: the mixer reads them
 		// before a lazy run of 40-odd dots goes round it
@@ -1349,8 +1391,9 @@ int nxv_run(Video* vid, int k) {
 		} else {
 			hc++;
 		}
-		nxv_dot_at(comp, h, v, hc, vc);
+		nxv_dot_at(comp, h, v, hc, vc, cop);
 	}
+	if (!cop && (k > 0)) nxv_cop_idle(comp, V.lastDot);
 	nxv_catch_up(comp);
 	return k;
 }
