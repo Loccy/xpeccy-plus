@@ -21,6 +21,7 @@ int rewind_play(Computer*, long long* phase);
 // every sound sub-sample the machine makes and the emulated time it covers
 // (16.16 ns), for playing back. On the sound thread, in the machine's order
 void rewind_sound(sndPair, long long nsFixed);
+void rewind_sound_quiet(long long n, long long nsFixed);	// n of them, silent
 // the key, down or up (any thread)
 void rewind_want(int);
 // 1 while the history is being played back (any thread)

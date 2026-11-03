@@ -167,7 +167,8 @@ static struct alignas(64) {
 	long long rwNsSent;	// the time a sub-sample stands for, as rewind was last told
 	int subPos;		// sub-samples made since the start: sb_pos as the sound thread will have it
 	int smpCount;
-} sp = {0, 0, 0, 0, -1, -1, 0, 0};
+	long long quiet;	// sub-samples of silence (Enabled off) not handed over yet
+} sp = {0, 0, 0, 0, -1, -1, 0, 0, 0};
 alignas(64) static std::atomic<long long> sqHead(0);	// what the consumer may take
 alignas(64) static std::atomic<long long> sqTail(0);	// what it has taken
 
@@ -175,8 +176,9 @@ alignas(64) static std::atomic<long long> sqTail(0);	// what it has taken
 // count of sub-samples queued before it.
 // The mirror's (see "the machine's mix on the sound thread" below) carry adv, the
 // devices' time since the item before them.
+// SND_T_QUIET: val sub-samples of silence, which were not made at all
 enum {SND_T_DROP, SND_T_RESET, SND_T_PUT, SND_T_NS, SND_T_CALL,
-	SND_T_SEED, SND_T_UNMIRROR, SND_T_ADV, SND_T_POKE, SND_T_RETUNE, SND_T_IN};
+	SND_T_SEED, SND_T_UNMIRROR, SND_T_ADV, SND_T_POKE, SND_T_RETUNE, SND_T_IN, SND_T_QUIET};
 typedef struct {
 	long long at;
 	int kind;
@@ -295,7 +297,10 @@ static void snd_q_publish() {
 // A token goes in after what is queued: taken (snd_tok_new), filled, handed over
 // (snd_tok_put). The sound thread is not woken for it - the cycle's end does that
 // (snd_q_flush): rewind puts one in for every sample it plays
+static void snd_quiet_out();
+
 static sndTok* snd_tok_new(int kind) {
+	if (sp.quiet) snd_quiet_out();		// the silence before it goes first
 	snd_q_publish();
 	long long h = stHead.load(std::memory_order_relaxed);
 	while ((h - stTail.load(std::memory_order_acquire) >= SND_T_SIZE) && !sndQuit.load()) {
@@ -330,7 +335,17 @@ void snd_drop() {
 	sp.dropAt = sp.put;
 }
 
+// the silence counted so far, handed over as one token
+static void snd_quiet_out() {
+	long long n = sp.quiet;
+	sp.quiet = 0;
+	sndTok* t = snd_tok_new(SND_T_QUIET);
+	t->val = n;
+	snd_tok_put();
+}
+
 static void snd_q_push(int l, int r) {
+	if (sp.quiet) snd_quiet_out();
 	while (sp.put - sp.tailSeen >= SND_Q_SIZE) {
 		sp.tailSeen = sqTail.load(std::memory_order_acquire);
 		if ((sp.put - sp.tailSeen < SND_Q_SIZE) || sndQuit.load()) break;
@@ -529,6 +544,7 @@ aymChip* snd_heard_chip(Computer* comp, int i) {
 
 // the end of an emulation cycle: what it made goes to the sound thread
 void snd_q_flush() {
+	if (sp.quiet) snd_quiet_out();
 	snd_q_publish();
 	if ((sp.woken != sp.put) || (stTail.load(std::memory_order_relaxed) != stHead.load(std::memory_order_relaxed))) {
 		sp.woken = sp.put;
@@ -672,6 +688,35 @@ static void snd_sub(const sndSub* q) {
 	snd_ring_put(lev);
 }
 
+// n sub-samples of silence: the samples they make are silent, the scope and the
+// window take silence, rewind's history moves on by their time
+static void snd_quiet_play(long long n) {
+	if (n <= 0) return;
+	if (conf.emu.rewind.on) rewind_sound_quiet(n, rwNs);
+	long long w = (n < SND_SCOPE_SIZE) ? n : SND_SCOPE_SIZE;
+	for (long long k = 0; k < w; k++)
+		scopeBuf[(scopePos + (int)(n - w + k)) & SND_SCOPE_MASK] = 0;
+	scopePos += (int)n;
+	// the window's last SND_FIR_TAPS: what the filter sees when the sound comes back
+	unsigned pos = (unsigned)sb_pos;
+	long long m = (n < SND_FIR_TAPS) ? n : SND_FIR_TAPS;
+	sndPair none = sndPair();
+	for (long long k = n - m; k < n; k++) {
+		unsigned i = (pos + (unsigned)k) & SND_FIR_MASK;
+		smpBuf[i] = none;
+		smpBuf[i + SND_FIR_TAPS] = none;
+	}
+	// a sample at every DISCRATE-th sub-sample, as snd_sub makes them
+	long long first = DISCRATE - (pos % DISCRATE);
+	long long count = (n >= first) ? 1 + (n - first) / DISCRATE : 0;
+	sb_pos = (int)(pos + (unsigned)n);
+	for (long long k = 0; k < count; k++) {
+		if (conf.snd.wavout)
+			snd_wav_write(none);
+		snd_ring_put(none);
+	}
+}
+
 static void snd_do_tok(const sndTok* t) {
 	switch (t->kind) {
 		case SND_T_DROP:
@@ -715,6 +760,9 @@ static void snd_do_tok(const sndTok* t) {
 			break;
 		case SND_T_IN:
 			memcpy(&sm.m.in, &t->in, sizeof(sm.m.in));
+			break;
+		case SND_T_QUIET:
+			snd_quiet_play(t->val);
 			break;
 	}
 }
@@ -816,7 +864,12 @@ int sndSync(Computer* comp) {
 				sp.rwNsSent = nsPerSampleFixed;
 				snd_tok(SND_T_NS, sndPair(), sp.rwNsSent);
 			}
-			if (snd_mirror_fits(comp)) {
+			if (!conf.snd.enabled) {
+				// nothing to hear: only what the machine itself does at a sample
+				// (the Next's copper, AY clock, DACs) is done, the mix is not made
+				if (comp->hw->sndtake) comp->hw->sndtake(comp, &mp.take);
+				sp.quiet++;
+			} else if (snd_mirror_fits(comp)) {
 				snd_mirror_sample(comp, 0);
 			} else {
 				if (mp.comp) snd_mirror_off();

@@ -293,6 +293,35 @@ void rewind_sound(sndPair lev, long long nsFixed) {
 	rw_acc.left = rw_acc.right = rw_acc.n = 0;
 }
 
+// n sub-samples of silence, each nsFixed long: what as many rewind_sound() calls
+// with nothing in them would do, a sample at a time rather than a sub-sample
+void rewind_sound_quiet(long long n, long long nsFixed) {
+	if (!conf.emu.rewind.on || (rw_mode != RW_REC) || (n <= 0) || (nsFixed <= 0)) return;
+	if ((conf.snd.rate != rw_snd_rate) || (conf.emu.rewind.secs != rw_snd_secs)) {
+		sndPair none = {0, 0};
+		rewind_sound(none, nsFixed);	// sizes the ring as the first sub-sample would
+		n--;
+	}
+	if (rw_snd_per <= 0) return;
+	while (n > 0) {
+		// the sub-samples up to the one that ends the sample
+		long long k = (rw_snd_per - rw_acc.ns + nsFixed - 1) / nsFixed;
+		if (k < 1) k = 1;
+		if (k > n) {
+			rw_acc.n += (int)n;
+			rw_acc.ns += n * nsFixed;
+			return;
+		}
+		rw_acc.n += (int)k;
+		rw_acc.ns += k * nsFixed;
+		n -= k;
+		rw_acc.ns -= rw_snd_per;
+		rw_snd[rw_snd_w % rw_snd.size()] = {(short)(rw_acc.left / rw_acc.n), (short)(rw_acc.right / rw_acc.n)};
+		rw_snd_w++;
+		rw_acc.left = rw_acc.right = rw_acc.n = 0;
+	}
+}
+
 // the next output sample going back: the samples its share of the stretch
 // covers, averaged, so the sound is sped up rather than thinned out. Silence
 // where there is none: past the oldest one kept, or a stretch with no sound in
