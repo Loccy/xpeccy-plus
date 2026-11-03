@@ -260,8 +260,8 @@ static const hwQuiet scotp_quiet = {HWQ_ACK_ZX, hwq_no_turbo, NULL, zx_devs_sync
 
 HardWare sco_hw_core = {HW_SCORP,"Scorpion","Scorpion ZS 256",MEM_256K,1.0,NULL,sco_port_tab,
 				scrp_init,scoMapMem,scoOut,scoIn,scoMRd,stdMWr,zx_irq,zx_ack,zx_reset,scoSync,zx_keyp,zx_keyr,zx_vol,
-				NULL,NULL,&hwq_zx_nohalt};
+				NULL,NULL,&hwq_zx_nohalt, .sndtake = zx_snd_take, .sndmix = zx_mix};
 
 HardWare scotp_hw_core = {HW_SCORPTP,"ScorpionTP","Scorpion ZS 256 Turbo+",MEM_256K | MEM_1M,1.0,NULL,sco_port_tab,
 				scrptp_init,scoMapMem,scoTpOut,scoTpIn,scoMRd,stdMWr,zx_irq,zx_ack,zx_reset,scoTpSync,zx_keyp,zx_keyr,zx_vol,
-				NULL,scotp_cont,&scotp_quiet};
+				NULL,scotp_cont,&scotp_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix};

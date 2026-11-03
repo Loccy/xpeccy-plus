@@ -304,6 +304,8 @@ sndPair zx_mix(sndMix*, sndVolume*);
 sndPair alf_mix(sndMix*, sndVolume*);
 sndPair nx_mix(sndMix*, sndVolume*);
 void snd_mix_take_wire(sndMix*, Computer*);	// the tape and the beeper into a mix
+void zx_snd_take(Computer*, sndMix*);
+void alf_snd_take(Computer*, sndMix*);
 void zx_set_pal(Computer*);	// todo: called from zx_reset only
 
 // tsconf SYSCONF: the cpu speed (the .spg loader sets it too)

@@ -245,8 +245,9 @@ sndPair tsGetVolume(TSound*);
 
 // A chip's registers changed other than by its time: whatever follows the chips
 // (sound.cpp's mirror) is told here, after the change. NULL: nothing follows.
-// AYL_TYPE: chip_set_type() - the type, the clock and the tick's fraction set anew
-enum {AYL_POKE = 0, AYL_ECNT, AYL_TYPE};	// a: register, b: value / a: chanE.cnt / -
+// AYL_TYPE: chip_set_type() - the type, the clock and the tick's fraction set anew;
+// AYL_WR: ay_wr(), a port write - a: the address, b: the byte
+enum {AYL_POKE = 0, AYL_ECNT, AYL_TYPE, AYL_WR};	// a: register, b: value / a: chanE.cnt / -
 extern void (*ay_log)(aymChip*, int what, int a, int b);
 aymChip* ts_chip(TSound*, int);		// chip 0..3, NULL for anything else
 

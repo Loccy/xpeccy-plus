@@ -394,9 +394,11 @@ static aymChip* snd_ts_chip(TSound* ts, int i) {
 	return (i == 0) ? ts->chipA : (i == 1) ? ts->chipB : (i == 2) ? ts->chipC : ts->chipD;
 }
 
-// can the sound thread mix this machine itself
+// Can the sound thread mix this machine itself. Not one with a GS or an SAA: their
+// levels move at nearly every sub-sample, and the copy would be told of each
 static int snd_mirror_fits(Computer* comp) {
 	if (!comp->hw->sndtake || !comp->hw->sndmix) return 0;
+	if (comp->gs->enable || comp->saa->enabled) return 0;
 	for (int i = 0; i < 4; i++)
 		if (snd_ts_chip(comp->ts, i)->type == SND_YM2203) return 0;
 	return 1;
@@ -703,6 +705,8 @@ static void snd_do_tok(const sndTok* t) {
 				ay_poke_reg(&sm.chip[t->chip], t->a, t->b);
 			else if (t->what == AYL_ECNT)
 				sm.chip[t->chip].chanE.cnt = t->a;
+			else if (t->what == AYL_WR)
+				ay_wr(&sm.chip[t->chip], t->a, t->b);
 			break;
 		case SND_T_RETUNE:
 			snd_mirror_time(t->adv);

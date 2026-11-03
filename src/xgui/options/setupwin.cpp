@@ -1370,6 +1370,7 @@ void SetupWin::applyMachine() {
 	}
 	ts_set_frq(comp->ts, opt_get_psg_frq(cbPsgFrq) / psgFrqMul, comp->cpuFrq);	// 0: Auto
 	comp->ts->type = (chips > 2) ? TS_ZXNEXT : (chips > 1) ? TS_NEDOPC : TS_NONE;
+	comp->sndSeed = 1;		// the chips the sound thread mixes take all of it
 	comp->gs->enable = gsBox->currentIndex();
 	comp->sdrv->type = getRFIData(sdrvBox);
 	comp->saa->enabled = saaBox->currentIndex() ? 1 : 0;
@@ -1523,6 +1524,7 @@ void SetupWin::applyGlobal() {
 	aymChip* chip[3] = {comp->ts->chipA, comp->ts->chipB, comp->ts->chipC};
 	for (int i = 0; i < 3; i++)
 		chip[i]->sep = chsep;
+	comp->sndSeed = 1;
 	comp->gs->reset = gsrbox->isChecked() ? 1 : 0;
 // input
 	comp->mouse->swapButtons = cbSwapButtons->isChecked() ? 1 : 0;

@@ -50,4 +50,4 @@ xPortDsc zx_port_tab_a[] = {
 
 HardWare pnt_hw_core = {HW_PENT,"Pentagon","Pentagon",MEM_128K | MEM_512K,1.0,NULL,zx_port_tab_a,
 			zx_init,penMapMem,penOut,penIn,stdMRd,stdMWr,zx_irq,zx_ack,zx_reset,zx_sync,zx_keyp,zx_keyr,zx_vol,
-			NULL,NULL,&hwq_zx};
+			NULL,NULL,&hwq_zx, .sndtake = zx_snd_take, .sndmix = zx_mix};

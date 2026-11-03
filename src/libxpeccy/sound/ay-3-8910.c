@@ -133,6 +133,7 @@ void ay_wr(aymChip* chip, int adr, int val) {
 	} else if (chip->curReg < 16) {						// write data
 		ay_set_reg(chip, val);
 	}
+	if (ay_log) ay_log(chip, AYL_WR, adr, val);
 }
 
 // k ticks on one counter: how many times it wrapped, with cnt left where k

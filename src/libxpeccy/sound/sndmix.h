@@ -21,6 +21,9 @@ typedef struct {
 	int tapeLevRec;
 	int tapeMute;		// ...or playing, unless muted, at this level
 	int tapeVolPlay;
+	sndPair gs;		// zx_mix's other devices, as their own volume functions give them
+	sndPair sdrv;
+	sndPair saa;
 	int sel;		// the Next: the chip selected, the one heard with TurboSound off
 	unsigned char nr06, nr08, nr09;	// ...the mixer's nextregs: AY or YM table, TurboSound, ACB, mono
 	unsigned char pan[3];	// ...each chip's L/R enables
@@ -31,10 +34,6 @@ typedef struct {
 typedef struct {
 	sndMixIn in;
 	TSound* ts;		// the PSGs
-	// zx_vol's other devices, as their own volume functions give them
-	sndPair gs;
-	sndPair sdrv;
-	sndPair saa;
 	int late;		// the Next: ns before the chips' time the sample is due
 	// kept by the mix
 	sndDC dc[5];

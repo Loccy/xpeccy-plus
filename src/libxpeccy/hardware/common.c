@@ -189,27 +189,32 @@ sndPair zx_mix(sndMix* m, sndVolume* sv) {
 	vol.left += svol.left * sv->ay / 100;
 	vol.right += svol.right * sv->ay / 100;
 	// 4:general sound
-	svol = snd_dc(&m->dc[2], m->gs, dc);
+	svol = snd_dc(&m->dc[2], m->in.gs, dc);
 	vol.left += svol.left * sv->gs / 100;
 	vol.right += svol.right * sv->gs / 100;
 	// 5:soundrive
-	svol = snd_dc(&m->dc[3], m->sdrv, dc);
+	svol = snd_dc(&m->dc[3], m->in.sdrv, dc);
 	vol.left += svol.left * sv->sdrv / 100;
 	vol.right += svol.right * sv->sdrv / 100;
 	// 6:saa
-	svol = snd_dc(&m->dc[4], m->saa, dc);
+	svol = snd_dc(&m->dc[4], m->in.saa, dc);
 	vol.left += svol.left * sv->saa / 100;
 	vol.right += svol.right * sv->saa / 100;
 	return vol;
 }
 
+// what zx_mix hears, at the sample
+void zx_snd_take(Computer* comp, sndMix* m) {
+	snd_mix_take_wire(m, comp);
+	m->ts = comp->ts;
+	m->in.gs = gsVolume(comp->gs);
+	m->in.sdrv = sdrvVolume(comp->sdrv);
+	m->in.saa = saaVolume(comp->saa);
+}
+
 sndPair zx_vol(Computer* comp, sndVolume* sv) {
 	static sndMix m;
-	snd_mix_take_wire(&m, comp);
-	m.ts = comp->ts;
-	m.gs = gsVolume(comp->gs);
-	m.sdrv = sdrvVolume(comp->sdrv);
-	m.saa = saaVolume(comp->saa);
+	zx_snd_take(comp, &m);
 	return zx_mix(&m, sv);
 }
 

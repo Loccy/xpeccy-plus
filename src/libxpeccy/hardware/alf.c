@@ -143,10 +143,14 @@ sndPair alf_mix(sndMix* m, sndVolume* sv) {
 	return p;
 }
 
+void alf_snd_take(Computer* comp, sndMix* m) {
+	m->in.beep = comp->beep->val;
+	m->ts = comp->ts;
+}
+
 sndPair alf_vol(Computer* comp, sndVolume* sv) {
 	static sndMix m;
-	m.in.beep = comp->beep->val;
-	m.ts = comp->ts;
+	alf_snd_take(comp, &m);
 	return alf_mix(&m, sv);
 }
 
@@ -154,4 +158,4 @@ sndPair alf_vol(Computer* comp, sndVolume* sv) {
 // clock, and without it the machine keeps the dot clock of whatever ran before.
 HardWare alf_hw_core = {HW_ALF,"ALF","ALF TV Game",MEM_64K | MEM_48K | MEM_128K,1.0,NULL,NULL,
 			zx_init,alf_mapmem,alf_iwr,alf_ird,alf_mrd,alf_mwr,zx_irq,zx_ack,alf_reset,alf_sync,NULL,NULL,alf_vol,
-			NULL,NULL,&alf_quiet};
+			NULL,NULL,&alf_quiet, .sndtake = alf_snd_take, .sndmix = alf_mix};
