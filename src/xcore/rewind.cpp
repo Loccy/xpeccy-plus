@@ -73,8 +73,9 @@ static std::vector<rwSample> rw_snd;
 static long long rw_snd_w = 0;
 static long long rw_snd_per = 0;	// emulated time of one sample, 16.16 ns
 static int rw_snd_rate = 0, rw_snd_secs = 0;	// what size and period were worked out for
-// the sub-samples gathered for the next sample
-static struct {
+// the sub-samples gathered for the next sample: the sound thread writes it at every
+// one of them, so it is kept off the lines the emulation thread uses
+static struct alignas(64) {
 	long long ns;
 	int left, right, n;
 } rw_acc;

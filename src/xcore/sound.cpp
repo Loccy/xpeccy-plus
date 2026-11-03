@@ -60,7 +60,6 @@ static void scope_put(int lev) {
 	scopePos++;
 }
 
-static int smpCount = 0;
 OutSys *sndOutput = NULL;
 // static int sndChunks = 882;
 
@@ -144,13 +143,32 @@ typedef struct {
 	int l, r;		// the mix as hw->vol gave it
 } sndSub;
 
-#define SND_Q_SIZE	0x10000		// sub-samples, about 46 ms at 44100
+#define SND_Q_SIZE	0x4000		// sub-samples, about 12 ms at 44100
 #define SND_Q_MASK	(SND_Q_SIZE - 1)
 #define SND_Q_BATCH	1024		// handed over at least this often
+// ...and the sound thread woken this often, or at the cycle's end. A wake is a
+// call into the system on the emulation thread: once a batch, a machine run flat
+// out spent a tenth of its time waking it
+#define SND_Q_WAKE	4096
 static sndSub sndQ[SND_Q_SIZE];
-static long long sqPut = 0;				// producer: queued so far
-static std::atomic<long long> sqHead(0);	// what the consumer may take
-static std::atomic<long long> sqTail(0);	// what it has taken
+// Each side's counters on cache lines of their own. A line one thread writes at
+// every sub-sample and the other reads goes back and forth between the cores
+// each time: next to what the sound thread reads, the producer's count cost the
+// emulation thread a quarter of its time. Hence one block for the producer, its
+// size a whole number of lines, and the consumer's counters apart; the producer
+// reads the consumer's only when its own copy says the queue is full.
+static struct alignas(64) {
+	long long put;		// queued so far
+	long long pub;		// ...handed over so far
+	long long tailSeen;	// ...and taken, as it last looked
+	long long woken;	// ...and where the sound thread was last woken
+	long long dropAt;	// where the last drop went in (snd_drop)
+	long long rwNsSent;	// the time a sub-sample stands for, as rewind was last told
+	int subPos;		// sub-samples made since the start: sb_pos as the sound thread will have it
+	int smpCount;
+} sp = {0, 0, 0, 0, -1, -1, 0, 0};
+alignas(64) static std::atomic<long long> sqHead(0);	// what the consumer may take
+alignas(64) static std::atomic<long long> sqTail(0);	// what it has taken
 
 // What has to happen between two sub-samples, in order with them: `at` is the
 // count of sub-samples queued before it.
@@ -166,8 +184,8 @@ typedef struct {
 #define SND_T_SIZE	0x2000
 #define SND_T_MASK	(SND_T_SIZE - 1)
 static sndTok sndT[SND_T_SIZE];
-static std::atomic<long long> stHead(0);
-static std::atomic<long long> stTail(0);
+alignas(64) static std::atomic<long long> stHead(0);
+alignas(64) static std::atomic<long long> stTail(0);
 
 // Never destroyed: a std::thread still running when the statics go would end the
 // process with terminate() on any way out that does not pass sndClose()
@@ -248,7 +266,6 @@ static short sndFadeL = 0, sndFadeR = 0;	// ...and the one the fade starts from
 
 // --- the producer's side (the emulation thread, or under emu_lock)
 
-static int subPos = 0;		// sub-samples made since the start: sb_pos as the sound thread will have it
 
 static void snd_kick() {
 	if (sndSleeping.load()) {
@@ -257,14 +274,14 @@ static void snd_kick() {
 	}
 }
 
-// what is queued becomes the sound thread's to take
+// what is queued becomes the sound thread's to take; an awake one takes it at
+// once, a sleeping one at the next kick
 static void snd_q_publish() {
-	if (sqHead.load(std::memory_order_relaxed) == sqPut) return;
-	sqHead.store(sqPut);
-	snd_kick();
+	if (sp.pub == sp.put) return;
+	sp.pub = sp.put;
+	sqHead.store(sp.put);
 }
 
-static long long dropAt = -1;	// where the last drop went in (snd_drop)
 
 // A token goes in after what is queued. The sound thread is not woken for it - the
 // cycle's end does that (snd_q_flush): rewind puts one in for every sample it plays
@@ -276,35 +293,42 @@ static void snd_tok(int kind, sndPair lev = sndPair(), long long val = 0, void (
 		std::this_thread::yield();
 	}
 	sndTok* t = &sndT[h & SND_T_MASK];
-	t->at = sqPut;
+	t->at = sp.put;
 	t->kind = kind;
 	t->lev = lev;
 	t->val = val;
 	t->fn = fn;
 	stHead.store(h + 1);
-	dropAt = -1;
+	sp.dropAt = -1;
 }
 
 // Fast mode asks for a drop on every step: one already queued at this point, with
 // nothing put into the ring after it, says it all
 void snd_drop() {
-	if (dropAt == sqPut) return;
+	if (sp.dropAt == sp.put) return;
 	snd_tok(SND_T_DROP);
-	dropAt = sqPut;
+	sp.dropAt = sp.put;
 }
 
 static void snd_q_push(sndPair lev) {
-	while ((sqPut - sqTail.load(std::memory_order_acquire) >= SND_Q_SIZE) && !sndQuit.load()) {
+	while (sp.put - sp.tailSeen >= SND_Q_SIZE) {
+		sp.tailSeen = sqTail.load(std::memory_order_acquire);
+		if ((sp.put - sp.tailSeen < SND_Q_SIZE) || sndQuit.load()) break;
 		snd_q_publish();
 		snd_kick();
 		std::this_thread::yield();
 	}
-	sndSub* q = &sndQ[sqPut & SND_Q_MASK];
+	sndSub* q = &sndQ[sp.put & SND_Q_MASK];
 	q->l = lev.left;
 	q->r = lev.right;
-	sqPut++;
-	if (sqPut - sqHead.load(std::memory_order_relaxed) >= SND_Q_BATCH)
+	sp.put++;
+	if (sp.put - sp.pub >= SND_Q_BATCH) {
 		snd_q_publish();
+		if (sp.put - sp.woken >= SND_Q_WAKE) {
+			sp.woken = sp.put;
+			snd_kick();
+		}
+	}
 }
 
 void snd_q_call(void (*fn)(long long), long long arg) {
@@ -314,8 +338,10 @@ void snd_q_call(void (*fn)(long long), long long arg) {
 // the end of an emulation cycle: what it made goes to the sound thread
 void snd_q_flush() {
 	snd_q_publish();
-	if (stTail.load(std::memory_order_relaxed) != stHead.load(std::memory_order_relaxed))
+	if ((sp.woken != sp.put) || (stTail.load(std::memory_order_relaxed) != stHead.load(std::memory_order_relaxed))) {
+		sp.woken = sp.put;
 		snd_kick();
+	}
 }
 
 // Until the sound thread has taken what was handed over so far. Any thread; the
@@ -537,7 +563,7 @@ static void snd_thread_stop() {
 long long snd_need_room(long long acc) {
 	int need = conf.snd.need;
 	if (conf.emu.fast || (need <= 0)) return nsPerSampleFixed - acc;
-	long long j = (DISCRATE - (subPos % DISCRATE)) + (long long)(need - 1) * DISCRATE;
+	long long j = (DISCRATE - (sp.subPos % DISCRATE)) + (long long)(need - 1) * DISCRATE;
 	return j * nsPerSampleFixed - acc;
 }
 
@@ -551,16 +577,15 @@ int sndSync(Computer* comp) {
 			sndPair lev = comp->hw->vol(comp, &conf.snd.vol);
 			// the time this sub-sample stands for, for rewind: it moves with
 			// the speed and with VSync's steer, so it goes along when it does
-			static long long rwNsSent = -1;
-			if (conf.emu.rewind.on && (nsPerSampleFixed != rwNsSent)) {
-				rwNsSent = nsPerSampleFixed;
-				snd_tok(SND_T_NS, sndPair(), rwNsSent);
+			if (conf.emu.rewind.on && (nsPerSampleFixed != sp.rwNsSent)) {
+				sp.rwNsSent = nsPerSampleFixed;
+				snd_tok(SND_T_NS, sndPair(), sp.rwNsSent);
 			}
 			snd_q_push(lev);
-			subPos++;
-			if (((subPos % DISCRATE) == 0) && (conf.snd.need > 0))
+			sp.subPos++;
+			if (((sp.subPos % DISCRATE) == 0) && (conf.snd.need > 0))
 				conf.snd.need--;
-			smpCount++;
+			sp.smpCount++;
 		} else if (conf.emu.fast) {
 			snd_drop();		// the GS's flush is all fast mode runs here
 		}
@@ -571,10 +596,10 @@ int sndSync(Computer* comp) {
 	if (conf.emu.fast) return 0;
 	if (conf.snd.need > 0) return 0;
 #else
-	if (smpCount < sndChunks) return 0;
+	if (sp.smpCount < sndChunks) return 0;
 #endif
 	conf.snd.fill = 0;
-	smpCount = 0;
+	sp.smpCount = 0;
 	return 1;
 }
 
@@ -768,8 +793,8 @@ double snd_scope_rate() {
 // the mixer's history, back to what a start leaves it at: here, and in order with
 // what is queued on the sound thread
 void snd_pipe_reset() {
-	subPos = 0;
-	smpCount = 0;
+	sp.subPos = 0;
+	sp.smpCount = 0;
 	snd_tok(SND_T_RESET);
 	snd_q_flush();
 }
