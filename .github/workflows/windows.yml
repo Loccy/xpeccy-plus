@@ -81,6 +81,8 @@ jobs:
       RELEASE: ${{ inputs.release && '1' || '' }}
       QT_DIR: C:\Qt\${{ matrix.qt }}\${{ matrix.qt_dir }}
       MINGW_DIR: C:\Qt\Tools\${{ matrix.mingw_dir }}
+      # whether the private training set can be fetched (not in a fork)
+      HAS_PGO_SET: ${{ secrets.PGO_SSH_KEY != '' }}
 
     steps:
       - uses: actions/checkout@v7
@@ -110,6 +112,18 @@ jobs:
       - name: Fetch SDL2, curl and System/Next
         run: packaging\fetch-deps.ps1 -SysNext
 
+      # programs of the private dotkoval/xpeccy-pgo, each in its folder with its files,
+      # trained on beside System/Next's; by a read-only deploy key. Without the secret
+      # the build trains on System/Next alone
+      - name: Fetch the training set
+        if: env.HAS_PGO_SET == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: dotkoval/xpeccy-pgo
+          ssh-key: ${{ secrets.PGO_SSH_KEY }}
+          path: build/pgo-set
+          persist-credentials: false
+
       # make-dist -Manual runs tools/manual.py with the python found first
       - name: Install the manual's tools
         run: |
@@ -134,6 +148,7 @@ jobs:
             Pgo = $true
           }
           if ($env:RELEASE) { $opts.Release = $true }
+          if (Test-Path build\pgo-set\next) { $opts.PgoExtra = @((Resolve-Path build\pgo-set\next).Path) }
           packaging\make-dist.ps1 @opts
           # the artifact is named after the archive, so the two cannot drift apart
           $zip = Get-ChildItem build\dist\*.zip | Select-Object -First 1

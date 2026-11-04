@@ -49,6 +49,8 @@ jobs:
   windows:
     needs: check
     uses: ./.github/workflows/windows.yml
+    # PGO_SSH_KEY: the private training set
+    secrets: inherit
     with:
       release: true
 
