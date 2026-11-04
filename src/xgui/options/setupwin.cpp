@@ -1284,7 +1284,7 @@ void SetupWin::apply() {
 	int rwStep = conf.emu.rewind.step;
 	int rwSecs = conf.emu.rewind.secs;
 	// unset shows as Last, and stays unset - the first start still asks - until changed
-	// a folder's mode is taken when it is mounted, which the machine's part does again below
+	// a folder's mode is taken when it is mounted or read again, with the power off
 	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
 	applySaves();
@@ -1409,10 +1409,9 @@ void SetupWin::applyMachine() {
 	difSetDrives(comp->dif, fit);
 // hdd
 	ide_set_type(comp->ide, getRFIData(hiface));
-	// what is mounted is the Drives menu's; a folder is read again on Apply
-	// (a new machine does it itself)
-	ide_remount(comp->ide);
-	sdc_remount(comp->sdc);
+	// What is mounted is the Drives menu's. A folder is not read again here: the DOS
+	// running keeps what it read of it, and a program's own folder put on the card
+	// would be gone from it. It is read again with the power off (xm_power_cycle).
 // divmmc: a board is put on, taken off or given other RAM with the power off, so
 // the machine comes up from its power-on with it. Left running, the machine would
 // meet a firmware that never started at its first error report or NMI.
@@ -1427,8 +1426,6 @@ void SetupWin::applyMachine() {
 	// a chip written outside the machine goes back in with the power off too
 	if (applyDivFirmware() && divModel) divPower = true;
 	fillDivFirmware();
-	sdc_remount(comp->div->card[0]);
-	sdc_remount(comp->div->card[1]);
 // debuga
 	setWatchPorts(comp, portwid->getPorts());
 	if (divPower) {
