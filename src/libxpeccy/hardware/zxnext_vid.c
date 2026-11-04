@@ -940,7 +940,11 @@ static inline __attribute__((always_inline)) void nxv_plain_dot(Computer* comp, 
 	int inwin = (phc >= sp->ucx1) && (phc <= sp->ucx2) && (vc >= sp->ucy1) && (vc <= sp->ucy2);
 	int clip = !(inwin || bad) || sp->ulaOff;
 	int bx = bad && !s_t;
-	for (int h = 0; h < 2; h++) {
+	// the two halves alike (the ULA's pixel and attribute, layer 2's byte not split in
+	// nibbles): the first one's colour is the second's
+	int one = (V.ula[ui].attr[0] == V.ula[ui].attr[1]) && !((bits ^ (bits >> 1)) & 1)
+		&& !((l2byte >= 0) && (sp->res & 2));
+	for (int h = 0; h < 2 - one; h++) {
 		int attr = V.ula[ui].attr[h];
 		int pen = (((bits >> h) & 1) ^ ((attr >> 7) & sp->flashOn)) & !bad;
 		int urgb;
@@ -981,6 +985,7 @@ static inline __attribute__((always_inline)) void nxv_plain_dot(Computer* comp, 
 		}
 		ptr[h] = nxv_col[nxv_mix6(order, l2, l2_t, l2p, s, s_t, u, u_t, bx, sp->fb9) & 0x1ff];
 	}
+	if (one) ptr[1] = ptr[0];
 }
 
 // nxv_plain_dot for one dot, kept out of nxv_draw_dot (inlined there it slows the other paths)
@@ -1036,7 +1041,11 @@ static inline __attribute__((always_inline)) void nxv_gen_dot(Computer* comp, co
 	if ((sp->tmen || sp->tmenb) && (whc < 320) && (wvc < 256))
 		tmw80 = nxv_tm_load(comp, D, whc, wvc);
 	int tmwin = (whc >= sp->tcx1) && (whc <= sp->tcx2) && (wvc >= sp->tcy1) && (wvc <= sp->tcy2);
-	for (int h = 0; h < 2; h++) {
+	// the two halves alike: as nxv_plain_dot, and the tilemap not in 80 columns (the ULA+
+	// bits b2, b3 are set together)
+	int one = (V.ula[ui].attr[0] == V.ula[ui].attr[1]) && !((bits ^ (bits >> 1)) & 1)
+		&& !((l2byte >= 0) && (sp->res & 2)) && (tmw80 != 1);
+	for (int h = 0; h < 2 - one; h++) {
 		int attr = V.ula[ui].attr[h];
 		int pix = (bits >> h) & 1;
 		int m2 = (bits >> (2 + h)) & 1;
@@ -1110,6 +1119,7 @@ static inline __attribute__((always_inline)) void nxv_gen_dot(Computer* comp, co
 		}
 		ptr[h] = nxv_col[nxv_mixo(order, sp->blend, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, sp->fb9) & 0x1ff];
 	}
+	if (one) ptr[1] = ptr[0];
 }
 
 // nxv_gen_dot for one dot, kept out of nxv_draw_dot
@@ -1477,7 +1487,8 @@ static void nxv_render(Computer* comp, long long end) {
 					int clip = !(inwin || bad) || off;
 					int ui = (int)(D & (NXV_ULA - 1));
 					int bits = V.ula[ui].bits;
-					for (int h = 0; h < 2; h++) {
+					int one = (V.ula[ui].attr[0] == V.ula[ui].attr[1]) && !((bits ^ (bits >> 1)) & 1);
+					for (int h = 0; h < 2 - one; h++) {
 						int attr = V.ula[ui].attr[h];
 						int pen = (((bits >> h) & 1) ^ ((attr >> 7) & fl)) & !bad;
 						int ink = attr & 7;
@@ -1486,6 +1497,7 @@ static void nxv_render(Computer* comp, long long end) {
 						int urgb = upal[sidx] & 0x1ff;
 						ptr[h] = nxv_col[(((urgb >> 1) == tr) || clip) ? fb9 : urgb];
 					}
+					if (one) ptr[1] = ptr[0];
 				}
 			}
 			if (!pent && (rx < rxe)) {
