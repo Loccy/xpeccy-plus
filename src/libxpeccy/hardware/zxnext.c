@@ -78,7 +78,8 @@ void nx_raw(Computer* comp, int* h, int* v) {
 // one pixel back (zxula_timing.vhd 344): hc_ula is 0 on the pixel after raw H =
 // c_min_hactive - 12, and vc_ula steps there. The first frame after power-on still
 // counts from the configuration values (hc_ula 256, vc_ula 0, cvc 0).
-void nx_ula(Computer* comp, int h, int v, int* hc, int* vc, int* cvc) {
+// rv: the raw line the ray is on (-1: where it is now)
+static void nx_ula_rv(Computer* comp, int h, int v, int* hc, int* vc, int* cvc, int rv) {
 	const nxTiming* t = nx_tim(comp);
 	int L = t->L;
 	int F = nx_lines(comp);
@@ -95,8 +96,10 @@ void nx_ula(Computer* comp, int h, int v, int* hc, int* vc, int* cvc) {
 	if (lv < 0) {
 		// the last line of the frame before: vcLine0 once the ray is in the new frame,
 		// worked out while it is still on that line (it is not taken yet)
-		int rh, rv;
-		nx_raw(comp, &rh, &rv);
+		if (rv < 0) {
+			int rh;
+			nx_raw(comp, &rh, &rv);
+		}
 		if (rv == 0) {
 			*vc = NX.vcLine0;
 			if (cvc) *cvc = NX.cvcLine0;
@@ -120,6 +123,15 @@ void nx_ula(Computer* comp, int h, int v, int* hc, int* vc, int* cvc) {
 		else if (c > 511) c = (c - 512) % F;
 		*cvc = c;
 	}
+}
+
+void nx_ula(Computer* comp, int h, int v, int* hc, int* vc, int* cvc) {
+	nx_ula_rv(comp, h, v, hc, vc, cvc, -1);
+}
+
+// hc_ula / vc_ula as the ray on (h, v) had them, the ray long gone (a line drawn after it)
+void nx_ula_seen(Computer* comp, int h, int v, int* hc, int* vc) {
+	nx_ula_rv(comp, h, v, hc, vc, NULL, v);
 }
 
 void next_counters(Computer* comp, int* hc, int* vc, int* cvc) {
@@ -1015,6 +1027,7 @@ static void nx_hblank(Computer* comp) {
 	// the line interrupt of the line that ended, before its base moves on
 	nx_line_scan(comp, (NX.frameBase + t->L) * 4, NX.frameBase, (v + nx_lines(comp) - 1) % nx_lines(comp));
 	NX.frameBase += t->L;			// the line that ended
+	nxv_line(comp);				// ...is drawn, the ray past it
 	if (v == 0) {
 		// the counters' last line of the frame that ended, before the raster changes
 		{
@@ -2532,10 +2545,12 @@ static void nx_power(Computer* comp) {
 static void nx_soft_reset(Computer* comp) {
 	NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
 	if (next_reset_open) return;
+	long long up = nxv_before_reset(comp);
 	nx_regs_reset(comp);
 	if (NX.speed) compSetHwTurbo(comp, 1.0);
 	nx_map_mem(comp);
 	nxv_reset(comp);
+	NX.v.upAt = up;			// drawn on from there, as the dot after the reset did
 	cpu_reset(comp->cpu);
 }
 
@@ -2858,6 +2873,7 @@ static const hwQuiet nx_quiet = {HWQ_ACK_NEXT, NULL, NULL, zx_devs_sync, NULL, 0
 // what is worked out of the state, again. The clock comes back after this.
 void next_snap_loaded(Computer* comp, int vmode) {
 	if (NX.vmode != vmode) comp_update_timings(comp);	// the board's CLK_28 (NR 11)
+	if (NX.v.live == 0xff) nxv_reset(comp);		// the picture's state, from the registers loaded
 	long long idle = NX.spr.idleTo;
 	nx_layout(comp);		// the raster of the timing the state runs
 	NX.spr.idleTo = idle;		// worked out for that same raster

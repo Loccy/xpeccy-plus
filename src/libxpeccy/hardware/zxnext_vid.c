@@ -3,13 +3,14 @@
 // mixer (zxnext.vhd, video pipeline stages 0-2), and the tilemap (video/tilemap.vhd).
 // Sprites are in zxnext_spr.c.
 //
-// Time. The ULA's fetch runs with the ray, one call at the end of each dot
-// (nxv_dot), and reads memory as it stood when the core read it: a write made
-// since is kept with its old byte (nxvWrite) and undone for the read. The mixer
-// draws a few dots behind the ray, and a register change is queued for the first
-// half-pixel the core shows it on (nxv_at), so a mid-line write lands where it
-// does on the board. A pixel is addressed by A = 2 D + half, D the absolute dot
-// whose phc is the pixel's.
+// Time. The ULA's fetch and the mixer run over a line once the ray has left it
+// (nxv_line, as the next one starts), and read what they would have read with the
+// ray on each dot: memory as it stood when the core read it (a write made since is
+// kept with its old byte, nxvWrite, and undone for the read), the values the fetch
+// samples with the time each changed, and every register change queued for the
+// first half-pixel the core shows it on (nxv_at), so a mid-line write lands where
+// it does on the board. The mixer keeps a few dots behind the fetch. A pixel is
+// addressed by A = 2 D + half, D the absolute dot whose phc is the pixel's.
 //
 // Still frames. A frame in which nothing the picture reads moves draws what the one
 // before drew: it runs as an undrawn frame (vid->still) with both buffers holding
@@ -25,6 +26,9 @@
 #define NXV_SHADOW	0x200000	// a memory key past the 2 MB: NX.shadow[]
 #define NXV_LAG		4		// dots the mixer keeps behind the fetch
 #define NXV_RAM		0x040000	// SRAM of RAM page 0
+
+// an SZX keeps nxVideo as one field, its length in 16 bits
+_Static_assert(sizeof(nxVideo) < 65536, "nxVideo does not fit an SZX field");
 
 // what the mixer reads, as the registers hold it
 enum {
@@ -170,14 +174,18 @@ void nxv_memw(Computer* comp, int key, int old, long long w) {
 	e->key = key;
 	e->old = old;
 	V.wrHead = (V.wrHead + 1) & (NXV_WRQ - 1);
+	V.wrT[key & (NXV_WRT - 1)] = (unsigned int)w;
 }
 
 // the byte at key as a read at CLK_28 r saw it: writes after r undone. The writes
-// come in time order, so most often the newest is before r and there is none to undo
+// come in time order; most often none is after r, or none after r to a key of the
+// same slot (the two are never 2^31 clk28 apart the wrong way: an old slot only asks
+// for the walk)
 static int nxv_mem(Computer* comp, int key, long long r) {
 	int v = (key >= NXV_SHADOW) ? NX.shadow[key - NXV_SHADOW] : comp->mem->ramData[key];
 	int i = V.wrHead;
 	if (V.wr[(i - 1) & (NXV_WRQ - 1)].w <= r) return v;
+	if ((int)(V.wrT[key & (NXV_WRT - 1)] - (unsigned int)r) <= 0) return v;
 	for (int k = 0; k < NXV_WRQ; k++) {
 		i = (i - 1) & (NXV_WRQ - 1);
 		nxvWrite* e = &V.wr[i];
@@ -1531,6 +1539,7 @@ static void nxv_resync(Computer* comp, long long d, int h, int v) {
 	V.ry = v;
 	nxv_step(comp, &V.rx, &V.ry, -NXV_LAG + 1);
 	V.live = 1;
+	V.upAt = -1;
 }
 
 // the copper stopped: nx_cop_run's own shortcut, its edges counted up to the end of dot d
@@ -1606,6 +1615,8 @@ static int nxv_still_ok(Computer* comp) {
 	return 1;
 }
 
+static void nxv_take_up(Computer* comp);
+
 // The frame start (VID_NEXT's frm): the frame that ended counted clean or not, and
 // the one starting made still or drawn
 void nxv_frm(Video* vid) {
@@ -1632,36 +1643,99 @@ void nxv_frm(Video* vid) {
 	} else if (!ok && vid->still) {
 		vid_still_end(vid);
 	}
+	// a drawn frame after undrawn ones: the drawing taken up at its first dot
+	if (!vid->nodraw && !vid->still && !V.live) nxv_take_up(comp);
 }
 
-// the end of dot (h, v), the ray on it, hc_ula/vc_ula of it. cop: the copper runs;
-// stopped, nothing in a run of dots starts it, and its edges are counted at the end
-static inline void nxv_dot_at(Computer* comp, int h, int v, int hc, int vc, int cop) {
-	long long d = NX.frameBase + h;
-	if (!V.live || (d != V.lastDot + 1))
-		nxv_resync(comp, d, h, v);
-	if ((hc & 1) || ((hc & 7) == 4))	// an even dot other than n = 4, C does nothing
-		nxv_fetch(comp, &V.fe, d, hc, vc, 0);
-	// the copper's edges up to the end of this dot
-	if (cop) nx_cop_run(comp, d * 4 + 4);
-	nxs_run_to(comp, d * 8 + 8);		// the sprite pass too
-	if (!hc && !vc) {
-		// flash_cnt counts at the end of (0, 0); pixel_en uses it from the next half-pixel on
-		V.flash = (V.flash + 1) & 31;
-		nxv_push(comp, d * 2 + 1, NXF_FLASH, 0, V.flash);
-		NX.still.flashDot = d;
-		NX.still.frameDots = (long long)nx_tim(comp)->L * nx_lines(comp);
-		if (!(V.flash & 15) && !V.q[NXF_ULANEXT] && !V.q[NXF_ULAP])
-			NX.still.dirty = 1;		// FLASH turned over
+// The fetch over the dots from lastDot + 1 to end - 1, the ray past them: their
+// counters as it had them. What the fetch and the mixer read is kept with its time
+// (the queued changes, the samples, the write log), so it reads what it read with the
+// ray on the dot. The copper and the sprite pass are run up to there first.
+static void nxv_fetch_to(Computer* comp, long long end) {
+	long long d = V.lastDot + 1;
+	if (d >= end) return;
+	// a copper running may stop itself on the way (nx_cop_run then counts its edges as
+	// the stopped one does); a stopped one is not started by anything here
+	if (nx_cop_on(comp))
+		nx_cop_run(comp, (end - 1) * 4 + 4);
+	else
+		nxv_cop_idle(comp, end - 1);
+	nxs_run_to(comp, (end - 1) * 8 + 8);
+	const nxTiming* t = nx_tim(comp);
+	int L = t->L;
+	int F = nx_lines(comp);
+	int r0 = t->hact - 11;		// hc_ula 0, where vc_ula steps: nx_ula again there
+	int h, v, hc, vc;
+	nx_raw(comp, &h, &v);
+	nxv_step(comp, &h, &v, (int)(d - (NX.frameBase + h)));
+	nx_ula_seen(comp, h, v, &hc, &vc);
+	for (; d < end; d++) {
+		if ((hc & 1) || ((hc & 7) == 4))	// an even dot other than n = 4, C does nothing
+			nxv_fetch(comp, &V.fe, d, hc, vc, 0);
+		if (!hc && !vc) {
+			// flash_cnt counts at the end of (0, 0); pixel_en uses it from the next half-pixel on
+			V.flash = (V.flash + 1) & 31;
+			nxv_push(comp, d * 2 + 1, NXF_FLASH, 0, V.flash);
+			NX.still.flashDot = d;
+			NX.still.frameDots = (long long)L * F;
+			if (!(V.flash & 15) && !V.q[NXF_ULANEXT] && !V.q[NXF_ULAP])
+				NX.still.dirty = 1;		// FLASH turned over
+		}
+		if (++h == L) {
+			h = 0;
+			if (++v == F) v = 0;
+			nx_ula_seen(comp, h, v, &hc, &vc);
+		} else if (h == r0) {
+			nx_ula_seen(comp, h, v, &hc, &vc);
+		} else {
+			hc++;
+		}
 	}
-	V.lastDot = d;
+	V.lastDot = end - 1;
 }
 
-// The mixer NXV_LAG dots behind the fetch, drawn after a run of them: what it reads
-// is kept with its time, the run is shorter than the fetch's ring of dots, and the
-// sprite buffers swap at whc 511, a run away from the last sprite pixel at whc 319
-static inline void nxv_catch_up(Computer* comp) {
+// the drawing taken up at the dot a reset left it at, or else at the dot under the
+// ray, as after any undrawn stretch
+static void nxv_take_up(Computer* comp) {
+	int h, v;
+	nx_raw(comp, &h, &v);
+	long long d = NX.frameBase + h;
+	if ((V.upAt >= 0) && (V.upAt < d)) {
+		nxv_step(comp, &h, &v, (int)(V.upAt - d));
+		d = V.upAt;
+	}
+	nxv_resync(comp, d, h, v);
+	V.lastDot = d - 1;
+}
+
+// The picture up to dot end (the first one the ray has not ended): the fetch up to
+// there, the mixer NXV_LAG dots behind it, as a change queued at the ray may still
+// show a dot or so back
+static void nxv_flush(Computer* comp, long long end) {
+	Video* vid = comp->vid;
+	if (vid->still) return;
+	if (vid->nodraw) {
+		V.live = 0;		// taken up afresh when the drawing is (nxv_frm)
+		V.upAt = -1;
+		return;
+	}
+	if (!V.live) nxv_take_up(comp);
+	nxv_fetch_to(comp, end);
 	nxv_render(comp, V.lastDot - NXV_LAG + 1);
+}
+
+void nxv_line(Computer* comp) {
+	nxv_flush(comp, NX.frameBase);
+}
+
+// A soft reset, before the registers go: the picture up to the ray as they stood, and
+// the dot to take the drawing up at after it (-1: at the ray when it is drawn again)
+long long nxv_before_reset(Computer* comp) {
+	if (!V.live || comp->vid->nodraw || comp->vid->still) return -1;
+	int h, v;
+	nx_raw(comp, &h, &v);
+	nxv_flush(comp, NX.frameBase + h);
+	return NX.frameBase + h;
 }
 
 // the raw counters of the dot under the ray
@@ -1680,52 +1754,29 @@ static inline void nxv_ray_hv(Computer* comp, Video* vid, int* h, int* v) {
 	*v = y;
 }
 
-// The dot callback (VID_NEXT): the end of the dot under the ray
+// The dot callback (VID_NEXT): the end of the dot under the ray. The lines draw
+// themselves as the ray leaves them (nxv_line); the debugger, stepping, wants the
+// picture up to the ray at every step
 void nxv_dot(Video* vid) {
+	if (!vid->debug) return;
 	Computer* comp = (Computer*)vid->xptr;
-	int h, v, hc, vc;
+	int h, v;
 	nxv_ray_hv(comp, vid, &h, &v);
-	nx_ula(comp, h, v, &hc, &vc, NULL);
-	int cop = nx_cop_on(comp);
-	nxv_dot_at(comp, h, v, hc, vc, cop);
-	if (!cop) nxv_cop_idle(comp, V.lastDot);
-	nxv_catch_up(comp);
+	nxv_flush(comp, NX.frameBase + h + 1);
 }
 
-// A run of k dots: the ray steps over them one by one, as the dot callback would see
-// it, the raw counters counted on (worked out again where the raw line starts)
+// a run of dots: nothing to do but count them, but under the debugger (a dot at a time)
 int nxv_run(Video* vid, int k) {
-	Computer* comp = (Computer*)vid->xptr;
-	int h = 0, v = 0, hc = 0, vc = 0;
-	int x = vid->ray.x;
-	int r0 = nx_tim(comp)->hact - 11;	// hc_ula 0, where vc_ula steps: nx_ula again there
-	// a copper running may stop itself in the run (nx_cop_run then counts its edges as
-	// the stopped one does); a stopped one is not started by anything here
-	int cop = nx_cop_on(comp);
-	for (int i = 0; i < k; i++) {
-		// the fetch writes 8 dots ahead into a ring of NXV_ULA: the mixer reads them
-		// before a lazy run of 40-odd dots goes round it
-		if (i && !(i & 31)) nxv_catch_up(comp);
-		vid->ray.x = x + i;
-		if ((i == 0) || (x + i == vid->vend.x)) {
-			nxv_ray_hv(comp, vid, &h, &v);
-			nx_ula(comp, h, v, &hc, &vc, NULL);
-		} else if (++h == r0) {
-			nx_ula(comp, h, v, &hc, &vc, NULL);
-		} else {
-			hc++;
-		}
-		nxv_dot_at(comp, h, v, hc, vc, cop);
-	}
-	if (!cop && (k > 0)) nxv_cop_idle(comp, V.lastDot);
-	nxv_catch_up(comp);
-	return k;
+	return vid->debug ? 0 : k;
 }
 
 // Where the picture stops in the buffer: the mixer's next dot, placed as nxv_render
-// places it (raw line V.ry, dot V.rx at column V.rx - 1 - hblank)
+// places it (raw line V.ry, dot V.rx at column V.rx - 1 - hblank), drawn up to the ray
 unsigned char* nxv_drawn(Video* vid) {
 	Computer* comp = (Computer*)vid->xptr;
+	int h, v;
+	nx_raw(comp, &h, &v);
+	nxv_flush(comp, NX.frameBase + h);
 	if (!V.live) return vid->ray.ptr;
 	const nxTiming* t = nx_tim(comp);
 	int row = V.ry - t->vblank;
@@ -1760,6 +1811,11 @@ void nxv_reset(Computer* comp) {
 	V.evHead = V.evN = 0;
 	memset(V.wr, 0, sizeof(V.wr));
 	V.wrHead = 0;
+	memset(V.wrT, 0, sizeof(V.wrT));
+	memset(V.sprKeep, 0, sizeof(V.sprKeep));
+	V.sprKeepTo[0] = V.sprKeepTo[1] = -1;
+	V.sprKeepNew = 0;
+	V.upAt = -1;
 	nxv_hset(&V.hBrd, NX.pfe & 7);
 	nxv_hset(&V.hPff, NX.pff & 0x3f);
 	nxv_hset(&V.hShadow, (NX.p7ffd >> 3) & 1);

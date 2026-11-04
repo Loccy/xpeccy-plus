@@ -962,7 +962,11 @@ static void vid_nodraw_to(Video* vid, int on) {
 	on = on ? 1 : 0;
 	if (on == vid->nodraw) return;
 	vid_latch_at(vid);
+	// a mode drawing behind the ray (VID_NEXT): the picture up to it as it was, and on
+	// from there as it now is
+	if (vid->cb && vid->cb->drawn) vid->cb->drawn(vid);
 	vid->nodraw = on;
+	if (vid->cb && vid->cb->drawn) vid->cb->drawn(vid);
 	if (on) vid->stillBreak = 1;		// the buffers fall behind the machine
 }
 
@@ -1740,7 +1744,9 @@ void vid_set_mode(Video* vid, int mode) {
 		i++;
 	}
 	vid_set_core(vid, &vidModeTab[i]);
-	vid->lazyDraw = (mode == VID_NEXT) ? 32 : 0;	// its queues hold what 32 dots can write
+	// the Next draws a line once the ray has left it (nxv_line): its queues hold what a
+	// line brings, and the ray goes on uncounted up to the next event
+	vid->lazyDraw = (mode == VID_NEXT) ? (1 << 20) : 0;
 	vid_latch_mark(vid);		// the new one reads back what was kept until its dots move it
 }
 
@@ -1821,8 +1827,9 @@ static int vid_run_len(Video* vid, int n) {
 	if (vid->full.x - 1 - x < k) k = vid->full.x - 1 - x;
 	if ((vid->vend.x > x) && (vid->vend.x - 1 - x < k)) k = vid->vend.x - 1 - x;
 	// the border edges only change what a dot draws: an undrawn run goes past them,
-	// hbrd is worked out where it ends (vid_run)
-	if (!vid_skips(vid)) {
+	// and so does a mode that draws its lines itself; hbrd is worked out where it ends
+	// (vid_run)
+	if (!vid_skips(vid) && !vid->lazyDraw) {
 		if ((vid->bord.x > x) && (vid->bord.x - 1 - x < k)) k = vid->bord.x - 1 - x;
 		if ((vid->send.x > x) && (vid->send.x - 1 - x < k)) k = vid->send.x - 1 - x;
 	}

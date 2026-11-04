@@ -1273,6 +1273,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 			case XR_NEXT:
 				if (ext_is_next(comp)) {
 					int vmode = comp->next->vmode;
+					comp->next->v.live = 0xff;	// left so: the file's nxVideo is of another size
 					fld_get(comp->next, fld_next, p, n);
 					next_snap_loaded(comp, vmode);
 				}
