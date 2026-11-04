@@ -748,6 +748,49 @@ static struct {
 
 #endif
 
+// The machine runs well short of its frame rate at normal speed, for seconds on end:
+// the computer cannot keep up with it. Frame skip is offered, once a run; closed, the
+// question comes again on the next start, and "Don't Ask Again" ends it for good.
+#define SLOW_HINT_RATE	0.84		// of the machine's own rate (42 fps of 50)
+#define SLOW_HINT_TICKS	25		// fps ticks in a row: 5 seconds
+void MainWin::slowHint() {
+	static bool done = false;
+	Computer* comp = conf.zx;
+	if (done || !comp || conf.vid.frameSkip || !conf.vid.skipHint) return;
+	int calm = !conf.emu.pause && !conf.emu.fast && (conf.emu.tmode == XTM_NONE) && (conf.emu.speed == 1.0)
+		&& !comp->vid->debug && !fastload_busy() && !autostart_busy() && !rzx_seeking() && !rewind_active()
+		&& (fpsmem.size() >= FPS_WINDOW) && (comp->vid->nsPerFrame > 0);
+	double rate = calm ? 1e9 / comp->vid->nsPerFrame : 0;
+	if (!calm || (conf.vid.curfps >= rate * SLOW_HINT_RATE)) {
+		slowTicks = 0;
+		return;
+	}
+	if (++slowTicks < SLOW_HINT_TICKS) return;
+	done = true;
+	xlog(XLG_VIDEO, XLL_INFO, "slow: %.1f fps of %.1f, Frame skip offered", conf.vid.curfps, rate);
+	pause(true, PR_EXTRA);
+	QMessageBox box(QMessageBox::Information, "Frame skip",
+		QString("This computer cannot keep up with the machine: it runs at %0 frames a second "
+		"instead of %1.\n\n"
+		"Frame skip leaves a frame undrawn now and then, so the machine and its sound keep "
+		"their speed. It can be turned off in Options (Video).")
+		.arg(conf.vid.curfps, 0, 'f', 0).arg(rate, 0, 'f', 0), QMessageBox::NoButton, this);
+	QPushButton* on = box.addButton("Turn On", QMessageBox::AcceptRole);
+	QPushButton* later = box.addButton("Not Now", QMessageBox::RejectRole);
+	QPushButton* never = box.addButton("Don't Ask Again", QMessageBox::DestructiveRole);
+	box.setDefaultButton(on);
+	box.setEscapeButton(later);
+	box.exec();
+	if (box.clickedButton() == on) {
+		conf.vid.frameSkip = 1;
+		saveConfig();
+	} else if (box.clickedButton() == never) {
+		conf.vid.skipHint = 0;
+		saveConfig();
+	}
+	pause(false, PR_EXTRA);
+}
+
 void MainWin::timerEvent(QTimerEvent* ev) {
 	Computer* comp = conf.zx;
 	if (ev->timerId() == secid) {		// 0.2 sec timer, fps counter
@@ -782,6 +825,7 @@ void MainWin::timerEvent(QTimerEvent* ev) {
 			updateWindow();
 		}
 		vsyncUpdate();
+		slowHint();
 		lightLook();
 		updateStatus();
 		syncActions();

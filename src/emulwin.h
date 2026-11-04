@@ -192,6 +192,7 @@ class MainWin : public QWidget {
 		void addDivCards(QMenu*);
 		bool drivesBack();		// asks to switch the divMMC off when it has the drives out
 		void folderAsk();		// the first write to a folder asks before the folder changes
+		void slowHint();		// the computer falls behind: Frame skip offered, once a run
 		void nextCard(bool asked = false);		// the Next's own card: made from System/Next, or one the user has
 		void folderNews();		// says once when a folder could not take what the machine wrote
 		void esxCheck();		// says when card 1 and the EEPROM are different esxDOS releases
@@ -316,6 +317,7 @@ class MainWin : public QWidget {
 		QMetaObject::Connection screenGeometryConnection;
 		QMetaObject::Connection screenRateConnection;
 		int vsyncShown = 0;		// the rate x100 the VSync note last gave
+		int slowTicks = 0;		// fps ticks in a row the machine ran short of its rate
 		QPoint fsHome;		// where the window goes back to from fullscreen, taken on the way in
 		QSize fsFree;		// and the size it goes back to, if it had one of its own (winFree)
 		QRect fsNormal;		// a maximized one: what Restore gives back afterwards

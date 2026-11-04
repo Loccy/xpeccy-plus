@@ -1604,6 +1604,16 @@ Integer scaling, so every pixel is the same size</string>
                      </widget>
                     </item>
                     <item>
+                     <widget class="QCheckBox" name="cbFrameSkip">
+                      <property name="toolTip">
+                       <string>A computer too slow for the machine leaves a frame undrawn now and then, and the machine keeps its speed</string>
+                      </property>
+                      <property name="text">
+                       <string>Frame skip</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
                      <widget class="QCheckBox" name="grayscale">
                       <property name="toolTip">
                        <string>Draw the picture in shades of gray</string>

@@ -44,6 +44,7 @@
 #include "rewind.h"
 #include "cheats.h"
 #include "rzxseek.h"
+#include "vidrec.h"
 #include "../libxpeccy/cpu/Z80/z80.h"
 #include "../libxpeccy/hardware/hardware.h"
 #include "../libxpeccy/xstate.h"
@@ -656,6 +657,40 @@ int fast_ffwd_frame() {
 	return fp_last ? 1 : -1;
 }
 
+// Frame skip (Options > Video): a host short of time leaves a frame undrawn while
+// the emulation is a frame or more behind the clock - the sound it owes (conf.snd.need)
+// - and catches up on what an undrawn frame does not cost. One frame in three at most,
+// so a sprite flickered on every other frame still shows both of its phases. Not
+// while the frames are recorded, run ahead, or something may stop the machine mid-frame.
+static int fs_held = 0;			// the next frame was left undrawn here
+static int fs_run = 0;			// frames drawn since the last one left out
+static int fs_said = 0;			// the log said it skips
+#define FS_QUIET	250		// frames drawn in a row that end a stretch of skipping (5 s)
+
+static void fs_frame(Computer* comp) {
+	Video* vid = comp->vid;
+	int on = conf.vid.frameSkip && !conf.emu.runahead && !conf.emu.pause && (vrec_state() == VREC_IDLE)
+		&& !fp_watched(comp) && !autostart_busy() && !fastload_busy() && !rzx_seeking() && !rewind_active();
+	long long frame = (long long)conf.snd.rate * vid->nsPerFrame / 1000000000LL;
+	int skip = on && (fs_run >= 2) && (conf.snd.need > frame);
+	if (skip) {
+		if (!fs_said) xlog(XLG_VIDEO, XLL_INFO, "frame skip: behind the clock, frames left undrawn");
+		fs_said = 1;
+		vid_set_nodraw_next(vid, 1);
+		fs_held = 1;
+		fs_run = 0;
+		return;
+	}
+	if (fs_held) {
+		vid_set_nodraw_next(vid, 0);
+		fs_held = 0;
+	}
+	if ((++fs_run >= FS_QUIET) && fs_said) {
+		xlog(XLG_VIDEO, XLL_INFO, "frame skip: caught up");
+		fs_said = 0;
+	}
+}
+
 void fast_picture_frame(Computer* comp) {
 	Video* vid = comp->vid;
 	// A still frame keeps the last picture and leaves the dots undrawn: not while
@@ -686,7 +721,12 @@ void fast_picture_frame(Computer* comp) {
 		&& !rewind_active() && !fp_watched(comp);
 	if (!want) {
 		fp_release(comp);
+		fs_frame(comp);
 		return;
+	}
+	if (fs_held) {				// fast mode takes the frames over
+		fs_held = 0;
+		fs_run = 0;
 	}
 	if (!fp_held) {
 		fp_held = 1;
