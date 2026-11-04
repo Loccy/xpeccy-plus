@@ -30,8 +30,10 @@ typedef struct {
 	tSec s[29];
 } tTrk;
 
+static int img_b = 0;		// writing the second image: Speedlock's weak sector
+
 static unsigned char pattern(int t, int r, int k, int copy) {
-	if ((t == 1) && (r == 3) && (k < 256)) return 0xe5;	// a weak sector's filler before its weak bits
+	if (img_b && (r == 2) && (k < 256)) return 0xe5;	// the filler before its weak bits
 	return (t * 59 + r * 31 + k * 7 + copy * 101 + (k >> 8) * 13) & 0xff;
 }
 
@@ -366,33 +368,57 @@ static void roundtrip(const char* path, const char* name) {
 	free(file);
 }
 
-// A sector of 512 with a data CRC error, stored as one read: taken for a weak one,
-// its first half reads as stored every time, the second half differently
+// Drive B: track 0 as Speedlock +3 has it - sector 2 with a data CRC error, stored
+// as one read: taken for a weak one, its opening filler reads as stored every time,
+// the rest differently
+static tTrk trk_b[1];
+
+static int write_image_b(const char* path) {
+	memset(trk_b, 0, sizeof(trk_b));
+	trk_b[0].n = 2;
+	trk_b[0].gap = 0x4e;
+	tSec* s = &trk_b[0].s[0];
+	s[0] = (tSec){0, 0, 1, 2, 0, 0, 512, 1};
+	s[1] = (tSec){0, 0, 2, 2, 0x20, 0x20, 512, 1};
+	trk_b[0].nsec = 2;
+	img_b = 1;
+	int ok = write_edsk(path, trk_b, 1);
+	img_b = 0;
+	return ok;
+}
+
 static void weak_made(void) {
-	unsigned char b[9] = {0x46, 0x00, 1, 0, 3, 2, 3, 0x2a, 0xff};
+	unsigned char sk[] = {0x0f, 0x01, 0};
+	unsigned char si[] = {0x08};
+	unsigned char b[9] = {0x46, 0x01, 0, 0, 2, 2, 2, 0x2a, 0xff};
 	unsigned char res[16];
 	unsigned char got[3][512];
-	seek(1);
+	send(sk, 3);
+	run(200000000);
+	send(si, 1);
+	result(res);
 	printf("== read/weak-made\n");
 	for (int i = 0; i < 3; i++) {
 		send(b, 9);
 		take(got[i], 512, 10000);
 		result(res);
 		int first = 0;
-		while ((first < 256) && (got[i][first] == pattern(1, 3, first, 0))) first++;
+		while ((first < 256) && (got[i][first] == 0xe5)) first++;
 		printf("  result %.2X %.2X %.2X, first half as stored: %s\n", res[0], res[1], res[2], (first == 256) ? "yes" : "no");
 	}
 	int differ = memcmp(got[0] + 256, got[1] + 256, 256) && memcmp(got[1] + 256, got[2] + 256, 256) && memcmp(got[0] + 256, got[2] + 256, 256);
 	printf("  second halves all differ: %s\n", differ ? "yes" : "no");
 }
 
-static void start(const char* path) {
+static void start(const char* path, const char* path_b) {
 	fdcFlag = 0;
 	dif = difCreate(DIF_P3DOS, dummy_irq, NULL);
 	difReset(dif);
 	for (int i = 0; i < 4; i++) dif->flp[i]->motor = 1;
 	int err = dsk_read(dif->flp[0], path);
 	if (err) printf("dsk_read: %d\n", err);
+	err = dsk_read(dif->flp[1], path_b);
+	if (err) printf("dsk_read B: %d\n", err);
 	run(600000000);			// the door closes
 	unsigned char spec[] = {0x03, 0xaf, 0x03};	// as +3DOS: non-DMA
 	unsigned char cal[] = {0x07, 0x00};
@@ -403,12 +429,14 @@ static void start(const char* path) {
 }
 
 static int cases(const char* tmp) {
+	char tmp_b[1100];
+	snprintf(tmp_b, sizeof(tmp_b), "%s.b.dsk", tmp);
 	make_image();
-	if (!write_edsk(tmp, trk, 5)) {
+	if (!write_edsk(tmp, trk, 5) || !write_image_b(tmp_b)) {
 		printf("can't write %s\n", tmp);
 		return 1;
 	}
-	start(tmp);
+	start(tmp, tmp_b);
 	read_id("id-t0", 0);
 	cmd("eot", 0x46, 0, 0, 0, 1, 2, 1, 0xff, 0x10000);
 	cmd("multi", 0x46, 0, 0, 0, 1, 2, 3, 0xff, 0x10000);
@@ -442,6 +470,7 @@ static int cases(const char* tmp) {
 	difDestroy(dif);
 	roundtrip(tmp, "bench");
 	remove(tmp);
+	remove(tmp_b);
 	return 0;
 }
 

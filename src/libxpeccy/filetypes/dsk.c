@@ -224,8 +224,10 @@ static void dsk_form_stream(Floppy* flp, int tr, dskSec* x) {
 	dsk_mark_fields(p.t, p.len);
 }
 
-// A sector of 512 with a CRC error in its data, stored as one read, is taken for a
-// weak sector as Speedlock +3 writes them. The dumps that keep several reads of one
+// Speedlock +3's weak sector: track 0, sector 2 of 512, a normal data mark and a CRC
+// error in the data, which most dumps keep as one read. Other sectors with a CRC
+// error are left as the image has them: loaders checksum those (Buggy Boy's sector 9,
+// deleted). The dumps that keep several reads of one
 // (SamDisk's of Salamander) read the filler it starts with the same, and the rest as
 // if the bits had slipped: shifted by a bit or more, a run of one byte value staying
 // a run (40 40 40 one time, 20 20 20 the next) - and loaders check such runs. Reads
@@ -339,7 +341,8 @@ int dsk_read(Floppy* flp, const char* name) {
 					x->len = nom;
 				} else if (slen > nom) {
 					x->len = nom;
-				} else if ((x->n == 2) && (slen == nom) && (x->st1 & 0x20) && (x->st2 & 0x20) && (wn < DSK_WEAK_MAX)) {
+				} else if ((i == 0) && (x->r == 2) && (x->n == 2) && (slen == nom) && (x->st1 & 0x20)
+						&& ((x->st2 & 0x60) == 0x20) && (wn < DSK_WEAK_MAX)) {
 					x->data = dsk_weak_reads(wbuf[wn++], x->data);	// one read of a weak sector
 					x->copies = DSK_WEAK_READS;
 					x->made = 1;

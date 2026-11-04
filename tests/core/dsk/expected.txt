@@ -38,7 +38,7 @@
 == read/data-crc
   cmd 46: C01 H00 R03 N02 EOT09 DTLFF
   result 40 20 20 01 00 03 02
-  data 512: T1R3(256)
+  data 512: T1R3
 == read/wrong-cyl
   cmd 46: C01 H00 R04 N02 EOT04 DTLFF
   result 40 04 12 01 00 04 02
@@ -87,7 +87,7 @@
 == read/track-t1
   cmd 42: C01 H00 R01 N02 EOT09 DTLFF
   result 40 21 21 01 00 01 02
-  data 3072: T1R1 T1R2 T1R3(256) T1R4 T1R5 T1R6
+  data 3072: T1R1 T1R2 T1R3 T1R4 T1R5 T1R6
 == read/turbo-multi
   cmd 46: C00 H00 R01 N02 EOT03 DTLFF
   result 40 80 00 00 00 03 02
@@ -100,7 +100,7 @@
   kept: same
   derived: same
 == read/weak-made
-  result 40 20 20, first half as stored: yes
-  result 40 20 20, first half as stored: yes
-  result 40 20 20, first half as stored: yes
+  result 41 20 20, first half as stored: yes
+  result 41 20 20, first half as stored: yes
+  result 41 20 20, first half as stored: yes
   second halves all differ: yes
