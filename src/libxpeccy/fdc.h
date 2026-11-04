@@ -19,7 +19,12 @@ enum {
 #define FDC_DATA	0x7f
 
 #define TURBOBYTE 500		// same for turbo
-#define turbo (fdcFlag & FDC_FAST)
+// fast disk access, unless the command in progress is to keep real time
+#define turbo ((fdcFlag & FDC_FAST) && !fdc->slow)
+
+// difOut's last argument on the +3: the command comes from a program in RAM, not
+// from +3DOS in ROM - a loader of its own, which may count on the drive's timing
+#define DIF_FROM_RAM	2
 
 typedef struct {
 	unsigned char trk;
@@ -50,6 +55,8 @@ struct FDC {
 	unsigned crchi:1;
 	unsigned hd:1;		// HD mode (trklen 12500, bytedelay 16000)
 	unsigned debug:1;
+	unsigned slow:1;	// uPD765: this command keeps real time whatever fast access says
+	unsigned ram:1;		// uPD765: the byte being written comes from a program in RAM
 
 	unsigned char trk;	// registers
 	unsigned char sec;

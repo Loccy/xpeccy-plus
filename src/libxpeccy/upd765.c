@@ -996,6 +996,7 @@ void uWrite(FDC* fdc, int adr, unsigned char val) {
 	if (!(adr & 1)) return;			// wr data only
 	fdc->intr = 0;				// reset interrupt
 	if (fdc->idle) {			// 1st byte, command
+		fdc->slow = fdc->ram;
 		uExec(fdc, val);
 		if (val != 0x08) {		// sense interupt status doesn't change status flags
 			fdc->sr0 = fdc->flp->id & 3;
