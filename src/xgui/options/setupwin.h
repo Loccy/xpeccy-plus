@@ -35,10 +35,13 @@ class SetupWin : public QDialog {
 		SetupWin(QWidget*);
 		void prewarmFfmpeg();
 		void stopProbe();
+		void benchApply();
 	public slots:
 		void start();
 		void startHotkeys();
 	private:
+		bool inBench = false;		// benchApply(): no files written, the sound output left alone
+		void fillPages();
 		QDialog* popOut(QWidget*, const char*);
 		void cfgLoaded();
 		void fillRomSlots();

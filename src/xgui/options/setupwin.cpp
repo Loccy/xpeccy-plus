@@ -950,6 +950,23 @@ static void fullscreenTip(QCheckBox* box) {
 }
 
 void SetupWin::start() {
+	fillPages();
+	bool shown = isVisible();
+	show();
+	if (!shown) center_over(this, parentWidget() ? parentWidget()->window() : nullptr);
+}
+
+// --bench-apply: Ok pressed on the pages as opening Options fills them, nothing shown.
+// The bench runs on no sound output and leaves no files behind.
+void SetupWin::benchApply() {
+	inBench = true;
+	fillPages();
+	okay();
+	inBench = false;
+}
+
+// the pages, from the machine and the settings as they stand
+void SetupWin::fillPages() {
 	Computer* comp = conf.zx;
 	fillLogPage();
 	QStringList ports = serial_ports();
@@ -1256,10 +1273,6 @@ void SetupWin::start() {
 	ui.leDbgFont->setFont(dbgfnt);
 // palette
 	fillDbgPalette();
-
-	bool shown = isVisible();
-	show();
-	if (!shown) center_over(this, parentWidget() ? parentWidget()->window() : nullptr);
 }
 
 void SetupWin::apply() {
@@ -1296,7 +1309,7 @@ void SetupWin::apply() {
 	} else {
 		// the machine carries what the page put in it: into its own file, so it is
 		// still there after a switch away and back
-		xm_save_over();
+		if (!inBench) xm_save_over();
 		if ((xm_signature() != macWas) || (conf.emu.rewind.step != rwStep) || (conf.emu.rewind.secs != rwSecs))
 			rewind_clear();
 		// The machine changed under a recording: it ends with the frames before
@@ -1316,8 +1329,10 @@ void SetupWin::apply() {
 	fullscreenTip(ui.cbFullscreen);		// the Hotkeys page may have moved it
 	emit s_apply();
 
-	layouts_save();
-	saveConfig();
+	if (!inBench) {
+		layouts_save();
+		saveConfig();
+	}
 }
 
 // What the pages hold for the machine itself. Another machine has its own, so
@@ -1512,8 +1527,8 @@ void SetupWin::applyGlobal() {
 	int latency = ui.sldSndLatency->value();
 	// reopen on a changed latency too: the pacer would creep to the new target
 	// over tens of seconds, refilling the ring gets there at once
-	if ((rate != conf.snd.rate) || (rateauto != conf.snd.rateauto) ||
-		(latency != conf.snd.latency) || (nname != sndGetName())) {
+	if (!inBench && ((rate != conf.snd.rate) || (rateauto != conf.snd.rateauto) ||
+		(latency != conf.snd.latency) || (nname != sndGetName()))) {
 		conf.snd.rate = rate;
 		conf.snd.rateauto = rateauto;
 		conf.snd.latency = latency;
