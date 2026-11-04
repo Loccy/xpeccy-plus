@@ -27,9 +27,10 @@ names.
 The disk is 512 MB, or twice that and so on, up to 32 GB - whatever holds the files. A folder
 that takes writes gets as much free room again as its files take, and 256 MB more.
 
-The folder is read again only with the power off: at a **Hard Reset**, a change of machine, or
-**Apply** in Options - as a real card is taken out, has files copied onto it and goes back in.
-Files copied into the folder while the machine runs are seen after that.
+The folder is read again only with the power off: at a **Hard Reset** or a change of machine -
+as a real card is taken out, has files copied onto it and goes back in. Files copied into the
+folder while the machine runs are seen after that. **Apply** in Options does not read it again:
+the program running keeps the disk it knows.
 
 ## Writing back
 
