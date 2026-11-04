@@ -3649,8 +3649,7 @@ void MainWin::optApply() {
 	Computer* comp = conf.zx;
 	fillUserMenu();
 	cutTexts();		// Options may have moved a hotkey
-	updateWindow();
-	loadPalette();
+	updateWindow();		// no palette here: Apply loads a new one, and one the machine set stays
 #ifdef USENETWORK
 	if (srv.serverPort() != conf.port) {
 		closeServer();
