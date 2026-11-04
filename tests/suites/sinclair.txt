@@ -24,4 +24,10 @@ paging_2a       zxplus2a  auto  3200  300     "zx-tests/+2A-+3 Paging Tests (202
 hikaru_2a       zxplus2a  auto  3200  300     "zx-tests/+2A-+3 Floating Bus Test v1.2 (2017-09-13)(Hikaru)[!].tap" keys:3000:_
 melange_p3      zxplus3   auto  3000  300     disk/melange.DSK
 gauntlet_p3     zxplus3   auto  3000  300     "disk/Gauntlet (1986)(U.S. Gold)(+3).dsk"
+chasehq_p3      zxplus3   auto  3000  300     "disk/plus3/Chase HQ.dsk"
+vigilante_p3    zxplus3   auto  3000  300     "disk/plus3/Vigilante.dsk"
+contcircus_p3   zxplus3   auto  3000  300     "disk/plus3/Continental Circus.dsk"
+driller_p3      zxplus3   auto  3000  300     disk/plus3/Driller.dsk
+salamander_p3   zxplus3   auto  3000  300     disk/plus3/Salamander.dsk
+actionforce_p3  zxplus3   auto  3000  300     "disk/plus3/Action Force.dsk"
 rodland_p3      zxplus3   auto  2000  300     "tape/Rod-Land - Re-Imagined (2012)(Miazga, Rafal)(128K)(PL)(en)[h Miazga, Rafal, 2012-08][Colour mod].tap" cfg:TAPE.fast=yes
