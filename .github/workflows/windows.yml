@@ -106,8 +106,9 @@ jobs:
             ${{ matrix.qt_modules && format('-m {0}', matrix.qt_modules) || '' }} -O C:\Qt
           Invoke-Aqt install-tool windows desktop ${{ matrix.mingw_tool }} ${{ matrix.mingw_variant }} -O C:\Qt
 
-      - name: Fetch SDL2
-        run: packaging\fetch-deps.ps1
+      # System/Next: the Next's card in the profile-guided build's training
+      - name: Fetch SDL2, curl and System/Next
+        run: packaging\fetch-deps.ps1 -SysNext
 
       # make-dist -Manual runs tools/manual.py with the python found first
       - name: Install the manual's tools
@@ -128,6 +129,9 @@ jobs:
             Jobs = $env:NUMBER_OF_PROCESSORS
             QtDir = $env:QT_DIR
             MinGW = $env:MINGW_DIR
+            # built, trained on the machines and System/Next, built again (pgo-train.ps1):
+            # some 5 minutes more, the Next 10-25 % faster
+            Pgo = $true
           }
           if ($env:RELEASE) { $opts.Release = $true }
           packaging\make-dist.ps1 @opts
