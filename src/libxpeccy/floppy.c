@@ -55,7 +55,7 @@ int flp_keep_raw(Floppy* flp, int tr, const unsigned char* data, int len) {
 	return t->rawlen;
 }
 
-int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsigned char* data) {
+int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsigned char* data, int made) {
 	flpTrack* t = &flp->data[tr & 0xff];
 	if ((len < 1) || (copies < 2)) return 0;
 	flpWeak* lst = (flpWeak*)realloc(t->weak, (t->nweak + 1) * sizeof(flpWeak));
@@ -67,6 +67,7 @@ int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsign
 	lst[t->nweak].pos = pos;
 	lst[t->nweak].len = len;
 	lst[t->nweak].copies = copies;
+	lst[t->nweak].made = made;
 	lst[t->nweak].data = buf;
 	t->nweak++;
 	return 1;

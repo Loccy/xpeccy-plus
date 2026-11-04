@@ -39,6 +39,7 @@ typedef struct {
 	int pos;		// its first data byte on the track
 	int len;		// bytes in one read
 	int copies;
+	int made;		// the reads after the first are made up: the image kept one
 	unsigned char* data;	// copies x len
 } flpWeak;
 
@@ -117,7 +118,7 @@ void flpGetTrackFields(Floppy*,int,unsigned char*);
 void flpClearTrack(Floppy*,int);
 void flpClearDisk(Floppy*);
 void flp_track_written(Floppy*, int);	// what the image said beyond the track's bytes is gone
-int flp_add_weak(Floppy*, int tr, int pos, int len, int copies, const unsigned char* data);
+int flp_add_weak(Floppy*, int tr, int pos, int len, int copies, const unsigned char* data, int made);
 int flp_keep_raw(Floppy*, int tr, const unsigned char* data, int len);
 
 unsigned short getCrc(unsigned char*, int);

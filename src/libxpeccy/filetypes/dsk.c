@@ -43,6 +43,7 @@ typedef struct {
 	unsigned char st1, st2;	// what the dumping controller answered reading it
 	int len;		// bytes of one read
 	int copies;		// reads kept: more than one is a weak sector
+	int made;		// the reads after the first made up here
 	const unsigned char* data;	// copies x len, in the file's buffer
 } dskSec;
 
@@ -144,7 +145,7 @@ static void dsk_form(Floppy* flp, int tr, dskSec* s, int n, int gap3) {
 			for (int k = 0; k < x->len; k++)
 				pen_put(&p, x->data[k], del ? 3 : 2);
 			if ((x->copies > 1) && (dpos + x->len <= p.len))
-				flp_add_weak(flp, tr, dpos, x->len, x->copies, x->data);
+				flp_add_weak(flp, tr, dpos, x->len, x->copies, x->data, x->made);
 			if (x->len >= dsk_nominal(x->n))
 				pen_crc(&p, st, x->st2 & 0x20);		// a CRC error in the data
 		}
@@ -223,6 +224,31 @@ static void dsk_form_stream(Floppy* flp, int tr, dskSec* x) {
 	dsk_mark_fields(p.t, p.len);
 }
 
+// A sector of 512 with a CRC error in its data, stored as one read, is taken for a
+// weak sector as Speedlock +3 writes them. The dumps that keep several reads of one
+// (SamDisk's of Salamander) read the filler it starts with the same, and the rest as
+// if the bits had slipped: shifted by a bit or more, a run of one byte value staying
+// a run (40 40 40 one time, 20 20 20 the next) - and loaders check such runs. Reads
+// of it are made up here that way: the first the image's, the k-th shifted by k bits
+// after its opening run of one value (from the start if it has none), served in turn
+// as stored ones are; fixed, so a rewind reads the same.
+#define DSK_WEAK_READS	8
+#define DSK_WEAK_MAX	29
+#define DSK_WEAK_RUN	16	// an opening run shorter than this is part of the weak bits
+
+static const unsigned char* dsk_weak_reads(unsigned char* dst, const unsigned char* src) {
+	int from = 1;
+	while ((from < 0x200) && (src[from] == src[0])) from++;
+	if (from < DSK_WEAK_RUN) from = 0;
+	for (int k = 0; k < DSK_WEAK_READS; k++) {
+		unsigned char* p = dst + k * 0x200;
+		memcpy(p, src, 0x200);
+		for (int i = from; k && (i < 0x200); i++)
+			p[i] = (((i ? src[i - 1] : 0) << (8 - k)) | (src[i] >> k)) & 0xff;
+	}
+	return dst;
+}
+
 static unsigned char* dsk_file(const char* name, long* len) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return NULL;
@@ -269,6 +295,7 @@ int dsk_read(Floppy* flp, const char* name) {
 	int tr = 0;
 	int cut = 0;
 	dskSec secs[29];
+	unsigned char (*wbuf)[DSK_WEAK_READS * 0x200] = malloc(DSK_WEAK_MAX * DSK_WEAK_READS * 0x200);
 	for (int i = 0; (i < tracks) && !cut; i++) {
 		long rtlen = ext ? (buf[0x34 + i] << 8) : tlen;
 		if (rtlen > 0) {
@@ -283,6 +310,7 @@ int dsk_read(Floppy* flp, const char* name) {
 			if (nsec > 29) nsec = 29;			// all the sector info there is
 			long dp = pos + 0x100;
 			int sc;
+			int wn = wbuf ? 0 : DSK_WEAK_MAX;		// made-up weak reads on this track
 			for (sc = 0; (sc < nsec) && !cut; sc++) {
 				dskSec* x = &secs[sc];
 				x->c = sib[sc].track;
@@ -304,12 +332,17 @@ int dsk_read(Floppy* flp, const char* name) {
 				}
 				x->data = buf + dp;
 				x->copies = 1;
+				x->made = 0;
 				x->len = (int)slen;
 				if (ext && (slen > nom) && !(slen % nom)) {	// several reads of a weak sector
 					x->copies = (int)(slen / nom);
 					x->len = nom;
 				} else if (slen > nom) {
 					x->len = nom;
+				} else if ((x->n == 2) && (slen == nom) && (x->st1 & 0x20) && (x->st2 & 0x20) && (wn < DSK_WEAK_MAX)) {
+					x->data = dsk_weak_reads(wbuf[wn++], x->data);	// one read of a weak sector
+					x->copies = DSK_WEAK_READS;
+					x->made = 1;
 				}
 				dp += slen;
 			}
@@ -337,6 +370,7 @@ int dsk_read(Floppy* flp, const char* name) {
 			tr += (sidcnt == 1) ? 2 : 1;
 		}
 	}
+	free(wbuf);
 	free(buf);
 	flp_insert(flp, name);		// what was read up to a broken track goes in, as before
 	return err;
@@ -438,7 +472,7 @@ static size_t dsk_save_track(Floppy* flp, int trk, int side, dskBuf* b) {
 			for (int i = 0; i < t->nweak; i++) {
 				if (t->weak[i].pos == dp) {	// all its reads
 					src[sec] = t->weak[i].data;
-					len = t->weak[i].len * t->weak[i].copies;
+					len = t->weak[i].len * (t->weak[i].made ? 1 : t->weak[i].copies);
 				}
 			}
 		}
