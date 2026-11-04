@@ -31,6 +31,7 @@ typedef struct {
 } tTrk;
 
 static unsigned char pattern(int t, int r, int k, int copy) {
+	if ((t == 1) && (r == 3) && (k < 256)) return 0xe5;	// a weak sector's filler before its weak bits
 	return (t * 59 + r * 31 + k * 7 + copy * 101 + (k >> 8) * 13) & 0xff;
 }
 
@@ -108,7 +109,7 @@ static void make_image(void) {
 		add(0, 0, 0, r, 2, 0, 0, 512, 1);
 	add(1, 1, 0, 1, 2, 0, 0, 512, 1);
 	add(1, 1, 0, 2, 2, 0, 0x40, 512, 1);		// deleted data mark
-	add(1, 1, 0, 3, 2, 0x20, 0x20, 512, 1);		// CRC error in the data
+	add(1, 1, 0, 3, 2, 0x20, 0x20, 512, 1);		// CRC error in the data: weak, one read
 	add(1, 0x11, 0, 4, 2, 0, 0, 512, 1);		// C is not the track's
 	add(1, 0xff, 0, 5, 2, 0, 0, 512, 1);		// C = FF
 	add(1, 1, 0, 6, 2, 0x20, 0, 512, 1);		// CRC error in the ID
@@ -365,6 +366,26 @@ static void roundtrip(const char* path, const char* name) {
 	free(file);
 }
 
+// A sector of 512 with a data CRC error, stored as one read: taken for a weak one,
+// its first half reads as stored every time, the second half differently
+static void weak_made(void) {
+	unsigned char b[9] = {0x46, 0x00, 1, 0, 3, 2, 3, 0x2a, 0xff};
+	unsigned char res[16];
+	unsigned char got[3][512];
+	seek(1);
+	printf("== read/weak-made\n");
+	for (int i = 0; i < 3; i++) {
+		send(b, 9);
+		take(got[i], 512, 10000);
+		result(res);
+		int first = 0;
+		while ((first < 256) && (got[i][first] == pattern(1, 3, first, 0))) first++;
+		printf("  result %.2X %.2X %.2X, first half as stored: %s\n", res[0], res[1], res[2], (first == 256) ? "yes" : "no");
+	}
+	int differ = memcmp(got[0] + 256, got[1] + 256, 256) && memcmp(got[1] + 256, got[2] + 256, 256) && memcmp(got[0] + 256, got[2] + 256, 256);
+	printf("  second halves all differ: %s\n", differ ? "yes" : "no");
+}
+
 static void start(const char* path) {
 	fdcFlag = 0;
 	dif = difCreate(DIF_P3DOS, dummy_irq, NULL);
@@ -407,6 +428,7 @@ static int cases(const char* tmp) {
 	cmd("n-differs", 0x46, 1, 1, 0, 8, 2, 8, 0xff, 0x10000);
 	cmd("n-1", 0x46, 1, 1, 0, 8, 1, 8, 0xff, 0x10000);
 	weak();
+	weak_made();
 	cmd("long", 0x46, 2, 2, 0, 1, 6, 1, 0xff, 0x10000);
 	read_id("id-unformatted", 3);
 	cmd("unformatted", 0x46, 3, 3, 0, 1, 2, 1, 0xff, 0x10000);
