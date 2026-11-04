@@ -642,10 +642,10 @@ static int nxv_tm_pixel(Computer* comp, long long D, int whc, int wvc, int h) {
 // == the mixer ==
 
 // the mixer (zxnext.vhd 7100-7356): the layers in their order, or blended
-static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, int s, int s_t, int fin, int fin_t,
-		int umix, int umix_t, int u, int u_t, int tm, int tm_t, int below, int bad, int fb9) {
+static inline __attribute__((always_inline)) int nxv_mixo(int order, int blend, int l2, int l2_t, int l2p, int s, int s_t,
+		int fin, int fin_t, int umix, int umix_t, int u, int u_t, int tm, int tm_t, int below, int bad, int fb9) {
 	int mix, mix_t, top, top_t, bot, bot_t;
-	switch (f[NXF_BLEND]) {
+	switch (blend) {
 		case 0:
 			mix = umix; mix_t = umix_t;
 			top = tm; top_t = tm_t || below;
@@ -674,7 +674,7 @@ static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, in
 	}
 	int out = fb9;
 	int bx = bad && tm_t && !s_t;
-	switch (f[NXF_ORDER]) {
+	switch (order) {
 		case 0:		// SLU
 			if (l2p) out = l2;
 			else if (!s_t) out = s;
@@ -713,7 +713,7 @@ static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, in
 			int ch[3];
 			for (int k = 0; k < 3; k++) {
 				int sum = ((l2 >> (6 - 3 * k)) & 7) + ((mix >> (6 - 3 * k)) & 7);
-				if (f[NXF_ORDER] == 6) {
+				if (order == 6) {
 					if (sum > 7) sum = 7;
 				} else if (!mix_t) {
 					if (sum <= 4) sum = 0;
@@ -732,6 +732,11 @@ static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, in
 		}
 	}
 	return out;
+}
+
+static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, int s, int s_t, int fin, int fin_t,
+		int umix, int umix_t, int u, int u_t, int tm, int tm_t, int below, int bad, int fb9) {
+	return nxv_mixo(f[NXF_ORDER], f[NXF_BLEND], l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9);
 }
 
 // nxv_mix in orders 0-5 with the tilemap off: fin = u, fin_t = u_t, bx = bad && !s_t
@@ -822,6 +827,11 @@ typedef struct {
 	int sprOn, sxs, sxe, sys, sye, sover;
 	int l2On, wide, res, l2cx1, l2cx2, l2cy1, l2cy2, l2sx, l2sy, l2ofs, l2bank;
 	int direct;		// no memory write after the first layer 2 read
+	// the rest of the general path: LoRes, ULA+, the tilemap, stencil, blend
+	const unsigned short* tpal;
+	int ulap, ulaen, blend, stencil;
+	int loen, losx, losy, lomode, lobase, loofs, lohi;
+	int tmen, tmenb, tmtop, tmtr, tcx1, tcx2, tcy1, tcy2;
 } nxvSpan;
 
 static void nxv_span_set(Computer* comp, nxvSpan* sp, long long D) {
@@ -859,6 +869,26 @@ static void nxv_span_set(Computer* comp, nxvSpan* sp, long long D) {
 	sp->l2bank = f[NXF_L2BANK];
 	// nxv_mem's first test: the newest write is before the read, so is every later read's
 	sp->direct = (V.wr[(V.wrHead - 1) & (NXV_WRQ - 1)].w <= (D - 1) * 4 + 2);
+	sp->tpal = V.pal[g->tmpal];
+	sp->ulap = f[NXF_ULAP];
+	sp->ulaen = f[NXF_ULAEN];
+	sp->blend = f[NXF_BLEND];
+	sp->stencil = f[NXF_STENCIL] && f[NXF_ULAEN] && f[NXF_TMEN];
+	sp->loen = f[NXF_LOEN];
+	sp->losx = f[NXF_LOSX];
+	sp->losy = f[NXF_LOSY];
+	sp->lomode = f[NXF_LOMODE];
+	sp->lobase = (f[NXF_DFILE] ^ f[NXF_LOXOR]) << 13;
+	sp->loofs = f[NXF_LOOFS];
+	sp->lohi = f[NXF_LORAD] ? (0x0c | (sp->loofs & 3)) : sp->loofs;
+	sp->tmen = f[NXF_TMEN];
+	sp->tmenb = f[NXF_TMENB];
+	sp->tmtop = f[NXF_TMTOP];
+	sp->tmtr = f[NXF_TMTR];
+	sp->tcx1 = f[NXF_TCX1] << 1;
+	sp->tcx2 = (f[NXF_TCX2] << 1) | 1;
+	sp->tcy1 = f[NXF_TCY1];
+	sp->tcy2 = f[NXF_TCY2];
 }
 
 // layer 2's byte for the dot, -1 outside its area (one read; 4-bit pixels take a nibble a half)
@@ -952,6 +982,135 @@ static __attribute__((noinline)) void nxv_plain_one(Computer* comp, long long D,
 	nxv_plain_dot(comp, &sp, V.f[NXF_ORDER], D, phc, vc, wvc, bad, whc, ptr);
 }
 
+// one dot on the general path (LoRes, ULANext/ULA+, the tilemap, blend): nxv_draw_dot's
+// mix with the fields taken from the span. Memory reads as nxv_mem makes them: straight
+// from memory when the span saw no write after its first read.
+static inline __attribute__((always_inline)) void nxv_gen_dot(Computer* comp, const nxvSpan* sp, const int order,
+		long long D, int phc, int vc, int wvc, int bad, int whc, unsigned int* ptr) {
+	int s_t = 1;
+	int s = 0;
+	if (sp->sprOn && (whc < 320) && (wvc < 256)) {
+		int sb = nxs_line(comp, D)[whc];
+		if ((sb & 0x100) && (whc >= sp->sxs) && (whc <= sp->sxe) && (wvc >= sp->sys) && (wvc <= sp->sye) && (sp->sover || (wvc < 224))) {
+			s = sp->spal[sb & 0xff] & 0x1ff;
+			s_t = 0;
+		}
+	}
+	int l2byte = sp->l2On ? nxv_span_l2(comp, sp, phc, vc, wvc, D) : -1;
+	int ui = (int)(D & (NXV_ULA - 1));
+	int bits = V.ula[ui].bits;
+	int inwin = (phc >= sp->ucx1) && (phc <= sp->ucx2) && (vc >= sp->ucy1) && (vc <= sp->ucy2);
+	// LoRes, in the ULA's clip window: one read for the dot
+	int lpen = inwin && sp->loen;
+	int lidx = 0;
+	if (lpen) {
+		int x = (phc + sp->losx) & 0xff;
+		int ypre = (vc + sp->losy) & 0x1ff;
+		int y = (ypre >= 192) ? ((ypre + 0x40) & 0xff) : ypre;
+		int a;
+		if (sp->lomode) {
+			a = sp->lobase | ((y >> 1) << 6) | (x >> 2);
+		} else {
+			a = ((y >> 1) << 7) | (x >> 1);
+			if (y >= 96) a = (a + 0x800) & 0x3fff;
+		}
+		int b = sp->direct ? comp->mem->ramData[NXV_RAM + (0x0a << 13) + (a & 0x3fff)] : nxv_bram(comp, 0, a, D * 4 + 2);
+		if (sp->lomode) {
+			int nib = (x & 2) ? (b & 15) : (b >> 4);
+			lidx = (sp->lohi << 4) | nib;
+		} else {
+			lidx = ((((b >> 4) + sp->loofs) & 15) << 4) | (b & 15);
+		}
+	}
+	int uclip = !(inwin || bad) && !lpen;
+	// the tilemap's group, for both halves
+	int tmw80 = -1;
+	if ((sp->tmen || sp->tmenb) && (whc < 320) && (wvc < 256))
+		tmw80 = nxv_tm_load(comp, D, whc, wvc);
+	int tmwin = (whc >= sp->tcx1) && (whc <= sp->tcx2) && (wvc >= sp->tcy1) && (wvc <= sp->tcy2);
+	for (int h = 0; h < 2; h++) {
+		int attr = V.ula[ui].attr[h];
+		int pix = (bits >> h) & 1;
+		int m2 = (bits >> (2 + h)) & 1;
+		int pen = (pix ^ ((attr >> 7) & sp->flashOn)) & !bad;
+		int idx = 0;
+		int bg = 0;
+		if (sp->fmt >= 0) {
+			if (bad) {
+				if (sp->fmt == 0xff) bg = 1;
+				idx = 0x80 | ((attr >> 3) & 7);
+			} else if (pen) {
+				idx = attr & sp->fmt;
+			} else {
+				switch (sp->fmt) {
+					case 0x01: idx = 0x80 | (attr >> 1); break;
+					case 0x03: idx = 0x80 | (attr >> 2); break;
+					case 0x07: idx = 0x80 | (attr >> 3); break;
+					case 0x0f: idx = 0x80 | (attr >> 4); break;
+					case 0x1f: idx = 0x80 | (attr >> 5); break;
+					case 0x3f: idx = 0x80 | (attr >> 6); break;
+					case 0x7f: idx = 0x80 | (attr >> 7); break;
+					default: bg = 1; break;
+				}
+			}
+		} else {
+			int ink = attr & 7;
+			int paper = (attr >> 3) & 7;
+			int col = paper ^ ((ink ^ paper) & -pen);
+			if (sp->ulap)
+				idx = 0xc0 | ((attr >> 6) << 4) | ((m2 | (pen ^ 1)) << 3) | col;
+			else
+				idx = ((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | col;
+		}
+		int urgb = (lpen ? sp->upal[lidx] : bg ? sp->fb9 : sp->upal[idx]) & 0x1ff;
+		int umix_t = ((urgb >> 1) == sp->tr) || uclip;
+		int umix = umix_t ? 0 : urgb;
+		int u_t = umix_t || !sp->ulaen;
+		int u = u_t ? 0 : urgb;
+		// the tilemap (nxv_tm_pick with the span's window)
+		int tp = 0;
+		if (tmw80 >= 0) {
+			int p = V.tmPix[(tmw80 ? (whc << 1) | h : whc) & 7];
+			int en = tmwin;
+			if (en && !(p & 0x200) && ((p & 15) == sp->tmtr)) en = 0;
+			tp = p | (en << 10);
+		}
+		int tm = sp->tpal[tp & 0xff] & 0x1ff;
+		int tm_t = !(tp & 0x400) || ((tp & 0x200) && ((tm >> 1) == sp->tr)) || !sp->tmen;
+		if (tm_t) tm = 0;
+		int below = sp->tmenb ? (tp >> 8) & 1 : !sp->tmtop;
+		int fin, fin_t;
+		if (sp->stencil) {
+			fin_t = u_t || tm_t;
+			fin = fin_t ? 0 : (u & tm);
+		} else {
+			fin_t = u_t && tm_t;
+			fin = (!tm_t && (!below || u_t)) ? tm : u;
+		}
+		// layer 2's pixel
+		int l2 = 0, l2_t = 1, l2p = 0;
+		if (l2byte >= 0) {
+			int px = (sp->res & 2) ? (h ? (l2byte & 15) : (l2byte >> 4)) : l2byte;
+			int li = ((((px >> 4) + sp->l2ofs) & 15) << 4) | (px & 15);
+			int w = sp->lpal[li];
+			int rgb = w & 0x1ff;
+			if ((rgb >> 1) != sp->tr) {
+				l2 = rgb;
+				l2_t = 0;
+				l2p = (w >> 10) & 1;
+			}
+		}
+		ptr[h] = nxv_col[nxv_mixo(order, sp->blend, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, sp->fb9) & 0x1ff];
+	}
+}
+
+// nxv_gen_dot for one dot, kept out of nxv_draw_dot
+static __attribute__((noinline)) void nxv_gen_one(Computer* comp, long long D, int phc, int vc, int wvc, int bad, int whc, unsigned int* ptr) {
+	nxvSpan sp;
+	nxv_span_set(comp, &sp, D);
+	nxv_gen_dot(comp, &sp, V.f[NXF_ORDER], D, phc, vc, wvc, bad, whc, ptr);
+}
+
 // One dot where no field moves between its two half-pixels (nearly all of them): what
 // the two share - clip, LoRes, the sprite pixel, layer 2's byte - is worked out once.
 // The same mix as nxv_draw's loop, which takes every dot something changes inside.
@@ -982,131 +1141,7 @@ static void nxv_draw_dot(Computer* comp, unsigned int* ptr, long long D, int phc
 		nxv_plain_one(comp, D, phc, vc, wvc, bad, whc, ptr);
 		return;
 	}
-	// the sprite pixel in its window
-	int s_t = 1;
-	int s = 0;
-	if (sb && f[NXF_SPREN] && (whc >= g->sxs) && (whc <= g->sxe) && (wvc >= g->sys) && (wvc <= g->sye) && (f[NXF_SOVER] || (wvc < 224))) {
-		s = V.pal[g->spal][sb & 0xff] & 0x1ff;
-		s_t = 0;
-	}
-	// layer 2's byte (one read for the dot; 4-bit pixels take a nibble each half)
-	int res = f[NXF_L2RES];
-	int l2byte = -1;
-	if (f[NXF_L2EN]) {
-		int wide = (res != 0);
-		int c = wide ? ((phc + 32) & 0x1ff) : phc;
-		int yv = wide ? wvc : vc;
-		int hv = wide ? (c < 320) : (c < 256);
-		int vv = wide ? (yv < 256) : (yv < 192);
-		if (hv && vv && (c >= g->l2cx1) && (c <= g->l2cx2) && (yv >= f[NXF_L2CY1]) && (yv <= f[NXF_L2CY2])) {
-			int xpre = c + f[NXF_L2SX];
-			int xx = wide ? ((xpre >= 320) ? (((xpre & 0x1ff) + 192) & 0x1ff) : xpre) : (xpre & 0xff);
-			int ypre = (yv + f[NXF_L2SY]) & 0x1ff;
-			int yy = (!wide && ((ypre & 0x100) || ((ypre & 0xc0) == 0xc0))) ? ((ypre + 0x40) & 0xff) : (ypre & 0xff);
-			int adr = wide ? ((xx << 8) | yy) : ((yy << 8) | xx);
-			int bank = f[NXF_L2BANK] + (adr >> 14);
-			if (bank < 112)
-				l2byte = nxv_sram(comp, NXV_RAM + bank * 0x4000 + (adr & 0x3fff), (D - 1) * 4 + 2);
-		}
-	}
-	// LoRes, in the ULA's clip window: one read for the dot
-	int lpen = inwin && f[NXF_LOEN];
-	int lidx = 0;
-	if (lpen) {
-		int x = (phc + f[NXF_LOSX]) & 0xff;
-		int ypre = (vc + f[NXF_LOSY]) & 0x1ff;
-		int y = (ypre >= 192) ? ((ypre + 0x40) & 0xff) : ypre;
-		int ofs = f[NXF_LOOFS];
-		int a;
-		if (f[NXF_LOMODE]) {
-			a = ((f[NXF_DFILE] ^ f[NXF_LOXOR]) << 13) | ((y >> 1) << 6) | (x >> 2);
-		} else {
-			a = ((y >> 1) << 7) | (x >> 1);
-			if (y >= 96) a = (a + 0x800) & 0x3fff;
-		}
-		int b = nxv_bram(comp, 0, a, D * 4 + 2);
-		if (f[NXF_LOMODE]) {
-			int nib = (x & 2) ? (b & 15) : (b >> 4);
-			int hi = f[NXF_LORAD] ? (0x0c | (ofs & 3)) : ofs;
-			lidx = (hi << 4) | nib;
-		} else {
-			lidx = ((((b >> 4) + ofs) & 15) << 4) | (b & 15);
-		}
-	}
-	int uclip = !(inwin || bad) && !lpen;
-	// the tilemap's group, for both halves
-	int tmw80 = -1;
-	if ((f[NXF_TMEN] || f[NXF_TMENB]) && (whc < 320) && (wvc < 256))
-		tmw80 = nxv_tm_load(comp, D, whc, wvc);
-	for (int h = 0; h < 2; h++) {
-		int attr = V.ula[ui].attr[h];
-		int pix = (bits >> h) & 1;
-		int m2 = (bits >> (2 + h)) & 1;
-		int pen = (pix ^ ((attr >> 7) & g->flashOn)) & !bad;
-		int idx = 0;
-		int bg = 0;
-		if (f[NXF_ULANEXT]) {
-			int fmt = f[NXF_FMT];
-			if (bad) {
-				if (fmt == 0xff) bg = 1;
-				idx = 0x80 | ((attr >> 3) & 7);
-			} else if (pen) {
-				idx = attr & fmt;
-			} else {
-				switch (fmt) {
-					case 0x01: idx = 0x80 | (attr >> 1); break;
-					case 0x03: idx = 0x80 | (attr >> 2); break;
-					case 0x07: idx = 0x80 | (attr >> 3); break;
-					case 0x0f: idx = 0x80 | (attr >> 4); break;
-					case 0x1f: idx = 0x80 | (attr >> 5); break;
-					case 0x3f: idx = 0x80 | (attr >> 6); break;
-					case 0x7f: idx = 0x80 | (attr >> 7); break;
-					default: bg = 1; break;
-				}
-			}
-		} else {
-			int ink = attr & 7;
-			int paper = (attr >> 3) & 7;
-			int col = paper ^ ((ink ^ paper) & -pen);
-			if (f[NXF_ULAP])
-				idx = 0xc0 | ((attr >> 6) << 4) | ((m2 | (pen ^ 1)) << 3) | col;
-			else
-				idx = ((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | col;
-		}
-		int urgb = (lpen ? upal[lidx] : bg ? fb9 : upal[idx]) & 0x1ff;
-		int umix_t = ((urgb >> 1) == tr) || uclip;
-		int umix = umix_t ? 0 : urgb;
-		int u_t = umix_t || !f[NXF_ULAEN];
-		int u = u_t ? 0 : urgb;
-		// the tilemap
-		int tp = (tmw80 >= 0) ? nxv_tm_pick(comp, tmw80, whc, wvc, h) : 0;
-		int tm = V.pal[g->tmpal][tp & 0xff] & 0x1ff;
-		int tm_t = !(tp & 0x400) || ((tp & 0x200) && ((tm >> 1) == tr)) || !f[NXF_TMEN];
-		if (tm_t) tm = 0;
-		int below = f[NXF_TMENB] ? (tp >> 8) & 1 : !f[NXF_TMTOP];
-		int fin, fin_t;
-		if (f[NXF_STENCIL] && f[NXF_ULAEN] && f[NXF_TMEN]) {
-			fin_t = u_t || tm_t;
-			fin = fin_t ? 0 : (u & tm);
-		} else {
-			fin_t = u_t && tm_t;
-			fin = (!tm_t && (!below || u_t)) ? tm : u;
-		}
-		// layer 2's pixel
-		int l2 = 0, l2_t = 1, l2p = 0;
-		if (l2byte >= 0) {
-			int px = (res & 2) ? (h ? (l2byte & 15) : (l2byte >> 4)) : l2byte;
-			int li = ((((px >> 4) + f[NXF_L2OFS]) & 15) << 4) | (px & 15);
-			int w = V.pal[g->l2pal][li];
-			int rgb = w & 0x1ff;
-			if ((rgb >> 1) != tr) {
-				l2 = rgb;
-				l2_t = 0;
-				l2p = (w >> 10) & 1;
-			}
-		}
-		ptr[h] = nxv_col[nxv_mix(f, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9) & 0x1ff];
-	}
+	nxv_gen_one(comp, D, phc, vc, wvc, bad, whc, ptr);
 }
 
 // what a raw line gives every dot of it: vc_ula and wvc before and after they step
@@ -1340,7 +1375,7 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 
 // A run of dots on one line with no event in it, on the plain path: what holds over the
 // run is taken once, and the layer order is a constant of each copy of the loop
-static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, const nxvSpan* sp, const int order,
+static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, const nxvSpan* sp, const int gen, const int order,
 		const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
 	for (; rx < rxe; rx++, D++, ptr += 2) {
 		// as nxv_draw has them
@@ -1348,20 +1383,36 @@ static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, c
 		int vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
 		int wvc = (rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
 		int bad = (phc & 0x100) || nxv_vbord(vc);
-		nxv_plain_dot(comp, sp, order, D, phc, vc, wvc, bad, (phc + 32) & 0x1ff, ptr);
+		if (gen)
+			nxv_gen_dot(comp, sp, order, D, phc, vc, wvc, bad, (phc + 32) & 0x1ff, ptr);
+		else
+			nxv_plain_dot(comp, sp, order, D, phc, vc, wvc, bad, (phc + 32) & 0x1ff, ptr);
 	}
 }
 
-static void nxv_span_plain(Computer* comp, const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
+static void nxv_span_draw(Computer* comp, const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
 	nxvSpan sp;
 	nxv_span_set(comp, &sp, D);
+	if (V.dv.plain) {
+		switch (V.f[NXF_ORDER]) {
+			case 0: nxv_span_run(comp, &sp, 0, 0, t, L, ln, rx, rxe, D, ptr); break;
+			case 1: nxv_span_run(comp, &sp, 0, 1, t, L, ln, rx, rxe, D, ptr); break;
+			case 2: nxv_span_run(comp, &sp, 0, 2, t, L, ln, rx, rxe, D, ptr); break;
+			case 3: nxv_span_run(comp, &sp, 0, 3, t, L, ln, rx, rxe, D, ptr); break;
+			case 4: nxv_span_run(comp, &sp, 0, 4, t, L, ln, rx, rxe, D, ptr); break;
+			default: nxv_span_run(comp, &sp, 0, 5, t, L, ln, rx, rxe, D, ptr); break;
+		}
+		return;
+	}
 	switch (V.f[NXF_ORDER]) {
-		case 0: nxv_span_run(comp, &sp, 0, t, L, ln, rx, rxe, D, ptr); break;
-		case 1: nxv_span_run(comp, &sp, 1, t, L, ln, rx, rxe, D, ptr); break;
-		case 2: nxv_span_run(comp, &sp, 2, t, L, ln, rx, rxe, D, ptr); break;
-		case 3: nxv_span_run(comp, &sp, 3, t, L, ln, rx, rxe, D, ptr); break;
-		case 4: nxv_span_run(comp, &sp, 4, t, L, ln, rx, rxe, D, ptr); break;
-		default: nxv_span_run(comp, &sp, 5, t, L, ln, rx, rxe, D, ptr); break;
+		case 0: nxv_span_run(comp, &sp, 1, 0, t, L, ln, rx, rxe, D, ptr); break;
+		case 1: nxv_span_run(comp, &sp, 1, 1, t, L, ln, rx, rxe, D, ptr); break;
+		case 2: nxv_span_run(comp, &sp, 1, 2, t, L, ln, rx, rxe, D, ptr); break;
+		case 3: nxv_span_run(comp, &sp, 1, 3, t, L, ln, rx, rxe, D, ptr); break;
+		case 4: nxv_span_run(comp, &sp, 1, 4, t, L, ln, rx, rxe, D, ptr); break;
+		case 5: nxv_span_run(comp, &sp, 1, 5, t, L, ln, rx, rxe, D, ptr); break;
+		case 6: nxv_span_run(comp, &sp, 1, 6, t, L, ln, rx, rxe, D, ptr); break;
+		default: nxv_span_run(comp, &sp, 1, 7, t, L, ln, rx, rxe, D, ptr); break;
 	}
 }
 
@@ -1429,8 +1480,8 @@ static void nxv_render(Computer* comp, long long end) {
 					}
 				}
 			}
-			if (!pent && V.dv.plain && (rx < rxe)) {
-				nxv_span_plain(comp, t, L, &ln, rx, rxe, D, ptr);
+			if (!pent && (rx < rxe)) {
+				nxv_span_draw(comp, t, L, &ln, rx, rxe, D, ptr);
 				D += rxe - rx;
 				rx = rxe;
 			}
