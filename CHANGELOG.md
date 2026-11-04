@@ -17,6 +17,10 @@ before that point is upstream's history and is not repeated here.
 - **The ZX Spectrum Next takes much less of the host CPU**: idle in NextBASIC or the
   NextZXOS menu about a third of what it took, and games and demos up to 11 % less, with the
   same picture and sound. A frame in which nothing on screen changes is not drawn again.
+- **Sound is made on a core of its own**: the sound chips, the mixing and the filter run
+  beside the emulation, not in it - up to a quarter faster on a computer with two cores or
+  more, with the sound the same to the bit. With **Sound > Enabled** off no sound is worked
+  out at all.
 
 ### Fixed
 
