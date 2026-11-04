@@ -9,7 +9,17 @@ before that point is upstream's history and is not repeated here.
 
 ## Unreleased
 
+### Added
+
+- **Frame skip** (Options > Video): on a computer too slow for the machine a frame is left
+  undrawn now and then, so the machine and its sound keep their speed. When the machine falls
+  behind for a few seconds, Xpeccy+ offers to turn it on.
+
 ### Changed
+
+- **The ZX Spectrum Next runs much faster, with the same picture and sound**: games and demos
+  20-50 % faster, and up to 1.7 times in the Windows builds, which are now laid out by a
+  profile of real programs - the other machines gain 6-14 % there too.
 
 - **File > Recent opens a file with one click or its number key**, a game with saves too
   (its saves are under the arrow). A new **Recent Files** hotkey, unset at first, opens the
