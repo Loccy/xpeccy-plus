@@ -9,10 +9,10 @@ The page has four groups:
 
 - **Picture** - **Border**, **Side fill**, **Palette** with the {icon}`edit` button for
   the **Palette Editor**, **Shader**, and on the right the window scale
-  (**Scale x1** to **Scale x6**), **Fullscreen**, **Keep ratio**, **VSync** and **Gray scale**.
-  The scale, **Fullscreen**, **Keep ratio**, **Side fill**, the palette and the shader are
-  the same settings as in the **View** menu; see [View menu](view.md). For **VSync** see
-  [VSync](#vsync).
+  (**Scale x1** to **Scale x6**), **Fullscreen**, **Keep ratio**, **VSync**, **Frame skip**
+  and **Gray scale**. The scale, **Fullscreen**, **Keep ratio**, **Side fill**, the palette
+  and the shader are the same settings as in the **View** menu; see [View menu](view.md).
+  For **VSync** see [VSync](#vsync), for **Frame skip** see [Frame skip](#frame-skip).
 - **Anti-flicker** - see [Anti-flicker](#anti-flicker).
 - **Screenshots** - see [Screenshots](#screenshots).
 - **Recording** - video recording through FFmpeg. See [Recording](#recording).
@@ -80,6 +80,28 @@ machine on a 60 Hz screen moves as unevenly as it would on a 60 Hz television.
   each frame when it is ready, so **VSync** has nothing to add there; leave it off. On macOS
   the machine keeps its own rate on such a screen.
 - On Linux **VSync** needs OpenGL and takes effect after a restart.
+
+## Frame skip
+
+```{index} Frame skip, slow computer
+```
+
+**Frame skip** in the **Picture** group is for a computer too slow for the machine it runs.
+While the machine falls behind its own speed, a frame is now and then left undrawn: the
+machine runs it all the same, only the picture is not made, which takes much less time. The
+machine and its sound keep their speed, and the picture changes a little less often. It is
+off by default.
+
+- At most one frame in three is left undrawn, so a sprite that flickers on every other frame
+  still shows both of its pictures.
+- While the computer keeps up, every frame is drawn.
+- Every frame is drawn while a video is recorded, with run-ahead (see
+  [Input lag](options-emulation.md#input-lag)), in the debugger, and while a breakpoint may
+  stop the machine.
+
+When the machine runs well under its frame rate for a few seconds at normal speed and
+**Frame skip** is off, Xpeccy+ offers to turn it on. **Not Now** asks again on the next
+start, **Don't Ask Again** never.
 
 ## Anti-flicker
 
