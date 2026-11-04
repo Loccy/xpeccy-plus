@@ -21,6 +21,7 @@ int sna_hardware_of(size_t size) {
 }
 
 int loadSNA_f(Computer* comp, FILE* file, size_t fileSize) {
+	comp->sndSeed = 1;
 
 	unsigned char tmp, tmp2;
 	//unsigned short adr;

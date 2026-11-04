@@ -331,6 +331,7 @@ int xstate_load(xState* st, Computer* comp) {
 	// the machine, any other leaves the log where it is and makes a join.
 	comp->rzx.rec = (st->m.rec == rzx_recording) ? recState : recLive;
 	if (st->m.rec != rzx_recording) rzx_rec_touch();
+	comp->sndSeed = 1;
 	return 1;
 }
 

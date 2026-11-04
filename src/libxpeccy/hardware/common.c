@@ -155,48 +155,67 @@ void zx_keyr(Computer* comp, keyEntry* ent) {
 
 // volume
 
+// The tape and the beeper, as a sound mix sees them
+void snd_mix_take_wire(sndMix* m, Computer* comp) {
+	Tape* tap = comp->tape;
+	m->in.tapeRec = tap->rec;
+	m->in.tapeLevRec = tap->levRec;
+	m->in.tapeMute = tap->mute;
+	m->in.tapeVolPlay = tap->volPlay;
+	m->in.beep = comp->beep->val;
+}
+
 // Every device is mixed here, and each has a dc blocker of its own on the way in.
-// The state sits here rather than in Computer on purpose: run-ahead never reaches
+// The state sits in the mix rather than in Computer on purpose: run-ahead never reaches
 // this function - its frame makes no sound - so there is nothing for a snapshot to
 // carry, and there is only ever one machine in the process anyway.
-sndPair zx_vol(Computer* comp, sndVolume* sv) {
-	static sndDC dcBeep, dcAy, dcGs, dcSdrv, dcSaa;
+sndPair zx_mix(sndMix* m, sndVolume* sv) {
 	sndPair vol;
 	sndPair svol;
 	int dc = sv->dc;		// read once, so every device in one sample agrees
-	int lev = 0;
 	// 1:tape sound. volPlay is a level around 0x80, not a level above zero -
 	// bit 7 of it is the EAR bit the ULA reads - so it is centred here. Read as
 	// 0..255 it put half of the tape volume into the mix as a constant, which is
 	// what a machine with nothing running was sitting on.
-	if (comp->tape->rec) {
-		lev = (comp->tape->levRec ? 0x800 : -0x800) * sv->tape / 100;
-	} else if (!comp->tape->mute) {
-		lev = ((comp->tape->volPlay - 0x80) << 8) * sv->tape / 1600;
-	}
+	int lev = snd_tape_level(m, sv);
 	// 2:beeper. The tape reaches the speaker on the same wire and is one level
 	// with it here, so the two share a blocker as well
-	lev += bc_level(comp->beep, sv->beep);
+	lev += bc_level_of(m->in.beep, sv->beep);
 	svol.left = lev;
 	svol.right = lev;
-	vol = snd_dc(&dcBeep, svol, dc);
+	vol = snd_dc(&m->dc[0], svol, dc);
 	// 3:turbo sound
-	svol = snd_dc(&dcAy, tsGetVolume(comp->ts), dc);
+	svol = snd_dc(&m->dc[1], tsGetVolume(m->ts), dc);
 	vol.left += svol.left * sv->ay / 100;
 	vol.right += svol.right * sv->ay / 100;
 	// 4:general sound
-	svol = snd_dc(&dcGs, gsVolume(comp->gs), dc);
+	svol = snd_dc(&m->dc[2], m->in.gs, dc);
 	vol.left += svol.left * sv->gs / 100;
 	vol.right += svol.right * sv->gs / 100;
 	// 5:soundrive
-	svol = snd_dc(&dcSdrv, sdrvVolume(comp->sdrv), dc);
+	svol = snd_dc(&m->dc[3], m->in.sdrv, dc);
 	vol.left += svol.left * sv->sdrv / 100;
 	vol.right += svol.right * sv->sdrv / 100;
 	// 6:saa
-	svol = snd_dc(&dcSaa, saaVolume(comp->saa), dc);
+	svol = snd_dc(&m->dc[4], m->in.saa, dc);
 	vol.left += svol.left * sv->saa / 100;
 	vol.right += svol.right * sv->saa / 100;
 	return vol;
+}
+
+// what zx_mix hears, at the sample
+void zx_snd_take(Computer* comp, sndMix* m) {
+	snd_mix_take_wire(m, comp);
+	m->ts = comp->ts;
+	m->in.gs = gsVolume(comp->gs);
+	m->in.sdrv = sdrvVolume(comp->sdrv);
+	m->in.saa = saaVolume(comp->saa);
+}
+
+sndPair zx_vol(Computer* comp, sndVolume* sv) {
+	static sndMix m;
+	zx_snd_take(comp, &m);
+	return zx_mix(&m, sv);
 }
 
 // set std zx palette

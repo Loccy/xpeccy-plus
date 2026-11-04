@@ -511,8 +511,12 @@ static int ra_snapshot(Computer* comp, int finish) {
 	return 1;
 }
 
+// Back where the machine stood: where the sound devices' copy (sound.cpp) stands too,
+// it never saw the frames run ahead - so no new start for it
 static void ra_wind_back(Computer* comp) {
+	int seed = comp->sndSeed;
 	xstate_load(raState, comp);
+	comp->sndSeed = seed;
 	*comp->keyb = raKbd;
 }
 
@@ -629,7 +633,10 @@ static int ra_kept_frames(Computer* comp, int k, int shown, int finish) {
 		}
 		if (!last) ra_raster_get(raShown, vid);
 		if (raKept.count > 0) {
-			if (xstate_load(raKept.state, comp)) {
+			int seed = comp->sndSeed;		// a frame ahead: see ra_wind_back()
+			int ok = xstate_load(raKept.state, comp);
+			comp->sndSeed = seed;
+			if (ok) {
 				*comp->keyb = raKept.kbd;
 			} else {		// not the machine it was taken from: run them all from this one
 				raKept.first = n + 1;
@@ -953,6 +960,8 @@ void xThread::emuCycle(Computer* comp) {
 		if (comp->flgCOND)
 			comp_brk_newstep(comp);
 	}
+	// what the cycle made goes to the sound thread
+	snd_q_flush();
 	// whoever looks next - the debugger, a snapshot, the gui - sees the ray where
 	// it stands, not the dots an undrawn frame has only counted
 	vid_unlazy(comp->vid);
@@ -1346,6 +1355,8 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 		sndNsFixed = 0;
 		snd_pipe_reset();
 	}
+	// the ring as the sound thread leaves it once it has what was made so far
+	snd_sync_wait();
 	int spos = snd_ring_fill_pos();
 	long long t0 = paceClockNs();
 	int tk0 = comp->tickCount;
@@ -1380,6 +1391,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 				for (int y = 0; y < vid->full.y; y++)
 					hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine, vid->full.x * 8);
 			}
+			snd_sync_wait();
 			int epos = snd_ring_fill_pos();
 			while (spos != epos) {
 				unsigned char b = snd_ring_byte(spos++);

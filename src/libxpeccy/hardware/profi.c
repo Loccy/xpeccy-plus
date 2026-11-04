@@ -282,8 +282,8 @@ static const hwQuiet prf_quiet = {HWQ_ACK_ZX, hwq_no_turbo, NULL, zx_devs_sync, 
 
 HardWare prf3_hw_core = {HW_PROFI3,"Profi3","Profi v3",MEM_256K | MEM_512K | MEM_768K | MEM_1M,1.0,NULL,zx_port_tab_p,
 			prf_init,prfMapMem,prf3Out,prf3In,stdMRd,stdMWr,zx_irq,zx_ack,prfReset,prfSync,prf_keyp,prf_keyr,zx_vol,
-			NULL,prf_cont,&prf_quiet};
+			NULL,prf_cont,&prf_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix};
 
 HardWare prf_hw_core = {HW_PROFI,"Profi","Profi v5",MEM_512K | MEM_1M,1.0,NULL,zx_port_tab_p,
 			prf_init,prfMapMem,prf5Out,prf5In,stdMRd,stdMWr,zx_irq,zx_ack,prfReset,prfSync,prf_keyp,prf_keyr,zx_vol,
-			NULL,prf_cont,&prf_quiet};
+			NULL,prf_cont,&prf_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix};

@@ -66,4 +66,4 @@ xPortDsc pl3_port_tab[] = {
 void plusRes(Computer*);
 HardWare pl3_hw_core = {HW_PLUS3,"Plus3","Spectrum +3",MEM_128K,1.0,NULL,pl3_port_tab,
 			zx_init,pl2MapMem,pl3Out,pl3In,asicMRd,asicMWr,zx_irq,zx_ack,plusRes,zx_sync,zx_keyp,zx_keyr,zx_vol,
-			NULL,NULL,&hwq_zx};
+			NULL,NULL,&hwq_zx, .sndtake = zx_snd_take, .sndmix = zx_mix};

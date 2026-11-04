@@ -157,7 +157,10 @@ static void nx_ay_data(Computer* comp, int val) {
 	// env_reset starts the envelope on its first value and the step process takes the
 	// next at the following enable (ym2149.vhd 337-403): the first value is out for at
 	// most one PSG clock, two of the AY code's ticks
-	if (r == 13) chip->chanE.cnt = (chip->chanE.per > 2) ? chip->chanE.per - 2 : 0;
+	if (r == 13) {
+		chip->chanE.cnt = (chip->chanE.per > 2) ? chip->chanE.per - 2 : 0;
+		if (ay_log) ay_log(chip, AYL_ECNT, chip->chanE.cnt, 0);
+	}
 }
 
 static void nx_dac_out(Computer* comp, int lo, int val, long long w) {
@@ -245,17 +248,11 @@ static void nx_ay_flush(aymChip* chip, int late) {
 	chip->pendNs = keep;
 }
 
-// The AYs' sum on each side (turbosound.vhd 186-205, 323-337), in the mixer's units,
-// late ns before the time the chips have been handed
-static void nx_ay_mix(Computer* comp, int late, int* l, int* r) {
-	unsigned char* nr = NX.nr;
-	const int* tab = (nr[0x06] & 1) ? nxAyTab : nxYmTab;
-	int ts = nr[0x08] & 2;
-	int acb = nr[0x08] & 0x20;
-	int al = 0, ar = 0;
-	// their clock comes off CLK_28 too: the machine's AY clock at VGA 0, faster with
-	// the video timing (Options set the first; the second only the board knows).
-	// Worked out again only when one of those moves: this runs at every sub-sample
+// The chips' clock comes off CLK_28 too: the machine's AY clock at VGA 0, faster with
+// the video timing (Options set the first; the second only the board knows). Set
+// at every sample, before the chips are heard, and worked out again only when one
+// of those moves
+static void nx_ay_retune(Computer* comp) {
 	static double wantTs = -1, wantCpu = -1, want = 0;
 	static int wantMode = -1;
 	if ((comp->ts->frq != wantTs) || (comp->cpuFrq != wantCpu) || (NX.vmode != wantMode)) {
@@ -271,19 +268,50 @@ static void nx_ay_mix(Computer* comp, int late, int* l, int* r) {
 			chip->frq = f;
 			chip_set_type(chip, chip->type);
 		}
-		if ((!ts && (i != SND.sel)) || nx_ay_silent(chip)) continue;
+	}
+}
+
+// the mixer's settings as they stand, for the mix
+static void nx_mix_take_cfg(sndMix* m, Computer* comp) {
+	m->ts = comp->ts;
+	m->in.nr06 = NX.nr[0x06];
+	m->in.nr08 = NX.nr[0x08];
+	m->in.nr09 = NX.nr[0x09];
+	m->in.pan[0] = SND.pan[0];
+	m->in.pan[1] = SND.pan[1];
+	m->in.pan[2] = SND.pan[2];
+	m->in.sel = SND.sel;
+}
+
+// The AYs' sum on each side (turbosound.vhd 186-205, 323-337), in the mixer's units,
+// late ns before the time the chips have been handed
+static void nx_ay_sum(const sndMix* m, int late, int* l, int* r) {
+	const int* tab = (m->in.nr06 & 1) ? nxAyTab : nxYmTab;
+	int ts = m->in.nr08 & 2;
+	int acb = m->in.nr08 & 0x20;
+	int al = 0, ar = 0;
+	for (int i = 0; i < 3; i++) {
+		aymChip* chip = (i == 0) ? m->ts->chipA : (i == 1) ? m->ts->chipB : m->ts->chipC;
+		if ((!ts && (i != m->in.sel)) || nx_ay_silent(chip)) continue;
 		nx_ay_flush(chip, late);
 		int a = nx_chan(chip, &chip->chanA, 0, tab);
 		int b = nx_chan(chip, &chip->chanB, 1, tab);
 		int c = nx_chan(chip, &chip->chanC, 2, tab);
-		int mono = (nr[0x09] >> (5 + i)) & 1;
+		int mono = (m->in.nr09 >> (5 + i)) & 1;
 		int lsum = ((acb || mono) ? c : b) + a;
 		int rsum = (mono ? lsum : c) + b;
-		if (SND.pan[i] & 2) al += mono ? rsum : lsum;
-		if (SND.pan[i] & 1) ar += rsum;
+		if (m->in.pan[i] & 2) al += mono ? rsum : lsum;
+		if (m->in.pan[i] & 1) ar += rsum;
 	}
 	*l = al;
 	*r = ar;
+}
+
+static void nx_ay_mix(Computer* comp, int late, int* l, int* r) {
+	sndMix m;
+	nx_ay_retune(comp);
+	nx_mix_take_cfg(&m, comp);
+	nx_ay_sum(&m, late, l, r);
 }
 
 // What audio_mixer.vhd adds up, pcm_L/R: the beeper's ear 512 and mic 128, the AYs,
@@ -313,8 +341,49 @@ int nx_snd_late(Computer* comp) {
 // The mix (audio_mixer.vhd 83-103): ear + mic + the AYs + 4 x the DACs (+ the Pi's
 // I2S, a constant 512 while it is off), each side 13 bits unsigned. Each part takes
 // its own volume from the options and its own dc blocker, as zx_vol does.
-sndPair nx_vol(Computer* comp, sndVolume* sv) {
-	static sndDC dcBeep, dcAy, dcDac;
+// The mix of what nx_vol gathered: the tape and the beeper, the AYs at m->late, the DACs
+sndPair nx_mix(sndMix* m, sndVolume* sv) {
+	int dc = sv->dc;
+	sndPair res, part;
+	// the tape and the beeper
+	int lev = snd_tape_level(m, sv);
+	// the beeper's share and the DACs' below move only with what they are made of:
+	// worked out again then, not at every sub-sample
+	if ((m->in.beep != m->bVal) || (sv->beep != m->bVol)) {
+		m->bVal = m->in.beep;
+		m->bVol = sv->beep;
+		m->bLev = m->bVal * 640 * NX_GAIN / 255 * m->bVol / 100;
+	}
+	lev += m->bLev;
+	part.left = part.right = lev;
+	res = snd_dc(&m->dc[0], part, dc);
+	// the AYs, at the time the sample was due
+	int al, ar;
+	nx_ay_sum(m, m->late, &al, &ar);
+	part.left = al * NX_GAIN * sv->ay / 100;
+	part.right = ar * NX_GAIN * sv->ay / 100;
+	part = snd_dc(&m->dc[1], part, dc);
+	res.left += part.left;
+	res.right += part.right;
+	// the DACs (soundrive.vhd 109-115), around their idle 80+80
+	unsigned int out = m->in.dac[0] | (m->in.dac[1] << 8) | (m->in.dac[2] << 16) | ((unsigned int)m->in.dac[3] << 24);
+	if ((out != m->dOut) || (sv->sdrv != m->dVol)) {
+		m->dOut = out;
+		m->dVol = sv->sdrv;
+		m->dL = (m->in.dac[0] + m->in.dac[1] - 0x100) * 4 * NX_GAIN * m->dVol / 100;
+		m->dR = (m->in.dac[2] + m->in.dac[3] - 0x100) * 4 * NX_GAIN * m->dVol / 100;
+	}
+	part.left = m->dL;
+	part.right = m->dR;
+	part = snd_dc(&m->dc[2], part, dc);
+	res.left += part.left;
+	res.right += part.right;
+	return res;
+}
+
+// What changes the machine is done here, at the sample's time: the copper run up to
+// it, the AYs retuned, the DACs played up to it; then what the mix reads is gathered
+void nx_snd_take(Computer* comp, sndMix* m) {
 	// the copper writes the DACs and the mixer's nextregs: its moves up to the dot under
 	// the ray count here, as the video, which runs it, may not have walked that far yet
 	// (the clock counted from the T says when it is still asleep, without the ray)
@@ -323,53 +392,22 @@ sndPair nx_vol(Computer* comp, sndVolume* sv) {
 		if (NX.copN || (NX.refT < 0) || (NX.refC + (ts - NX.refT) * (8 >> NX.speed) + 8 >= NX.copWake))
 			nx_cop_run(comp, nx_now(comp) & ~3LL);
 	}
-	int dc = sv->dc;
-	sndPair res, part;
-	// the tape and the beeper
-	int lev = 0;
-	if (comp->tape->rec) {
-		lev = (comp->tape->levRec ? 0x800 : -0x800) * sv->tape / 100;
-	} else if (!comp->tape->mute) {
-		lev = ((comp->tape->volPlay - 0x80) << 8) * sv->tape / 1600;
-	}
-	// the beeper's share and the DACs' below move only with what they are made of:
-	// worked out again then, not at every sub-sample
-	static int bVal = -1, bVol = -1, bLev = 0;
-	if ((comp->beep->val != bVal) || (sv->beep != bVol)) {
-		bVal = comp->beep->val;
-		bVol = sv->beep;
-		bLev = bVal * 640 * NX_GAIN / 255 * bVol / 100;
-	}
-	lev += bLev;
-	part.left = part.right = lev;
-	res = snd_dc(&dcBeep, part, dc);
-	// the AYs, at the time the sample was due (comp->sndAgo)
-	int al, ar;
-	nx_ay_mix(comp, (comp->sndAgo > 0) ? (int)FIXED_TO_NS(comp->sndAgo) : 0, &al, &ar);
-	part.left = al * NX_GAIN * sv->ay / 100;
-	part.right = ar * NX_GAIN * sv->ay / 100;
-	part = snd_dc(&dcAy, part, dc);
-	res.left += part.left;
-	res.right += part.right;
-	// the DACs (soundrive.vhd 109-115), around their idle 80+80
+	snd_mix_take_wire(m, comp);
+	// the AYs are heard at the time the sample was due (comp->sndAgo)
+	m->late = (comp->sndAgo > 0) ? (int)FIXED_TO_NS(comp->sndAgo) : 0;
+	nx_ay_retune(comp);
+	nx_mix_take_cfg(m, comp);
+	// the DACs as they stood then
 	if (SND.qN) {
 		long long t = nx_now(comp);
 		if (comp->sndAgo > 0) t -= comp->sndAgo * 4 / comp->vid->nsPerDotFixed;
 		nx_dac_play(comp, t);
 	}
-	static unsigned int dOut = 0xffffffff;
-	static int dVol = -1, dL = 0, dR = 0;
-	unsigned int out = SND.out[0] | (SND.out[1] << 8) | (SND.out[2] << 16) | ((unsigned int)SND.out[3] << 24);
-	if ((out != dOut) || (sv->sdrv != dVol)) {
-		dOut = out;
-		dVol = sv->sdrv;
-		dL = (SND.out[0] + SND.out[1] - 0x100) * 4 * NX_GAIN * dVol / 100;
-		dR = (SND.out[2] + SND.out[3] - 0x100) * 4 * NX_GAIN * dVol / 100;
-	}
-	part.left = dL;
-	part.right = dR;
-	part = snd_dc(&dcDac, part, dc);
-	res.left += part.left;
-	res.right += part.right;
-	return res;
+	memcpy(m->in.dac, SND.out, sizeof(m->in.dac));
+}
+
+sndPair nx_vol(Computer* comp, sndVolume* sv) {
+	static sndMix m = {.bVal = -1, .bVol = -1, .dOut = 0xffffffff, .dVol = -1};
+	nx_snd_take(comp, &m);
+	return nx_mix(&m, sv);
 }

@@ -584,6 +584,9 @@ typedef struct Computer {
 	// run past several (a DMA holding the bus), and a machine that keeps the times of
 	// its level changes plays them where they were
 	long long sndAgo;
+	// the state was put back or replaced (a load, a reset): a copy of the sound
+	// devices following the machine starts again from it (sound.cpp)
+	int sndSeed;
 	// time as the machine lived it (comp_ns): ns at nsBaseTick, where the rate last
 	// changed; a turbo switch moves only what follows it
 	long long nsBase;

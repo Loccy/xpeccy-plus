@@ -91,4 +91,4 @@ xPortDsc zx_port_tab_px[] = {
 
 HardWare phx_hw_core = {HW_PHOENIX,"Phoenix","ZXM Phoenix",MEM_2M,1.0,NULL,zx_port_tab_px,
 			zx_init,phxMapMem,phxOut,phxIn,stdMRd,stdMWr,zx_irq,zx_ack,phxReset,zx_sync,zx_keyp,zx_keyr,zx_vol,
-			NULL,NULL,&hwq_zx};
+			NULL,NULL,&hwq_zx, .sndtake = zx_snd_take, .sndmix = zx_mix};

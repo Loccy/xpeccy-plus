@@ -195,6 +195,7 @@ int loadZ80(Computer* comp, const char* name, int drv) {
 }
 
 int loadZ80_f(Computer* comp, FILE* file) {
+	comp->sndSeed = 1;
 	int btm;
 	int err = ERR_OK;
 	unsigned char tmp,tmp2,reg,lst,pg;

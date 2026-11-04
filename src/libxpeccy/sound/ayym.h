@@ -198,6 +198,9 @@ typedef struct {
 	aymChip* chipC;
 	aymChip* chipD;
 	aymChip* curChip;
+	// time handed to the chips that a copy of them following the machine has not been
+	// told about yet (sound.cpp's mirror); in the struct, so a state put back puts it back
+	long long advNs;
 } TSound;
 
 void initNoise();
@@ -232,12 +235,20 @@ static inline void ts_chip_sync(aymChip* chip, int ns) {
 		chip->sync(chip, ns);
 }
 static inline void tsSync(TSound* ts, int ns) {
+	ts->advNs += ns;
 	ts_chip_sync(ts->chipA, ns);
 	ts_chip_sync(ts->chipB, ns);
 	ts_chip_sync(ts->chipC, ns);
 	ts_chip_sync(ts->chipD, ns);
 }
 sndPair tsGetVolume(TSound*);
+
+// A chip's registers changed other than by its time: whatever follows the chips
+// (sound.cpp's mirror) is told here, after the change. NULL: nothing follows.
+// AYL_TYPE: chip_set_type() - the type, the clock and the tick's fraction set anew;
+// AYL_WR: ay_wr(), a port write - a: the address, b: the byte
+enum {AYL_POKE = 0, AYL_ECNT, AYL_TYPE, AYL_WR};	// a: register, b: value / a: chanE.cnt / -
+extern void (*ay_log)(aymChip*, int what, int a, int b);
 aymChip* ts_chip(TSound*, int);		// chip 0..3, NULL for anything else
 
 // Run-ahead: a chip can keep state outside its own struct, which is all a

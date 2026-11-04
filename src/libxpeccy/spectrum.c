@@ -1082,6 +1082,7 @@ void compUserReset(Computer* comp, int res) {
 void compReset(Computer* comp,int res) {
 	int i;
 	comp->frmCount = 0;
+	comp->sndSeed = 1;
 	for (i = 0; i < comp->pwcount; i++) {	// what a watched port held is history now
 		comp->pwatch[i].val = -1;
 	}

@@ -39,8 +39,11 @@ typedef struct {
 
 // The beeper's share of the mix: val is the 0..255 above, vol the percent
 // from the options.
+static inline int bc_level_of(int val, int vol) {
+	return val * vol * BEEP_MAX / (0xff * 100);
+}
 static inline int bc_level(bitChan* ch, int vol) {
-	return ch->val * vol * BEEP_MAX / (0xff * 100);
+	return bc_level_of(ch->val, vol);
 }
 
 bitChan* bcCreate();

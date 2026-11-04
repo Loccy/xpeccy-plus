@@ -685,6 +685,7 @@ int szxGetHardware(const char* name) {
 }
 
 int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
+	comp->sndSeed = 1;
 	szxLoad ld;
 	int version;
 	int mid = szx_header(buf, len, &version);

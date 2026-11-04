@@ -130,22 +130,32 @@ static void alf_devs_sync(Computer* comp, int ns) {
 // its own read: the steps run on, a HALT is stepped
 static const hwQuiet alf_quiet = {HWQ_ACK_ZX, NULL, NULL, alf_devs_sync, NULL, 0};
 
-// A beeper and the chips, and a dc blocker for each - see zx_vol().
-sndPair alf_vol(Computer* comp, sndVolume* sv) {
-	static sndDC dcBeep, dcAy;
+// A beeper and the chips, and a dc blocker for each - see zx_mix().
+sndPair alf_mix(sndMix* m, sndVolume* sv) {
 	sndPair p;
 	sndPair v;
-	v.left = bc_level(comp->beep, sv->beep);
+	v.left = bc_level_of(m->in.beep, sv->beep);
 	v.right = v.left;
-	p = snd_dc(&dcBeep, v, sv->dc);
-	v = snd_dc(&dcAy, tsGetVolume(comp->ts), sv->dc);
+	p = snd_dc(&m->dc[0], v, sv->dc);
+	v = snd_dc(&m->dc[1], tsGetVolume(m->ts), sv->dc);
 	p.left += v.left * sv->ay / 100;
 	p.right += v.right * sv->ay / 100;
 	return p;
+}
+
+void alf_snd_take(Computer* comp, sndMix* m) {
+	m->in.beep = comp->beep->val;
+	m->ts = comp->ts;
+}
+
+sndPair alf_vol(Computer* comp, sndVolume* sv) {
+	static sndMix m;
+	alf_snd_take(comp, &m);
+	return alf_mix(&m, sv);
 }
 
 // zx_init, like every other ZX core: it is what sets the dot period from the cpu
 // clock, and without it the machine keeps the dot clock of whatever ran before.
 HardWare alf_hw_core = {HW_ALF,"ALF","ALF TV Game",MEM_64K | MEM_48K | MEM_128K,1.0,NULL,NULL,
 			zx_init,alf_mapmem,alf_iwr,alf_ird,alf_mrd,alf_mwr,zx_irq,zx_ack,alf_reset,alf_sync,NULL,NULL,alf_vol,
-			NULL,NULL,&alf_quiet};
+			NULL,NULL,&alf_quiet, .sndtake = alf_snd_take, .sndmix = alf_mix};

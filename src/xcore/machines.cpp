@@ -1094,6 +1094,7 @@ static void mac_set_psg(Computer* comp, int count, int type, double frq, int ste
 	}
 	ts_set_frq(comp->ts, mac_psg_frq(type, frq), comp->cpuFrq);	// 0: Auto
 	comp->ts->type = (count > 2) ? TS_ZXNEXT : (count > 1) ? TS_NEDOPC : TS_NONE;
+	comp->sndSeed = 1;		// the chips the sound thread mixes take it too
 }
 
 static void mac_set_cpu(Computer* comp, const std::string& val) {
@@ -1683,11 +1684,13 @@ static void mac_set_defer_key(const std::string& nam, const std::string& val) {
 		comp->ts->chipA->stereo = arg.i;
 		comp->ts->chipB->stereo = arg.i;
 		comp->ts->chipC->stereo = arg.i;
+		comp->sndSeed = 1;
 	}
 	else if (nam == "psg.separation") {
 		comp->ts->chipA->sep = arg.i;
 		comp->ts->chipB->sep = arg.i;
 		comp->ts->chipC->sep = arg.i;
+		comp->sndSeed = 1;
 	}
 	else if (nam == "gs.reset") comp->gs->reset = arg.b;
 	else if (nam == "gs.stereo") comp->gs->stereo = arg.b ? GS_12_34 : GS_MONO;

@@ -36,7 +36,9 @@ are on the **Sound** page.
 The **Sound** group beside **Output** has three switches:
 
 - **Enabled** - with it off, the program plays silence. The machine still runs at its
-  normal speed.
+  normal speed, and its sound is not worked out at all, which leaves more of the
+  computer to the emulation. The Debugger's scope and the sound of a rewind are silent
+  for that time too.
 - **Low cut (DC)** - takes out the lowest frequencies. The chips' output sits above zero
   rather than around it, and that offset only takes loudness away from the rest of the
   sound. On by default.

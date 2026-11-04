@@ -1550,6 +1550,8 @@ int load_file(Computer* comp, const char* name, int id, int drv) {
 		xlog(XLG_FILE, XLL_WARN, "open %s failed, error %i",
 			path.toLocal8Bit().constData(), err);
 	}
+	// whatever was loaded, the sound devices may stand elsewhere now
+	if (err == ERR_OK) comp->sndSeed = 1;
 	file_errors(err);
 	return err;
 }
