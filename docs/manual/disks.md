@@ -90,6 +90,10 @@ Real drives spend time moving the head and waiting for the sector to come around
 **Media > Fast Disk Access** skips those waits, so disks load much faster. The same switch
 is in the **Disk Manager** and in **Machine: Disk**.
 
+On the +3 it speeds up what +3DOS reads and writes. A program that drives the disk with a
+loader of its own - most copy-protected games do - gets the drive's real timing even with
+the switch on, because such loaders count on it.
+
 ## Changed disks
 
 ```{index} disk; saving, Save Changed Disks, Remember mounted media
@@ -132,7 +136,9 @@ the drives and on the disks. In the picture drive A holds Fire 'n Ice (n-Discove
   They do what the **Floppy Drives** menu does.
 - **The catalog** - the files on a TR-DOS disk: **Name**, **Ext**, **Start**, **Length**,
   **SecLen** (length in sectors), **Trk** and **Sec** (where the file begins). A +3DOS disk
-  has columns of its own (see below); any other disk shows no catalog.
+  has columns of its own (see below); any other disk shows no catalog. A +3 disk that starts
+  its own loader and has no +3DOS directory, as copy-protected games are made, says so in the
+  line at the bottom: **+3 boot disk, no +3DOS catalog: it starts from the Loader**.
 - **The line at the bottom** - the disk's label, how many files and deleted files it has,
   free sectors, and **modified** when it has unsaved changes. While the drive's motor runs,
   **Head on track** shows where the head is, and the file under it is shown in bold.

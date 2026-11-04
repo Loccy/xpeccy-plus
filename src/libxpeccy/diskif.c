@@ -128,6 +128,7 @@ int pdosIn(DiskIF* dif, int port, int* res, int dos) {
 int pdosOut(DiskIF* dif, int port, int val, int dos) {
 	port = pdosGetPort(port);
 	if (port < 0) return 0;
+	dif->fdc->ram = (dos == DIF_FROM_RAM);
 	uWrite(dif->fdc, port, val);
 	return 1;
 }

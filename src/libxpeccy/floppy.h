@@ -33,10 +33,27 @@ typedef struct {
 
 typedef void(*cbflpirq)(int, void*);
 
+// A weak sector: bits on the disk that read differently each time. An image
+// keeps a few reads of it; one is served per revolution, in turn.
+typedef struct {
+	int pos;		// its first data byte on the track
+	int len;		// bytes in one read
+	int copies;
+	int made;		// the reads after the first are made up: the image kept one
+	unsigned char* data;	// copies x len
+} flpWeak;
+
 typedef struct {
 	unsigned char byte[TRKLEN_HD];
 	unsigned char field[TRKLEN_HD];
 	int map[256];		// position of sector n = 1+
+	// What an image file said of the track beyond its bytes, dropped once the
+	// track is written: its weak sectors, and its block as the file held it,
+	// to be saved back the same
+	flpWeak* weak;
+	int nweak;
+	unsigned char* raw;
+	int rawlen;
 } flpTrack;
 
 typedef struct {
@@ -62,6 +79,7 @@ typedef struct {
 	unsigned char trk;
 	unsigned char field;
 	int pos;
+	int revs;		// revolutions seen: which read of a weak sector is under the head
 	int trklen;		// 12500 HD, 6250 DD
 	char* path;
 	// 256 tracks in an allocation of their own, past what xstate keeps of the
@@ -99,6 +117,9 @@ void flpGetTrackFields(Floppy*,int,unsigned char*);
 
 void flpClearTrack(Floppy*,int);
 void flpClearDisk(Floppy*);
+void flp_track_written(Floppy*, int);	// what the image said beyond the track's bytes is gone
+int flp_add_weak(Floppy*, int tr, int pos, int len, int copies, const unsigned char* data, int made);
+int flp_keep_raw(Floppy*, int tr, const unsigned char* data, int len);
 
 unsigned short getCrc(unsigned char*, int);
 

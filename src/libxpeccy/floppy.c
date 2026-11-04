@@ -27,9 +27,61 @@ Floppy* flpCreate(int id, cbflpirq cb, void* p) {
 }
 
 void flpDestroy(Floppy* flp) {
+	for (int i = 0; i < 256; i++)
+		flp_track_written(flp, i);
 	free(flp->path);
 	free(flp->data);
 	free(flp);
+}
+
+void flp_track_written(Floppy* flp, int tr) {
+	flpTrack* t = &flp->data[tr & 0xff];
+	for (int i = 0; i < t->nweak; i++)
+		free(t->weak[i].data);
+	free(t->weak);
+	t->weak = NULL;
+	t->nweak = 0;
+	free(t->raw);
+	t->raw = NULL;
+	t->rawlen = 0;
+}
+
+int flp_keep_raw(Floppy* flp, int tr, const unsigned char* data, int len) {
+	flpTrack* t = &flp->data[tr & 0xff];
+	free(t->raw);
+	t->raw = (len > 0) ? (unsigned char*)malloc(len) : NULL;
+	t->rawlen = t->raw ? len : 0;
+	if (t->raw) memcpy(t->raw, data, len);
+	return t->rawlen;
+}
+
+int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsigned char* data, int made) {
+	flpTrack* t = &flp->data[tr & 0xff];
+	if ((len < 1) || (copies < 2)) return 0;
+	flpWeak* lst = (flpWeak*)realloc(t->weak, (t->nweak + 1) * sizeof(flpWeak));
+	if (!lst) return 0;
+	t->weak = lst;
+	unsigned char* buf = (unsigned char*)malloc((size_t)len * copies);
+	if (!buf) return 0;
+	memcpy(buf, data, (size_t)len * copies);
+	lst[t->nweak].pos = pos;
+	lst[t->nweak].len = len;
+	lst[t->nweak].copies = copies;
+	lst[t->nweak].made = made;
+	lst[t->nweak].data = buf;
+	t->nweak++;
+	return 1;
+}
+
+// the read of a weak sector this revolution gives, or the track's own byte
+static unsigned char flp_byte(Floppy* flp, flpTrack* t) {
+	for (int i = 0; i < t->nweak; i++) {
+		flpWeak* w = &t->weak[i];
+		int off = flp->pos - w->pos;
+		if ((off >= 0) && (off < w->len))
+			return w->data[(flp->revs % w->copies) * w->len + off];
+	}
+	return t->byte[flp->pos];
 }
 
 void flp_set_path(Floppy* flp, const char* path) {
@@ -64,7 +116,9 @@ void flpWr(Floppy* flp, int hd, unsigned char val) {
 	if (flp->insert && flp->door) {
 		flp->changed = 1;
 		x_media_writes++;
-		flp->data[(flp->trk << 1) | hd].byte[flp->pos] = val;
+		flpTrack* t = &flp->data[(flp->trk << 1) | hd];
+		if (t->nweak || t->raw) flp_track_written(flp, (flp->trk << 1) | hd);
+		t->byte[flp->pos] = val;
 	}
 }
 
@@ -73,7 +127,8 @@ unsigned char flpRd(Floppy* flp, int hd) {
 	hd &= 1;
 	if (!(flp->insert && flp->door)) return 0x00;
 	if (hd && !flp->doubleSide) return 0x00;
-	return flp->data[(flp->trk << 1) | hd].byte[flp->pos];
+	flpTrack* t = &flp->data[(flp->trk << 1) | hd];
+	return t->nweak ? flp_byte(flp, t) : t->byte[flp->pos];
 }
 
 // TODO: move disk spinning here (if motor is on)
@@ -109,6 +164,7 @@ int flpNext(Floppy* flp, int fdcSide) {
 		flp->pos++;
 		if (flp->pos >= flp->trklen) {
 			flp->pos = 0;
+			flp->revs++;
 			res = 1;
 		}
 		flp->index = (flp->pos < 4) ? 1 : 0;		// ~90ms index pulse
@@ -241,6 +297,7 @@ void flpPrev(Floppy* flp, int fdcSide) {
 }
 
 void flpClearTrack(Floppy* flp,int tr) {
+	flp_track_written(flp, tr);
 	memset(flp->data[tr].byte, 0, TRKLEN_HD);
 	memset(flp->data[tr].field, 0, TRKLEN_HD);
 }
@@ -259,6 +316,7 @@ void flpFillFields(Floppy* flp,int tr, int flag) {
 	unsigned char scn = 0;		// sector number (1+)
 	unsigned char sct = 1;		// sector size code
 	if (tr > 255) return;
+	flp_track_written(flp, tr);	// the track is laid out anew
 	for (i = 0; i < 256; i++) {
 		flp->data[tr].map[i] = 0;
 	}

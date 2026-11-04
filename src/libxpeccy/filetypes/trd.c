@@ -32,11 +32,11 @@ int trd_read(Floppy* flp, const char* name) {
 }
 
 int loadTRD(Computer* comp, const char* name, int drv) {
-	return trd_read(comp->dif->fdc->flop[drv & 3], name);
+	return trd_read(comp->dif->flp[drv & 3], name);
 }
 
 int saveTRD(Computer* comp, const char* name, int drv) {
-	Floppy* flp = comp->dif->fdc->flop[drv & 3];
+	Floppy* flp = comp->dif->flp[drv & 3];
 	unsigned char syssec[0x100];
 	diskGetSectorData(flp, 0, 9, syssec, 256);
 	int disksize;
