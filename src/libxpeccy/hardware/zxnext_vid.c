@@ -1167,6 +1167,9 @@ typedef struct {
 	int ry;
 	int vcA, vcB;		// lv = ry, ry - 1
 	int wvcA, wvcB;		// wl = ry, ry - 1
+	// the raster drawn (vid->dlt, drb), in raw counters: the dot of raw rx goes
+	// to column rx - 1, so rx from cx0 to cx1 (exclusive), lines cy0 to cy1
+	int cx0, cx1, cy0, cy1;
 } nxvLine;
 
 static void nxv_line_set(nxvLine* ln, int ry, int F, int vact) {
@@ -1189,7 +1192,7 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 		ix = L - 1;
 		iy = (iy + F - 1) % F;
 	}
-	if ((ix < t->hblank) || (iy < t->vblank) || comp->vid->nodraw) {
+	if ((ix < ln->cx0 - 1) || (ix >= ln->cx1 - 1) || (iy < ln->cy0) || (iy >= ln->cy1) || comp->vid->nodraw) {
 		nxv_apply_to(comp, A + 1);
 		return;
 	}
@@ -1446,6 +1449,18 @@ static void nxv_render(Computer* comp, long long end) {
 	int pent = (NX.timing == NXT_PENT);
 	nxvLine ln;
 	ln.ry = -1;
+	Video* vid = comp->vid;
+	if (vid->drawAll) {
+		ln.cx0 = t->hblank + 1;
+		ln.cx1 = L + 1;
+		ln.cy0 = t->vblank;
+		ln.cy1 = F;
+	} else {
+		ln.cx0 = t->hblank + 1 + vid->dlt.x;
+		ln.cx1 = t->hblank + 1 + vid->drb.x;
+		ln.cy0 = t->vblank + vid->dlt.y;
+		ln.cy1 = t->vblank + vid->drb.y;
+	}
 	while (V.cur < end) {
 		if (V.ry != ln.ry) nxv_line_set(&ln, V.ry, F, vact);
 		// the dots with 2D + 1 short of the next event, on this line
@@ -1456,15 +1471,17 @@ static void nxv_render(Computer* comp, long long end) {
 			nxv_draw(comp, t, L, F, vact, &ln);
 			V.cur++;
 			V.rx++;
-		} else if (nodraw || (V.ry < t->vblank)) {
+		} else if (nodraw || (V.ry < ln.cy0) || (V.ry >= ln.cy1)) {
 			V.rx += (int)(stop - V.cur);
 			V.cur = stop;
 		} else {
 			int rx = V.rx;
-			int rxe = rx + (int)(stop - V.cur);
+			int rxa = rx + (int)(stop - V.cur);	// where the run ends
+			int rxe = (rxa < ln.cx1) ? rxa : ln.cx1;	// and its drawn part
 			long long D = V.cur;
-			if (rx <= t->hblank) {
-				int k = ((rxe < t->hblank + 1) ? rxe : t->hblank + 1) - rx;
+			if (rx < ln.cx0) {
+				int k = ((rxe < ln.cx0) ? rxe : ln.cx0) - rx;
+				if (k < 0) k = 0;
 				rx += k;
 				D += k;
 			}
@@ -1524,6 +1541,11 @@ static void nxv_render(Computer* comp, long long end) {
 					if (!(sb & 0x100)) sb = 0;
 				}
 				nxv_draw_dot(comp, ptr, D, phc, vc, wvc, whc, bad, sb, (int)(D & (NXV_ULA - 1)));
+			}
+			// the run's dots past the drawn part are passed over
+			if (rx < rxa) {
+				D += rxa - rx;
+				rx = rxa;
 			}
 			V.cur = D;
 			V.rx = rx;

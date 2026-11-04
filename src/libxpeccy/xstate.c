@@ -277,6 +277,9 @@ int xstate_load(xState* st, Computer* comp) {
 	vCoord lcut = comp->vid->lcut;
 	vCoord rcut = comp->vid->rcut;
 	vCoord vsze = comp->vid->vsze;
+	vCoord dlt = comp->vid->dlt;
+	vCoord drb = comp->vid->drb;
+	int drawAll = comp->vid->drawAll;
 	int brdmode = comp->vid->brdmode;
 	// What the breakpoint list has set up is the list of now, not of the time
 	// the snapshot was taken: a point added since fires, one deleted is gone
@@ -305,6 +308,9 @@ int xstate_load(xState* st, Computer* comp) {
 	comp->vid->lcut = lcut;
 	comp->vid->rcut = rcut;
 	comp->vid->vsze = vsze;
+	comp->vid->dlt = dlt;
+	comp->vid->drb = drb;
+	comp->vid->drawAll = drawAll;
 	comp->vid->brdmode = brdmode;
 	// the buffers are not in the snapshot: the picture is drawn again from the ray
 	comp->vid->still = 0;

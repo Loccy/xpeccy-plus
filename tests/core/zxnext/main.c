@@ -250,6 +250,7 @@ int main(int argc, char** argv) {
 	xhost_time_fixed = 1759665600;
 
 	Computer* comp = compCreate();
+	comp->vid->drawAll = 1;		// the frames are compared whole
 	if (!compSetHardware(comp, "ZXNext")) {
 		fprintf(stderr, "no ZXNext core\n");
 		return 1;

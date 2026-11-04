@@ -321,6 +321,15 @@ void vid_widen_crop(Video* vid, int wid, int hei) {
 
 void vid_upd_crop(Video* vid) {
 	vid_crop_margin(vid, brd_margin(vid, vid->brdmode));
+	// what is drawn: what vid_widen_crop may widen the frame to
+	vCoord m = brd_margin(vid, (vid->brdmode > VID_BRD_FULL) ? vid->brdmode : VID_BRD_FULL);
+	vCoord lt = {vid->bord.x - m.x, vid->bord.y - m.y};
+	vCoord rb = {vid->send.x + m.x, vid->send.y + m.y};
+	// an edge drawn no more till now shows the frame of then: the next one is drawn
+	if ((lt.x < vid->dlt.x) || (lt.y < vid->dlt.y) || (rb.x > vid->drb.x) || (rb.y > vid->drb.y))
+		vid_still_break(vid);
+	vid->dlt = lt;
+	vid->drb = rb;
 }
 
 // new layout:

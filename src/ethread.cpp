@@ -139,6 +139,7 @@ xThread::xThread() {
 	benchKeys = NULL;
 	benchApplyAt = -1;
 	benchHashEvery = 1;
+	benchCrop = 0;
 	benchDrawEvery = 0;
 	earBlock = -1;
 	conf.emu.fast = 0;
@@ -1209,6 +1210,8 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 	// and it draws the frames fast mode would leave out
 	fastload_hold(1);
 	fast_picture_hold(1);
+	// the whole raster, as the frames hash covers it, unless asked for the crop
+	comp->vid->drawAll = !benchCrop;
 	int rwOn = conf.emu.rewind.on;
 	conf.emu.rewind.on = (rw > 0);
 	rzx_begin(comp);
@@ -1401,8 +1404,13 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 				fl = conf.vid.fcount;
 				if ((split && first) || (done % every)) continue;
 				Video* vid = comp->vid;
-				for (int y = 0; y < vid->full.y; y++)
-					hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine, vid->full.x * 8);
+				if (benchCrop) {
+					for (int y = vid->dlt.y; y < vid->drb.y; y++)
+						hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine + vid->dlt.x * 8, (vid->drb.x - vid->dlt.x) * 8);
+				} else {
+					for (int y = 0; y < vid->full.y; y++)
+						hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine, vid->full.x * 8);
+				}
 			}
 			snd_sync_wait();
 			int epos = snd_ring_fill_pos();

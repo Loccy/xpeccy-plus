@@ -27,6 +27,7 @@ class xThread : public QThread {
 		int benchRecNmi;	// ...an NMI at this frame, 0: no
 		int benchRecFinal;	// the file is also read back and written finalized beside it
 		int benchHashEvery;	// only every Nth frame goes into the frames hash (1: all)
+		int benchCrop;		// the Next draws, and the frames hash covers, only what a window can show
 		int benchDrawEvery;	// ...and the others are left undrawn, 0: every frame drawn
 		const char* benchKeys;	// keys pressed at frames counted from the bench start, NULL: none
 		int benchApplyAt;	// Options' Ok pressed at this frame, counted as the keys are, -1: never
