@@ -950,6 +950,23 @@ static void fullscreenTip(QCheckBox* box) {
 }
 
 void SetupWin::start() {
+	fillPages();
+	bool shown = isVisible();
+	show();
+	if (!shown) center_over(this, parentWidget() ? parentWidget()->window() : nullptr);
+}
+
+// --bench-apply: Ok pressed on the pages as opening Options fills them, nothing shown.
+// The bench runs on no sound output and leaves no files behind.
+void SetupWin::benchApply() {
+	inBench = true;
+	fillPages();
+	okay();
+	inBench = false;
+}
+
+// the pages, from the machine and the settings as they stand
+void SetupWin::fillPages() {
 	Computer* comp = conf.zx;
 	fillLogPage();
 	QStringList ports = serial_ports();
@@ -1256,10 +1273,13 @@ void SetupWin::start() {
 	ui.leDbgFont->setFont(dbgfnt);
 // palette
 	fillDbgPalette();
-
-	bool shown = isVisible();
-	show();
-	if (!shown) center_over(this, parentWidget() ? parentWidget()->window() : nullptr);
+// what Apply sets only if it moves, as the page shows it now
+	shown.cpu = xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq);
+	shown.psg = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;
+	shown.mem = getRFIData(ui.mszbox);
+	shown.lay = getRFText(ui.geombox);
+	xLayout* lay = findLayout(shown.lay);
+	if (lay) shown.geom = lay->lay;
 }
 
 void SetupWin::apply() {
@@ -1271,7 +1291,7 @@ void SetupWin::apply() {
 	int rwStep = conf.emu.rewind.step;
 	int rwSecs = conf.emu.rewind.secs;
 	// unset shows as Last, and stays unset - the first start still asks - until changed
-	// a folder's mode is taken when it is mounted, which the machine's part does again below
+	// a folder's mode is taken when it is mounted or read again, with the power off
 	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
 	applySaves();
@@ -1296,7 +1316,7 @@ void SetupWin::apply() {
 	} else {
 		// the machine carries what the page put in it: into its own file, so it is
 		// still there after a switch away and back
-		xm_save_over();
+		if (!inBench) xm_save_over();
 		if ((xm_signature() != macWas) || (conf.emu.rewind.step != rwStep) || (conf.emu.rewind.secs != rwSecs))
 			rewind_clear();
 		// The machine changed under a recording: it ends with the frames before
@@ -1316,20 +1336,28 @@ void SetupWin::apply() {
 	fullscreenTip(ui.cbFullscreen);		// the Hotkeys page may have moved it
 	emit s_apply();
 
-	layouts_save();
-	saveConfig();
+	if (!inBench) {
+		layouts_save();
+		saveConfig();
+	}
 }
 
 // What the pages hold for the machine itself. Another machine has its own, so
-// none of this goes onto it.
+// none of this goes onto it. The machine runs on under Apply, and what it has set
+// itself stays: the clocks, the layout and the sound chips are set only when the
+// page shows them otherwise than when it was opened - setting them again runs the
+// board's init (comp_update_timings), puts the frame INT where the layout has it
+// and starts the chips' tick over.
 void SetupWin::applyMachine() {
 	Computer* comp = conf.zx;
 // machine
 	emu_lock();		// roms and memory size are rebuilt below
 	xm_set_roms(roms);
 	comp->resbank = resTarget;
-	memSetSize(comp->mem, getRFIData(ui.mszbox), -1);
-	compSetBaseFrq(comp, xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq));
+	int msz = getRFIData(ui.mszbox);
+	double frq = xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq);
+	if (msz != shown.mem) memSetSize(comp->mem, msz, -1);
+	if ((msz != shown.mem) || (frq != shown.cpu)) compSetBaseFrq(comp, frq);	// a board's init may size its memory
 	xm_turbo_set(comp, getRFSData(cbCpuTurbo).toStdString());
 	if (ui.sldSpeed->value() != xspeed_get())
 		xspeed_set(ui.sldSpeed->value());
@@ -1346,8 +1374,13 @@ void SetupWin::applyMachine() {
 	comp->vid->ula->early = ui.cbEarlyTiming->isChecked();
 	comp_set_snow(comp, ui.cbSnow->isChecked() ? 1 : 0);
 	comp->flgSNOWX = ui.cbSnowCrash->isChecked() ? 1 : 0;
-	comp->beep->mic = ui.cbBeepMic->isChecked() ? 1 : 0;
-	bc_out(comp->beep, comp->beep->lev, comp->tape->levRec);
+	// the MIC level in the beeper or out of it, at once; left alone, the levels stay
+	// as the machine set them (the Next sets its own, nx_snd_fe)
+	int mic = ui.cbBeepMic->isChecked() ? 1 : 0;
+	if (comp->beep->mic != mic) {
+		comp->beep->mic = mic;
+		bc_out(comp->beep, comp->beep->lev, comp->tape->levRec);
+	}
 	// The ula type also picks the screen drawer. The reset above ran before this
 	// line and saw the old type, so it has to be redone here - but only while a
 	// plain zx screen is up: a machine sitting in one of its own modes keeps it
@@ -1356,21 +1389,38 @@ void SetupWin::applyMachine() {
 		zx_set_vmode(comp);
 	comp->vid->ula->enabled = ui.ulaPlus->isChecked() ? 1 : 0;
 	comp->flgDDP = ui.cbDDp->isChecked() ? 1 : 0;
-	xm_set_layout(getRFText(ui.geombox));	// the border size goes on top of it in applyGlobal()
+	// another layout, or this one edited (the border size goes on top of it in applyGlobal())
+	std::string lay = getRFText(ui.geombox);
+	xLayout* nlay = findLayout(lay);
+	if ((lay != shown.lay) || !nlay || memcmp(&nlay->lay, &shown.geom, sizeof(vLayout)))
+		xm_set_layout(lay);
 // sound
 	int psg = getRFIData(cbPsgCount);
 	int chips = (psg == PSG_NEXT) ? 3 : ((psg == PSG_TS) || (psg == PSG_TSFM)) ? 2 : (psg == PSG_ONE) ? 1 : 0;
 	int chtype = (psg == PSG_TSFM) ? SND_YM2203 : getRFIData(cbPsgType);
 	if ((psg != PSG_TSFM) && (chtype == SND_YM2203)) chtype = SND_YM;
 	int chstereo = getRFIData(cbPsgStereo);
+	double psgFrq = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;	// 0: Auto
+	int tsType = (chips > 2) ? TS_ZXNEXT : (chips > 1) ? TS_NEDOPC : TS_NONE;
+	bool chipsNew = (comp->ts->type != tsType);
 	aymChip* chip[3] = {comp->ts->chipA, comp->ts->chipB, comp->ts->chipC};
 	for (int i = 0; i < 3; i++) {			// one setting for all the chips
-		chip_set_type(chip[i], (i < chips) ? chtype : SND_NONE);
-		chip[i]->stereo = chstereo;
+		int type = (i < chips) ? chtype : SND_NONE;
+		if (chip[i]->type != type) {
+			chip_set_type(chip[i], type);
+			chipsNew = true;
+		}
+		if (chip[i]->stereo != chstereo) {
+			chip[i]->stereo = chstereo;
+			chipsNew = true;
+		}
 	}
-	ts_set_frq(comp->ts, opt_get_psg_frq(cbPsgFrq) / psgFrqMul, comp->cpuFrq);	// 0: Auto
-	comp->ts->type = (chips > 2) ? TS_ZXNEXT : (chips > 1) ? TS_NEDOPC : TS_NONE;
-	comp->sndSeed = 1;		// the chips the sound thread mixes take all of it
+	// a chip of another type takes its clock here too (a YM2203 runs at twice the AY's)
+	if (chipsNew || (psgFrq != shown.psg)) {
+		ts_set_frq(comp->ts, psgFrq, comp->cpuFrq);
+		comp->ts->type = tsType;
+		comp->sndSeed = 1;		// the chips the sound thread mixes take all of it
+	}
 	comp->gs->enable = gsBox->currentIndex();
 	comp->sdrv->type = getRFIData(sdrvBox);
 	comp->saa->enabled = saaBox->currentIndex() ? 1 : 0;
@@ -1394,10 +1444,9 @@ void SetupWin::applyMachine() {
 	difSetDrives(comp->dif, fit);
 // hdd
 	ide_set_type(comp->ide, getRFIData(hiface));
-	// what is mounted is the Drives menu's; a folder is read again on Apply
-	// (a new machine does it itself)
-	ide_remount(comp->ide);
-	sdc_remount(comp->sdc);
+	// What is mounted is the Drives menu's. A folder is not read again here: the DOS
+	// running keeps what it read of it, and a program's own folder put on the card
+	// would be gone from it. It is read again with the power off (xm_power_cycle).
 // divmmc: a board is put on, taken off or given other RAM with the power off, so
 // the machine comes up from its power-on with it. Left running, the machine would
 // meet a firmware that never started at its first error report or NMI.
@@ -1412,8 +1461,6 @@ void SetupWin::applyMachine() {
 	// a chip written outside the machine goes back in with the power off too
 	if (applyDivFirmware() && divModel) divPower = true;
 	fillDivFirmware();
-	sdc_remount(comp->div->card[0]);
-	sdc_remount(comp->div->card[1]);
 // debuga
 	setWatchPorts(comp, portwid->getPorts());
 	if (divPower) {
@@ -1421,6 +1468,12 @@ void SetupWin::applyMachine() {
 		xm_power_cycle();
 		emu_unlock();
 	}
+	// what the machine has now, for the next Apply with the window still open
+	shown.cpu = frq;
+	shown.psg = psgFrq;
+	shown.mem = msz;
+	shown.lay = lay;
+	if (nlay) shown.geom = nlay->lay;
 }
 
 // The emulator's own settings, and the user's that live on the machine (mouse,
@@ -1512,8 +1565,8 @@ void SetupWin::applyGlobal() {
 	int latency = ui.sldSndLatency->value();
 	// reopen on a changed latency too: the pacer would creep to the new target
 	// over tens of seconds, refilling the ring gets there at once
-	if ((rate != conf.snd.rate) || (rateauto != conf.snd.rateauto) ||
-		(latency != conf.snd.latency) || (nname != sndGetName())) {
+	if (!inBench && ((rate != conf.snd.rate) || (rateauto != conf.snd.rateauto) ||
+		(latency != conf.snd.latency) || (nname != sndGetName()))) {
 		conf.snd.rate = rate;
 		conf.snd.rateauto = rateauto;
 		conf.snd.latency = latency;
@@ -1522,9 +1575,11 @@ void SetupWin::applyGlobal() {
 
 	int chsep = sldPsgSep->value();
 	aymChip* chip[3] = {comp->ts->chipA, comp->ts->chipB, comp->ts->chipC};
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < 3; i++) {
+		if (chip[i]->sep == chsep) continue;
 		chip[i]->sep = chsep;
-	comp->sndSeed = 1;
+		comp->sndSeed = 1;
+	}
 	comp->gs->reset = gsrbox->isChecked() ? 1 : 0;
 // input
 	comp->mouse->swapButtons = cbSwapButtons->isChecked() ? 1 : 0;

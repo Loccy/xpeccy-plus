@@ -35,10 +35,19 @@ class SetupWin : public QDialog {
 		SetupWin(QWidget*);
 		void prewarmFfmpeg();
 		void stopProbe();
+		void benchApply();
 	public slots:
 		void start();
 		void startHotkeys();
 	private:
+		bool inBench = false;		// benchApply(): no files written, the sound output left alone
+		struct {			// the machine's page as filled: applyMachine() sets only what moved
+			double cpu = 0, psg = 0;
+			int mem = 0;
+			std::string lay;
+			vLayout geom = {};
+		} shown;
+		void fillPages();
 		QDialog* popOut(QWidget*, const char*);
 		void cfgLoaded();
 		void fillRomSlots();

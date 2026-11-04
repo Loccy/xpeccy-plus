@@ -2,6 +2,7 @@
 
 #include <QThread>
 #include <QMutex>
+#include <functional>
 
 #include "xcore/xcore.h"
 #include "libxpeccy/ldbytes.h"
@@ -28,6 +29,8 @@ class xThread : public QThread {
 		int benchHashEvery;	// only every Nth frame goes into the frames hash (1: all)
 		int benchDrawEvery;	// ...and the others are left undrawn, 0: every frame drawn
 		const char* benchKeys;	// keys pressed at frames counted from the bench start, NULL: none
+		int benchApplyAt;	// Options' Ok pressed at this frame, counted as the keys are, -1: never
+		std::function<void()> benchApply;	// ...which is this, called with the machine let go
 		int earBlock;		// the block the rom reads only part of, -1: none
 	public slots:
 		void stop();
@@ -48,6 +51,7 @@ class xThread : public QThread {
 		// tickTotal: a cycle can end between the hit and that step
 		long long skipTick = -1;
 		long long haltRoom(Computer*);
+		void benchApplyStep(int frame, int rw);
 		long long lateNoTick = -(1LL << 62);	// where haltRoom last found the mix may not sample late
 		void tap_catch_load(Computer*, int, int base = LD_ROM_BASE, int dir = 1);
 		void tap_hand_over(Computer*, int blk, int base, int dir);

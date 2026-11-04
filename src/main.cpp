@@ -122,6 +122,7 @@ void help() {
 	printf("\t\t\tdigits and small letters, E Enter, C Caps, S Symbol, _ Space;\n");
 	printf("\t\t\tjoy:up+fire or joyb:... a joystick, nmi the NMI button, power a Hard Reset,\n");
 	printf("\t\t\tpc:NAME a PC key by its keymap name (UP, F1, ENT)\n");
+	printf("--bench-apply F\t\tOk in Options at frame F, counted as for --bench-keys, nothing changed\n");
 	printf("--bench-hash\t\tprint hashes of the frames, sound, RAM and registers, PC and T\n");
 	printf("--bench-shot FILE\tthe last frame, whole raster, as a PPM picture\n");
 	printf("--bench-save FILE\ta snapshot at the end, in the format its extension names\n");
@@ -886,6 +887,9 @@ int main(int ac,char** av) {
 				ethread.benchHashEvery = ethread.benchDrawEvery;
 			} else if (!strcmp(parg,"--bench-keys")) {
 				ethread.benchKeys = av[i++];
+			} else if (!strcmp(parg,"--bench-apply")) {
+				ethread.benchApplyAt = atoi(av[i++]);
+				ethread.benchApply = [&optw]() {optw.benchApply();};
 			} else if (!strcmp(parg,"--bench-loops")) {
 				fastload_bench(atoi(av[i++]));
 			} else if (!strcmp(parg,"--pc")) {
