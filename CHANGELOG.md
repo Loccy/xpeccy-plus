@@ -14,6 +14,12 @@ before that point is upstream's history and is not repeated here.
 - **Frame skip** (Options > Video): on a computer too slow for the machine a frame is left
   undrawn now and then, so the machine and its sound keep their speed. When the machine falls
   behind for a few seconds, Xpeccy+ offers to turn it on.
+- **Next Side, Shift+F3, puts in the next side of the tape or disk in use** - side B after
+  side A, disk 3 after disk 2 - with no menu; **Previous Side** goes back. Both are in the
+  **Media** menu.
+- **Next tape of a set** (Options > Machine > Tape) can be turned off: a tape of a set then
+  starts over at its end instead of going on to side B, for a game that loads its levels from
+  side B again and again.
 
 ### Changed
 
