@@ -69,6 +69,7 @@ xCmosDumpTable::xCmosDumpTable(QWidget* p):QTableView(p) {
 }
 
 void xCmosDumpTable::resizeEvent(QResizeEvent* e) {
+	QTableView::resizeEvent(e);
 	int w = e->size().width();
 	int sz = w / 9;
 	horizontalHeader()->setDefaultSectionSize(sz);
