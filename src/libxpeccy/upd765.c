@@ -856,7 +856,8 @@ void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors he
 			}
 			if (fit) fdc->scnt++;				// next sector
 			if (!fit || (fdc->scnt >= fdc->comBuf[2])) {	// sectors/track
-				diskFormTrack(fdc->flp, (fdc->trk << 1) | fdc->side, fdc->slst, fdc->scnt);
+				int sc = (fdc->scnt < fdc->comBuf[2]) ? fdc->scnt : fdc->comBuf[2];	// SC 0: none
+				diskFormTrack(fdc->flp, (fdc->trk << 1) | fdc->side, fdc->slst, sc);
 				fdc->drq = 0;				// all data completed, no more bytes needed
 				fdc->pos++;
 			} else {
