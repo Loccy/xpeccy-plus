@@ -535,10 +535,6 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	ui.cbNoflicMode->addItem("2-frames (adaptive)", AF_2C_ADAPTIVE);
 	ui.cbNoflicMode->addItem("3-frames (fullscreen)", AF_3C_FULL);
 	ui.cbNoflicMode->addItem("2-/3-frames (adaptive)", AF_3C_ADAPTIVE);
-	// the check box columns as wide as Recording's buttons, so every group's
-	// fields end at one edge
-	foreach(QWidget* col, QList<QWidget*>() << ui.picRight << ui.afRight << ui.ssRight)
-		col->setFixedWidth(ui.machButtons->maximumWidth());
 // emulation
 	ui.cbRunAhead->addItem("Off", 0);
 	ui.cbRunAhead->addItem("1", 1);
@@ -1075,7 +1071,7 @@ void SetupWin::fillPages() {
 			g->setColumnMinimumWidth(col, wid);
 	}
 	ui.cbStyleSheet->setFixedWidth(ui.gridLayout_look->columnMinimumWidth(1));	// as wide as the names under it
-	fitButtonColumns();
+	fitWidths();
 	// Saves: the numbers alike, as wide as the widest of them asks; the columns
 	// as Emulation's, so the names stand in one place on both pages
 	int savw = 0;
@@ -1286,10 +1282,12 @@ void SetupWin::noteShown() {
 	shown.mem = getRFIData(ui.mszbox);
 }
 
-// The columns of buttons with their names beside an icon: as wide as the widest name
-// asks in this font and style, the .ui's width at least. The Machine page's buttons
-// and the columns lined up with them, and the Application page's.
-void SetupWin::fitButtonColumns() {
+// What is as wide as its widest text asks in this font and style: measured when the
+// pages are filled and when a style is applied. The columns of buttons with their names
+// beside an icon, the .ui's width at least - the Machine page's, with the columns lined
+// up with them (Video's check boxes, so every group's fields end at one edge), and the
+// Application page's - and the border size's label, so it does not jump while dragging.
+void SetupWin::fitWidths() {
 	int wid = machColMin;
 	for (QPushButton* btn : {(QPushButton*)ui.pbResetMachine, (QPushButton*)ui.pbSaveMachine, (QPushButton*)ui.pbDelMachine, btnRecAdv})
 		wid = qMax(wid, btn->sizeHint().width());
@@ -1299,6 +1297,11 @@ void SetupWin::fitButtonColumns() {
 	for (QPushButton* btn : {ui.pbFavorites, ui.pbCfgExport, ui.pbCfgImport, ui.pbCfgReset})
 		wid = qMax(wid, btn->sizeHint().width());
 	ui.appButtons->setFixedWidth(wid);
+	Computer* comp = conf.zx;
+	wid = 0;
+	for (int m = comp->vid->brdmin; m <= VID_BRD_OVERSCAN; m++)
+		wid = std::max(wid, ui.bszlab->fontMetrics().horizontalAdvance(borderText(m)));
+	ui.bszlab->setMinimumWidth(wid);
 }
 
 void SetupWin::apply() {
@@ -1360,7 +1363,7 @@ void SetupWin::apply() {
 
 	fullscreenTip(ui.cbFullscreen);		// the Hotkeys page may have moved it
 	emit s_apply();
-	fitButtonColumns();		// a style just applied pads the buttons its own way
+	fitWidths();		// a style just applied pads the buttons its own way
 
 	if (!inBench) {
 		layouts_save();
@@ -2905,16 +2908,13 @@ void SetupWin::chabsz() {
 	Computer* comp = conf.zx;
 	int mode = ui.bszsld->value();
 	if (mode < comp->vid->brdmin) mode = comp->vid->brdmin;
-	auto text = [comp](int m) {
-		vCoord sz = vid_crop_size(comp->vid, m);
-		return QString("%0 (%1×%2)").arg(brd_mode_name(m)).arg(sz.x).arg(sz.y);
-	};
-	// as wide as the widest it can say in this font, so the row does not jump while dragging
-	int wid = 0;
-	for (int m = comp->vid->brdmin; m <= VID_BRD_OVERSCAN; m++)
-		wid = std::max(wid, ui.bszlab->fontMetrics().horizontalAdvance(text(m)));
-	ui.bszlab->setMinimumWidth(wid);
-	ui.bszlab->setText(text(mode));
+	ui.bszlab->setText(borderText(mode));
+}
+
+// a border size's name and the frame it gives on this machine
+QString SetupWin::borderText(int mode) {
+	vCoord sz = vid_crop_size(conf.zx->vid, mode);
+	return QString("%0 (%1×%2)").arg(brd_mode_name(mode)).arg(sz.x).arg(sz.y);
 }
 
 // the label beside the overclock slider says what the cpu ends up on - the board's
@@ -3569,10 +3569,9 @@ void SetupWin::buildRecording() {
 		// the command is wrapped to its box only once shown, and may take a line more
 		QTimer::singleShot(0, win, [win]() {win->adjustSize();});
 	});
-	// as wide as the Machine page's buttons: a box of their width, which the
-	// style sheet's min-width on a push button cannot override
+	// as wide as the Machine page's buttons: a box of their width (fitWidths), which
+	// the style sheet's min-width on a push button cannot override
 	QWidget* adbox = new QWidget;
-	adbox->setFixedWidth(ui.machButtons->maximumWidth());
 	btnRecAdv = adb;
 	boxRecAdv = adbox;
 	QVBoxLayout* adlay = new QVBoxLayout(adbox);
