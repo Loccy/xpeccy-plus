@@ -95,9 +95,12 @@ public:
 		all = false;
 		for (const QString& p : pat) {
 			const QString ext = p.mid(2);
+			bool plain = p.startsWith("*.") && !ext.isEmpty();	// one suffix, compared with the last one of a name
+			for (QChar c : ext)
+				plain &= (c != '*') && (c != '?') && (c != '[') && (c != '.');
 			if (p == "*")
 				all = true;
-			else if (p.startsWith("*.") && !ext.contains(QRegularExpression("[*?\\[]")))
+			else if (plain)
 				exts.insert(ext.toLower());
 			else
 				rest.append(QRegularExpression(QRegularExpression::wildcardToRegularExpression(p), QRegularExpression::CaseInsensitiveOption));
@@ -2298,6 +2301,7 @@ void fitFileDialog(QWidget* w) {
 	QTreeView* tree = dlg ? dlg->findChild<QTreeView*>("treeView") : nullptr;
 	if (!tree) return;
 	file_dialog_tune(dlg);
+	file_dialog_filtered(dlg);	// whatever patterns Qt put on the model since
 	QHeaderView* hdr = tree->header();
 	hdr->setSectionResizeMode(QHeaderView::ResizeToContents);
 	hdr->setSectionResizeMode(0, QHeaderView::Stretch);
