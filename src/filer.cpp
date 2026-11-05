@@ -20,6 +20,7 @@
 #include <QDialogButtonBox>
 #include <QDirIterator>
 #include <QFileDialog>
+#include <QFileIconProvider>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
@@ -48,6 +49,18 @@
 static QFileDialog* fileDlg = nullptr;
 static QWidget* fileDlgParent = nullptr;
 
+// The Type column by the suffix alone. Qt 6 names a file by its MIME type and,
+// for a suffix it does not know (.tap, .tzx...), reads the file to find it - on
+// the GUI thread, file by file: a folder of 37k images held the window for minutes
+class xFileTypes : public QFileIconProvider {
+public:
+	QString type(const QFileInfo& fi) const override {
+		if (!fi.isFile()) return QFileIconProvider::type(fi);
+		QString ext = fi.suffix().toUpper();
+		return ext.isEmpty() ? QString("File") : ext + " File";
+	}
+};
+
 // Built on first use, in the folder it is about to show: a Qt dialog built
 // without one lists and watches the cwd on the GUI thread, and started from a
 // 37k-file folder the window froze for seconds
@@ -62,6 +75,11 @@ static QFileDialog* file_dialog() {
 	fileDlg->setOption(QFileDialog::HideNameFilterDetails, false);
 	fileDlg->setOption(QFileDialog::DontConfirmOverwrite, false);
 	fileDlg->setOption(QFileDialog::DontUseNativeDialog, true);
+	// after the option above, which builds the views and their model (with
+	// no model yet the provider is dropped), and before the event loop takes
+	// the first files listed
+	static xFileTypes types;
+	fileDlg->setIconProvider(&types);
 	fileDlg->resize(700, 480);
 	return fileDlg;
 }
