@@ -1054,6 +1054,17 @@ unsigned char uRead(FDC* fdc, int adr) {
 fdcCall* const uPlans[] = {utermTab, uSpecify, uDrvStat, uCalib, uSeek, uReadID, uReadD01,
 	uRdData, uRdTrk, uScan, uWrData, uFormat, uInvalid, uSenseInt, NULL};
 
+// Layout 0 had no uread04c, and its Read Track went from the data to the next
+// sector at once, counting the sectors in sec
+void upd_plan_v0(FDC* fdc) {
+	if ((fdc->plan == uReadD01) && (fdc->pos >= 4)) fdc->pos++;
+	if (fdc->plan == uRdTrk) {
+		if (fdc->pos >= 7) fdc->pos++;
+		fdc->scnt = fdc->sec;
+		fdc->sec = fdc->comBuf[3];
+	}
+}
+
 void uReset(FDC* fdc) {
 //	fdc->idle = 1;
 //	fdc->drq = 1;

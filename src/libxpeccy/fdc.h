@@ -104,9 +104,9 @@ struct FDC {
 	int resPos;
 	int xfer;		// uPD765: bytes of the field still to hand to the CPU
 	unsigned char sr0,sr1,sr2,sr3;	// status registers
+	int scnt;		// uPD765: sectors of a Read Track or a Format so far
 
 	Sector slst[64];
-	int scnt;
 };
 
 void fdc_set_hd(FDC*, int);
@@ -150,6 +150,11 @@ void difSetDrives(DiskIF*, int);	// how many drives are on the cable, from A
 // the plan in progress as a number a snapshot can keep, -1: one not known
 int dif_plan_id(DiskIF*);
 void dif_plan_set(DiskIF*, int);
+// The uPD765 plans' layout a snapshot keeps with the step: 1 since Read Data and
+// Read Track check the data CRC in a step of their own. upd_plan_v0() moves a step
+// of layout 0 (2026.9) to where it is now.
+#define UPD_PLANS	1
+void upd_plan_v0(FDC*);
 int dif_quiet(DiskIF*);		// its time may come in any pieces
 void dif_align_flps(DiskIF*, FDC*, int, int, int, int);
 

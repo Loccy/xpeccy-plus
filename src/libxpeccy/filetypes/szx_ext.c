@@ -69,6 +69,20 @@ static int fld_get(void* base, const szxField* tab, const unsigned char* p, size
 	return got;
 }
 
+// 1 if the record has a field of that name, whatever its size
+static int fld_has(const unsigned char* p, size_t n, const char* name) {
+	size_t pos = 0;
+	size_t len = strlen(name);
+	while (pos < n) {
+		size_t k = p[pos++];
+		if (pos + k + 2 > n) break;
+		if ((k == len) && !memcmp(p + pos, name, k)) return 1;
+		pos += k;
+		pos += 2 + rd_word(p + pos);
+	}
+	return 0;
+}
+
 static void rec_begin(szxBuf* b, unsigned id, size_t* mark) {
 	sb_dword(b, id);
 	*mark = b->len;
@@ -218,7 +232,7 @@ static const szxField fld_sdrv[] = {
 };
 
 static const szxField fld_fdc[] = {
-	FLDRAW("bits", 4, 4),		// irq, drq, dir, mr, block, side, step, mfm, idle, crchi
+	FLDRAW("bits", 4, 4),		// irq, drq, dir, mr, block, side, step, mfm, idle, crchi, slow
 	FLD(FDC, trk),
 	FLD(FDC, sec),
 	FLD(FDC, data),
@@ -248,10 +262,12 @@ static const szxField fld_fdc[] = {
 	FLD(FDC, resBuf),
 	FLD(FDC, resCnt),
 	FLD(FDC, resPos),
+	FLD(FDC, xfer),
 	FLD(FDC, sr0),
 	FLD(FDC, sr1),
 	FLD(FDC, sr2),
 	FLD(FDC, sr3),
+	FLD(FDC, scnt),
 	FLDEND
 };
 
@@ -270,6 +286,7 @@ static const szxField fld_flp[] = {
 	FLD(Floppy, trk),
 	FLD(Floppy, field),
 	FLD(Floppy, pos),
+	FLD(Floppy, revs),
 	FLDEND
 };
 
@@ -826,6 +843,7 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		int sel = 0;
 		while ((sel < 3) && (comp->dif->fdc->flp != comp->dif->fdc->flop[sel])) sel++;
 		sb_byte(b, sel);			// the drive selected, by the controller's numbering
+		sb_byte(b, UPD_PLANS);
 		rec_end(b, mark);
 		for (i = 0; i < 4; i++)
 			if (comp->dif->flp[i]->fitted)
@@ -1107,6 +1125,7 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	fdc->step = t->step;
 	fdc->mfm = t->mfm;
 	fdc->crchi = t->crchi;
+	fdc->slow = t->slow;
 	fdc->intr = t->intr;
 	fdc->trk = t->trk;
 	fdc->sec = t->sec;
@@ -1136,6 +1155,9 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	memcpy(fdc->resBuf, t->resBuf, sizeof(fdc->resBuf));
 	fdc->resCnt = t->resCnt;
 	fdc->resPos = t->resPos;
+	// an older file's read hands the CPU the whole field
+	fdc->xfer = fld_has(p, n, "xfer") ? t->xfer : t->cnt;
+	fdc->scnt = t->scnt;
 	fdc->sr0 = t->sr0;
 	fdc->sr1 = t->sr1;
 	fdc->sr2 = t->sr2;
@@ -1160,6 +1182,7 @@ static void ext_flp(Floppy* flp, const unsigned char* p, size_t n, int carried) 
 	flp->trk = t->trk;
 	flp->field = t->field;
 	flp->pos = t->pos;
+	flp->revs = t->revs;
 	free(t);
 }
 
@@ -1303,6 +1326,8 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 					comp->dif->fdc->idle = p[4] & 1;
 					comp->dif->fdc->seekend = (p[4] >> 1) & 1;
 					if (n >= 6) comp->dif->fdc->flp = comp->dif->fdc->flop[p[5] & 3];
+					if ((comp->dif->type == DIF_P3DOS) && ((n < 7) || !p[6]))
+						upd_plan_v0(comp->dif->fdc);
 				}
 				break;
 			case XR_IDE:
