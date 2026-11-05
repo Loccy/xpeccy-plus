@@ -2490,6 +2490,7 @@ void SetupWin::cfgExport() {
 void SetupWin::cfgLoaded() {
 	start();
 	emit s_apply();
+	fitWidths();		// the style of the settings just read
 	emit s_prf_changed();
 }
 
