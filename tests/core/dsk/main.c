@@ -434,7 +434,7 @@ static void format(const char* name, int cyl, int n, int sc, int fill, int fits)
 	printf("== format/%s\n", name);
 	send(b, 6);
 	int ids = 0, k = 0;
-	for (long t = 0; t < 4000000000L; t += 10000) {
+	for (int t = 0; t < 400000; t++) {		// 4 s at most
 		int m = msr();
 		if (!(m & 0x20)) break;
 		if ((m & 0xc0) == 0x80) {
@@ -454,10 +454,9 @@ static void format(const char* name, int cyl, int n, int sc, int fill, int fits)
 	unsigned char ri[2] = {0x4a, 0x00};
 	send(ri, 2);
 	nr = result(res);
-	printf("  Read ID: %.2X %.2X %.2X - %.2X %.2X %.2X %.2X", res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
-	putchar(10);
-	for (int r = fits; r <= fits + 1; r++) {
-		int len = 128 << n;
+	printf("  Read ID: %.2X %.2X %.2X - %.2X %.2X %.2X %.2X\n", res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
+	for (int r = fits; fits && (r <= fits + 1); r++) {		// fits 0: no reads
+		int len = flp_seclen(n);
 		unsigned char c[9] = {0x46, 0x00, cyl, 0, r, n, r, 0x2a, n ? 0xff : 0x80};
 		send(c, 9);
 		int got = take(data, len, 10000);
@@ -563,6 +562,7 @@ static int cases(const char* tmp) {
 	beta_after_p3();
 	format("sc11", 3, 2, 11, 0x5a, 10);
 	format("sc255", 3, 0, 255, 0xa5, 29);
+	format("n-ff", 3, 0xff, 64, 0x33, 0);	// N past 23 counts as 0 bytes, yet 1K each is written
 	difDestroy(dif);
 	cleared(tmp);
 	roundtrip(tmp, "bench");

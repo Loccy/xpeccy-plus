@@ -231,7 +231,8 @@ void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
 	// a track with no sectors (images keep unformatted ones so) is left as the
 	// loader cleared it
 	if ((tr < 0) || (tr > 255) || (scount <= 0)) return;
-	unsigned char *ppos = flp->data[tr].byte;
+	unsigned char* base = flp->data[tr].byte;
+	unsigned char *ppos = base;
 	long long gap = disk_form_gap(flp, sdata, scount);
 	if (gap < 10) return;
 	int dsz = (int)gap;
@@ -242,6 +243,10 @@ void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
 	*(ppos++) = 0xc2;
 	*(ppos++) = 0xfc;
 	for (sc = 0; sc < scount; sc++) {
+		ln = (128 << (sdata[sc].sz & 3));
+		// a size code past 23 counts as nothing above, but its bytes are written:
+		// what would run past the track's buffer stays off it
+		if ((ppos - base) + 72 + ln > TRKLEN_HD) break;
 		/*memset(ppos, 0x4e, 10);*/ ppos += 10;		// 10	sync (GAP1)
 		memset(ppos, 0x00, 12); ppos += 12;		// 12	space
 		*(ppos++) = 0xa1;				//	address mark
@@ -259,8 +264,7 @@ void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
 		*(ppos++) = 0xa1;
 		*(ppos++) = 0xa1;
 		*(ppos++) = sdata[sc].type;
-		ln = (128 << (sdata[sc].sz & 3));		//	data
-		memcpy(ppos, sdata[sc].data, ln); ppos += ln;
+		memcpy(ppos, sdata[sc].data, ln); ppos += ln;	//	data
 		*(ppos++) = 0xf7; *(ppos++) = 0xf7;
 		/*memset(ppos, 0x4e, dsz);*/ ppos += dsz;		// 60	sync (GAP3)
 	}
