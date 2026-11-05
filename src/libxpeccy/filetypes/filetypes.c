@@ -158,8 +158,10 @@ void loadBoot(Computer* comp, const char* path, int drv) {
 	boot_read(comp->dif->flp[drv & 3], path);
 }
 
+// every track a disk read in can have: what the drive held before is gone
 void diskClear(Floppy* flp) {
-	for (int i = 0; i < 168; i++) {
+	for (int i = 0; i < 256; i++) {
+		flp_track_written(flp, i);
 		memset(flp->data[i].byte, 0, flp->trklen);
 		flpFillFields(flp, i, 0);
 	}
