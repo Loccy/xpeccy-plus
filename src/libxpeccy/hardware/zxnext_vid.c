@@ -1916,6 +1916,9 @@ void nxv_sweep(Video* vid) {
 // (-1: at the ray when it is drawn again). A copper writing it stands at w, inside the
 // drawing (nxv_fetch_to) or not, so drawing up to w runs it no further.
 long long nxv_before_reset(Computer* comp, long long w) {
+	// a still frame ends first (the write's own nxv_touch comes after the reset): the
+	// drawing taken up at the ray, and on as for any reset
+	vid_still_end(comp->vid);
 	if (comp->vid->nodraw || comp->vid->still) return -1;
 	if (!V.live) return V.upAt;		// one not taken up yet (in this line): from its dot
 	long long d = nxv_ray_dot(comp);
