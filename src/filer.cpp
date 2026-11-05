@@ -879,6 +879,17 @@ static QFileDialog* file_dialog_open_mode() {
 	return filer;
 }
 
+// The filters set again only when they are not already there with the first one
+// picked, as setting them leaves it: Qt 5 checks every file of the folder against
+// every pattern on each set - 6.9 s at every Open in 37k files (Linux)
+static void file_dialog_open_filter(QFileDialog* dlg, const QString& flt) {
+	QStringList want;
+	for (const QString& f : flt.split(flt.contains(";;") ? QString(";;") : QString("\n")))
+		want << f.simplified();
+	if ((dlg->nameFilters() == want) && (dlg->selectedNameFilter() == want.value(0))) return;
+	dlg->setNameFilter(flt);
+}
+
 // The open dialog, for the kind of file id asks for. What was picked in it
 // comes back through id and drv: the filter chosen is the group the file is
 // opened as, and a drive of its own when drv did not name one.
@@ -898,7 +909,7 @@ QString file_ask_open(Computer* comp, int* id, int* drv) {
 	if (flt.isEmpty()) return path;
 	QFileDialog* filer = file_dialog_open_mode();
 	filer->setWindowTitle("Open File");
-	filer->setNameFilter(flt);
+	file_dialog_open_filter(filer, flt);
 	filer->setDirectory(conf.lastDir.c_str());
 	filer->setHistory(QStringList());
 	if (filer->exec()) {
@@ -2172,7 +2183,7 @@ QString file_ask_save(const char* title, const char* filter, const char* ext, co
 QString file_ask_load(const char* title, const char* filter) {
 	QFileDialog* filer = file_dialog_open_mode();
 	filer->setWindowTitle(title);
-	filer->setNameFilter(filter);
+	file_dialog_open_filter(filer, filter);
 	filer->setDirectory(conf.lastDir.c_str());
 	filer->setHistory(QStringList());
 	if (!filer->exec()) return QString();
