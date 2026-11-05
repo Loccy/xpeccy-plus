@@ -582,6 +582,7 @@ class MainWin : public QWidget {
 		bool fpsOsd();
 		bool fsHeld();
 		bool fsCovers();
+		QSize fsRoom();
 		void popupUserMenu(const QPoint&);
 		void popupRecent();
 		void placeWindow();

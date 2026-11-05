@@ -190,7 +190,7 @@ void MainWin::updateWindow() {
 	refit = 1;
 	QSize wsz;
 	Computer* comp = conf.zx;
-	const QSize screenSize = SCREENSIZE;
+	const QSize screenSize = fsRoom();
 	vid_set_fit(QSize());
 	vid_upd_scale(screenSize);		// the picture and window use the same monitor
 	const QSize zoomSize(drawW, drawH);	// windowed: the zoom's size
@@ -999,6 +999,12 @@ bool MainWin::eventFilter(QObject* obj, QEvent* ev) {
 				// a new zoom or border: the frame takes its size after updateWindow()
 				// has asked for it, so a docked keyboard is told again from here
 				emit s_keywin_snap();
+#if !defined(__WIN32)
+				// fullscreen, the window manager has given the window another size
+				// than the one it was laid out for: laid out again for that (fsRoom)
+				if (!block && conf.vid.fullScreen && (fsRoom() != size()))
+					QTimer::singleShot(0, this, &MainWin::updateWindow);
+#endif
 				break;
 			case QEvent::Close:
 				closeEvent(static_cast<QCloseEvent*>(ev));	// accepts or ignores it
@@ -3147,6 +3153,19 @@ bool MainWin::fsCovers() {
 #endif
 	QRect fg = frame->geometry();
 	return (fg.topLeft() == scr.topLeft()) && (fg.width() == scr.width()) && (fg.height() >= scr.height());
+}
+
+// The size fullscreen fits the picture to. Off Windows the window manager sizes a
+// fullscreen window, and with screens that overlap (two outputs both at 0,0) it can
+// pick another one than the screen Qt names: once the window is in the state, the
+// size it got is the one. Windows: the screen's, the window is made to cover it.
+QSize MainWin::fsRoom() {
+#if !defined(__WIN32)
+	QWindow* win = frame->windowHandle();
+	if (conf.vid.fullScreen && win && (win->windowStates() & Qt::WindowFullScreen) && !frame->size().isEmpty())
+		return frame->size();
+#endif
+	return SCREENSIZE;
 }
 
 // a window of ours, not a menu or a tip: those are seen to by fsCompose's callers
