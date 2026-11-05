@@ -34,6 +34,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **The Debugger's disk dump keeps all its lines**: after the panel grew taller, lines
+  below its old height stayed blank while scrolling.
 - **Fullscreen on Linux with two screens at one place** (a docked Steam Deck with its own
   screen on): the picture fits the window again instead of showing an enlarged corner of it.
 - **No text cut in Options on Linux**: the buttons of the Machine and Application pages, the
