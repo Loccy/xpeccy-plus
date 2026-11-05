@@ -152,7 +152,8 @@ QVariant xHotkeyModel::headerData(int sec, Qt::Orientation ori, int role) const 
 
 // The section headings. The built-in colors are drawn for a light ground: under
 // System on a dark one (a dark desktop theme) they come from its palette instead,
-// the accent toned down into the table's ground. Colors the user set are kept.
+// the accent toned down into the table's ground. Colors other than the built-in
+// ones - a style's, the user's - are kept.
 static QColor headingColor(bool ground) {
 	const char* name = ground ? "dbg.header.bg" : "dbg.header.txt";
 	QColor col = conf.pal.value(name);
