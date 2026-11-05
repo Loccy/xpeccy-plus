@@ -18,8 +18,8 @@ in [Machine: Disk](options-machine.md#machine-disk).
 ```
 
 Open a disk image with **File > Open...**, or drop it onto the window: it goes into drive A
-(see [Run a program](getting-started.md#run-a-program)). To put it into another drive, pick
-**Disk B**, **Disk C** or **Disk D** as the file type in the open dialog.
+(see [Run a program](getting-started.md#run-a-program)). To put it into another drive, use
+**Open...** in that drive's submenu below.
 
 ![Media > Floppy Drives](images/menu-floppy.png)
 

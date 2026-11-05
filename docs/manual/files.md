@@ -90,7 +90,7 @@ A snapshot, tape or disk packed in a `.zip`, `.gz` or `.7z` archive opens as if 
 packed: open the archive, drop it onto the window, pick it from **Recent** or name it on the
 command line. No archiver is needed.
 
-Only the images the open is for are offered: **Disk A** in the open dialog offers the disks
+Only the images the open is for are offered: **Disk** in the open dialog offers the disks
 in the archive, the Tape Player's **Open** its tapes. Text files, pictures, cheats and the
 `SCRSHOT`, `INFO` and `POKES` folders of an archive are left out.
 
@@ -153,8 +153,9 @@ All opening and saving goes through the program's own file dialog, the same on e
 system. It starts in the folder you used last.
 
 The list of file types at the bottom is more than a filter: the type you pick says what
-the file is opened as. **Disk B** puts a disk into drive B, **RAW file to disk** writes any
-file onto disk A, and with **All files** the file's extension decides.
+the file is opened as. **Disk** puts a disk into drive A, **RAW file to disk** writes any
+file onto disk A, and with **All files** the file's extension decides. A drive's own
+**Open...** (**Media > Floppy Drives**) puts the disk into that drive.
 
 ## Saving
 
