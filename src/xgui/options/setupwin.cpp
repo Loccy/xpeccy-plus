@@ -432,6 +432,8 @@ void SetupWin::makeDevWidgets() {
 SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	setModal(true);
 	ui.setupUi(this);
+	machColMin = ui.machButtons->maximumWidth();
+	appColMin = ui.appButtons->maximumWidth();
 	makeDevWidgets();
 	// a .ui iconset holds a single pixmap, which the title bar would have
 	// to downscale; the application icon carries every drawn
@@ -1073,6 +1075,7 @@ void SetupWin::fillPages() {
 			g->setColumnMinimumWidth(col, wid);
 	}
 	ui.cbStyleSheet->setFixedWidth(ui.gridLayout_look->columnMinimumWidth(1));	// as wide as the names under it
+	fitButtonColumns();
 	// Saves: the numbers alike, as wide as the widest of them asks; the columns
 	// as Emulation's, so the names stand in one place on both pages
 	int savw = 0;
@@ -1283,6 +1286,21 @@ void SetupWin::noteShown() {
 	shown.mem = getRFIData(ui.mszbox);
 }
 
+// The columns of buttons with their names beside an icon: as wide as the widest name
+// asks in this font and style, the .ui's width at least. The Machine page's buttons
+// and the columns lined up with them, and the Application page's.
+void SetupWin::fitButtonColumns() {
+	int wid = machColMin;
+	for (QPushButton* btn : {(QPushButton*)ui.pbResetMachine, (QPushButton*)ui.pbSaveMachine, (QPushButton*)ui.pbDelMachine, btnRecAdv})
+		wid = qMax(wid, btn->sizeHint().width());
+	for (QWidget* col : {ui.machButtons, ui.picRight, ui.afRight, ui.ssRight, boxRecAdv})
+		col->setFixedWidth(wid);
+	wid = appColMin;
+	for (QPushButton* btn : {ui.pbFavorites, ui.pbCfgExport, ui.pbCfgImport, ui.pbCfgReset})
+		wid = qMax(wid, btn->sizeHint().width());
+	ui.appButtons->setFixedWidth(wid);
+}
+
 void SetupWin::apply() {
 	ui.tvHotkeys->commit();
 	x_input_bump();			// the machine changed from outside: frames run ahead go
@@ -1342,6 +1360,7 @@ void SetupWin::apply() {
 
 	fullscreenTip(ui.cbFullscreen);		// the Hotkeys page may have moved it
 	emit s_apply();
+	fitButtonColumns();		// a style just applied pads the buttons its own way
 
 	if (!inBench) {
 		layouts_save();
@@ -3554,6 +3573,8 @@ void SetupWin::buildRecording() {
 	// style sheet's min-width on a push button cannot override
 	QWidget* adbox = new QWidget;
 	adbox->setFixedWidth(ui.machButtons->maximumWidth());
+	btnRecAdv = adb;
+	boxRecAdv = adbox;
 	QVBoxLayout* adlay = new QVBoxLayout(adbox);
 	adlay->setContentsMargins(0, 0, 0, 0);
 	adlay->addWidget(adb);
