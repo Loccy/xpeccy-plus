@@ -583,6 +583,7 @@ class MainWin : public QWidget {
 		bool fsHeld();
 		bool fsCovers();
 		QSize fsRoom();
+		bool fsRefit = false;	// a refit to the fullscreen size the window got is queued
 		void popupUserMenu(const QPoint&);
 		void popupRecent();
 		void placeWindow();
