@@ -104,8 +104,11 @@ It asks once: the answer becomes the **Folders** setting. Both settings are in t
 **Folder as a disk** group on the [Emulation page](options-emulation.md) page of **Options**:
 
 - **Folders** - **R/W**, read/write (the default), or **R/O**, read-only. The machine cannot
-  write to a read-only folder: esxDOS reports `I/O ERROR`, a hard disk an error. A change
-  takes effect when the folder is next read: at a **Hard Reset** or a change of machine.
+  write to a folder opened read-only: esxDOS reports `I/O ERROR`, a hard disk an error.
+  **R/O** takes effect at **Apply**: a folder in use stops changing, and what the machine
+  writes to it from then on stays in memory, as with the **Read-only** answer above.
+  **R/W** takes effect when the folder is next read: at a **Hard Reset** or a change of
+  machine.
 - **Deleted files** - **Move to trash** (the default) puts a file the machine deletes in
   your system's trash; **Delete permanently** removes it. A file the trash will not take
   stays in the folder.
