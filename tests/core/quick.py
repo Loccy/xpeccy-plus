@@ -141,58 +141,41 @@ def bench_prog(bench, jobs):
         return dict(pool.map(lambda c: run_prog(bench, c), runs))
 
 
+def run_sections(bench, args, rc=True, timeout=120, **kw):
+    """A bench that prints its own sections; a failed run (rc: a nonzero exit too) is one of them."""
+    p = subprocess.run([str(BUILD / f"{bench}-bench{EXE}")] + args, capture_output=True, text=True,
+                       errors="replace", timeout=timeout, **kw)
+    res = read_sections(p.stdout)
+    if (rc and p.returncode) or not res:
+        res[f"{bench}-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
+    return res
+
+
 def bench_tape():
     with tempfile.TemporaryDirectory(prefix="xquick-") as tmp:
         subprocess.run([sys.executable, str(CORE / "tape" / "mktape.py"), tmp], check=True)
-        p = subprocess.run([str(BUILD / f"tape-bench{EXE}"), tmp], capture_output=True, text=True, errors="replace", timeout=120)
-    res = read_sections(p.stdout)
-    if p.returncode or not res:
-        res["tape-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
-    return res
+        return run_sections("tape", [tmp])
 
 
 def bench_pok():
-    files = sorted(str(f) for f in (CORE / "pok" / "files").glob("*.pok"))
-    p = subprocess.run([str(BUILD / f"pok-bench{EXE}")] + files, capture_output=True, text=True, errors="replace", timeout=120)
-    res = read_sections(p.stdout)
-    if p.returncode or not res:
-        res["pok-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
-    return res
+    return run_sections("pok", sorted(str(f) for f in (CORE / "pok" / "files").glob("*.pok")))
 
 
 def bench_siblings():
-    p = subprocess.run([str(BUILD / f"siblings-bench{EXE}"), str(CORE / "siblings" / "folders.txt")],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
-    res = read_sections(p.stdout)
-    if p.returncode or not res:
-        res["siblings-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
-    return res
+    return run_sections("siblings", [str(CORE / "siblings" / "folders.txt")], encoding="utf-8")
 
 
 def bench_brk():
-    p = subprocess.run([str(BUILD / f"brk-bench{EXE}")], capture_output=True, text=True, errors="replace", timeout=120)
-    res = read_sections(p.stdout)
-    if not res:
-        res["brk-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
-    return res
+    return run_sections("brk", [], rc=False)
 
 
 def bench_dsk():
-    p = subprocess.run([str(BUILD / f"dsk-bench{EXE}")], capture_output=True, text=True, errors="replace", timeout=300)
-    res = read_sections(p.stdout)
-    if p.returncode or not res:
-        res["dsk-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
-    return res
+    return run_sections("dsk", [], timeout=300)
 
 
 def bench_vfat():
     with tempfile.TemporaryDirectory(prefix="xquick-") as tmp:
-        p = subprocess.run([str(BUILD / f"vfat-bench{EXE}"), tmp, "4", "120"], capture_output=True, text=True,
-                           errors="replace", timeout=300)
-    res = read_sections(p.stdout)
-    if p.returncode or not res:
-        res["vfat-bench"] = f"exit {p.returncode}: {p.stderr.strip()}"
-    return res
+        return run_sections("vfat", [tmp, "4", "120"], timeout=300)
 
 
 def bench_zxnext():
