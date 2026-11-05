@@ -2725,12 +2725,17 @@ static void nx_reset(Computer* comp) {
 	comp->cpu->xinta = nx_inta;
 	int fw = !NX.powered && NX.firmware;
 	NX.firmware = 0;
+	long long up = -1;
 	if (!NX.powered) {
 		nx_power(comp);
 	} else {
 		// the reset button: a soft reset (zxnext.vhd 1733-1738, 6370)
 		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
+		up = nxv_before_reset(comp);
+		const nxTiming* t0 = nx_tim(comp);
+		int f0 = nx_lines(comp);
 		nx_regs_reset(comp);
+		if ((nx_tim(comp) != t0) || (nx_lines(comp) != f0)) up = -1;	// another raster: at the ray
 		nx_layout(comp);
 	}
 	// a reset lets the I2C lines go (zxnext.vhd 3231-3252); the clock chip sees that
@@ -2743,6 +2748,7 @@ static void nx_reset(Computer* comp) {
 	comp_set_cont(comp, 0);		// the machine contends by itself (nx_cont)
 	nx_map_mem(comp);
 	nxv_reset(comp);
+	NX.v.upAt = up;			// the button: drawn on from where the reset found the ray
 	nx_snd_reset(comp);
 	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
 }
