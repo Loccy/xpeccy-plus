@@ -1288,8 +1288,15 @@ void SetupWin::apply() {
 	int rwStep = conf.emu.rewind.step;
 	int rwSecs = conf.emu.rewind.secs;
 	// unset shows as Last, and stays unset - the first start still asks - until changed
-	// a folder's mode is taken when it is mounted or read again, with the power off
-	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
+	// R/O stops the folders in use from changing at once; R/W is taken when a folder
+	// is mounted or read again, with the power off
+	int foldRw = getRFIData(cbFolderWrite) ? 1 : 0;
+	if (conf.fold.rw && !foldRw) {
+		emu_lock();
+		fold_read_only(conf.zx);
+		emu_unlock();
+	}
+	conf.fold.rw = foldRw;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
 	applySaves();
 	int row = cbStart->currentIndex();
@@ -3081,9 +3088,9 @@ void SetupWin::buildFolders() {
 	gridFolders->setColumnStretch(2, 1);
 	cbFolderWrite = new QComboBox;
 	cbFolderWrite->addItem(tr("R/O"), 0);
-	cbFolderWrite->setItemData(0, tr("Read-only: the folder stays as it is"), Qt::ToolTipRole);
+	cbFolderWrite->setItemData(0, tr("Read-only: the folder stays as it is, from Apply on"), Qt::ToolTipRole);
 	cbFolderWrite->addItem(tr("R/W"), 1);
-	cbFolderWrite->setItemData(1, tr("Read/write: the folder's files follow\nwhat the machine writes"), Qt::ToolTipRole);
+	cbFolderWrite->setItemData(1, tr("Read/write: the folder's files follow what\nthe machine writes, from the next Hard Reset"), Qt::ToolTipRole);
 	cbFolderTrash = new QComboBox;
 	cbFolderTrash->addItem(tr("Move to trash"), 1);
 	cbFolderTrash->addItem(tr("Delete permanently"), 0);
@@ -3100,7 +3107,7 @@ void SetupWin::buildFolders() {
 	note->setFont(font);
 	gridFolders->addWidget(cbFolderWrite, 0, 0);
 	gridFolders->addWidget(label(cbFolderWrite, tr("Folders"),
-		tr("R/O: read-only, the folder stays as it is\nR/W: read/write, the folder's files follow\nwhat the machine writes")), 0, 1);
+		tr("R/O: read-only, the folder stays as it is,\nfrom Apply on\nR/W: read/write, the folder's files follow\nwhat the machine writes, from the next Hard Reset")), 0, 1);
 	gridFolders->addWidget(note, 0, 2);
 	gridFolders->addWidget(label(cbFolderTrash, tr("Deleted files"),
 		tr("Where a file the machine deletes in such\na folder goes. A file the trash will not\ntake stays in the folder")), 1, 1);
