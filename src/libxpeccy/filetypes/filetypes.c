@@ -245,7 +245,7 @@ void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
 		ln = (128 << (sdata[sc].sz & 3));
 		// a size code past 23 counts as nothing above, but its bytes are written:
 		// what would run past the track's buffer stays off it
-		if ((ppos - base) + 72 + ln > TRKLEN_HD) break;
+		if ((ppos - base) + 72 + ln > (int)sizeof(flp->data[tr].byte)) break;
 		/*memset(ppos, 0x4e, 10);*/ ppos += 10;		// 10	sync (GAP1)
 		memset(ppos, 0x00, 12); ppos += 12;		// 12	space
 		*(ppos++) = 0xa1;				//	address mark

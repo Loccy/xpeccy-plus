@@ -834,6 +834,8 @@ void utrkfrm01(FDC* fdc) {		// wait for index
 void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount);
 int diskFormFits(Floppy* flp, Sector* sdata, int scount);
 
+#define U_SLST	((int)(sizeof(((FDC*)0)->slst) / sizeof(((FDC*)0)->slst[0])))
+
 void upd_form_id(FDC* fdc, int i, const unsigned char* chrn) {
 	Sector* s = &fdc->slst[i];
 	s->trk = chrn[0];
@@ -842,7 +844,7 @@ void upd_form_id(FDC* fdc, int i, const unsigned char* chrn) {
 	s->sz = chrn[3];
 	s->crc = -1;			// to be worked out
 	s->type = 0xfb;			// a normal data mark
-	memset(s->data, fdc->comBuf[4], 4096);	// filled with D
+	memset(s->data, fdc->comBuf[4], 128 << (chrn[3] & 3));	// filled with D, as much as diskFormTrack takes
 }
 
 void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors header data
@@ -854,7 +856,7 @@ void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors he
 			fdc->cnt = 0;
 			// The index coming round ends the command (datasheet): the track
 			// holds the sectors that fit, and no more IDs are asked for
-			int fit = (fdc->scnt < (int)(sizeof(fdc->slst) / sizeof(fdc->slst[0])));
+			int fit = (fdc->scnt < U_SLST);
 			if (fit) {
 				upd_form_id(fdc, fdc->scnt, fdc->buf);
 				fit = diskFormFits(fdc->flp, fdc->slst, fdc->scnt + 1);
@@ -862,6 +864,7 @@ void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors he
 			if (fit) fdc->scnt++;				// next sector
 			if (!fit || (fdc->scnt >= fdc->comBuf[2])) {	// sectors/track
 				int sc = (fdc->scnt < fdc->comBuf[2]) ? fdc->scnt : fdc->comBuf[2];	// SC 0: none
+				if (sc > U_SLST) sc = U_SLST;		// a count a snapshot file put there
 				diskFormTrack(fdc->flp, (fdc->trk << 1) | fdc->side, fdc->slst, sc);
 				fdc->drq = 0;				// all data completed, no more bytes needed
 				fdc->pos++;
@@ -897,7 +900,8 @@ void utrkfrm03(FDC* fdc) {		// emulate whole track writing
 static fdcCall uFormat[] = {&uwargs,&utrkfrm00,&utrkfrm01,&utrkfrm02,&utrkfrm03,&ureadRS,&uTerm};
 
 int upd_format_ids(FDC* fdc) {
-	return ((fdc->plan == uFormat) && (fdc->pos >= 3)) ? fdc->scnt : 0;	// from utrkfrm02 on
+	if ((fdc->plan != uFormat) || (fdc->pos != 3)) return 0;	// utrkfrm02 alone uses them
+	return (fdc->scnt < 0) ? 0 : (fdc->scnt > U_SLST) ? U_SLST : fdc->scnt;
 }
 
 // invalid op : R [SR0 = 0x80]

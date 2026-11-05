@@ -1159,7 +1159,7 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	fdc->resPos = t->resPos;
 	// an older file's read hands the CPU the whole field
 	fdc->xfer = (t->xfer >= 0) ? t->xfer : t->cnt;
-	fdc->scnt = t->scnt;
+	fdc->scnt = (t->scnt < 0) ? 0 : t->scnt;	// an index into the Format's list
 	fdc->sr0 = t->sr0;
 	fdc->sr1 = t->sr1;
 	fdc->sr2 = t->sr2;
