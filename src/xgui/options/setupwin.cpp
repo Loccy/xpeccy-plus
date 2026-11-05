@@ -1282,25 +1282,20 @@ void SetupWin::noteShown() {
 	shown.mem = getRFIData(ui.mszbox);
 }
 
-// What is as wide as its widest text asks in this font and style: measured when the
-// pages are filled and when a style is applied. The columns of buttons with their names
-// beside an icon, the .ui's width at least - the Machine page's, with the columns lined
-// up with them (Video's check boxes, so every group's fields end at one edge), and the
-// Application page's - and the border size's label, so it does not jump while dragging.
+// widths that follow the font and style: on fill and after a style is applied
 void SetupWin::fitWidths() {
 	int wid = machColMin;
-	for (QPushButton* btn : {(QPushButton*)ui.pbResetMachine, (QPushButton*)ui.pbSaveMachine, (QPushButton*)ui.pbDelMachine, btnRecAdv})
+	for (xSideButton* btn : {ui.pbResetMachine, ui.pbSaveMachine, ui.pbDelMachine, btnRecAdv})
 		wid = qMax(wid, btn->sizeHint().width());
 	for (QWidget* col : {ui.machButtons, ui.picRight, ui.afRight, ui.ssRight, boxRecAdv})
 		col->setFixedWidth(wid);
 	wid = appColMin;
-	for (QPushButton* btn : {ui.pbFavorites, ui.pbCfgExport, ui.pbCfgImport, ui.pbCfgReset})
+	for (xSideButton* btn : {ui.pbFavorites, ui.pbCfgExport, ui.pbCfgImport, ui.pbCfgReset})
 		wid = qMax(wid, btn->sizeHint().width());
 	ui.appButtons->setFixedWidth(wid);
-	Computer* comp = conf.zx;
 	wid = 0;
-	for (int m = comp->vid->brdmin; m <= VID_BRD_OVERSCAN; m++)
-		wid = std::max(wid, ui.bszlab->fontMetrics().horizontalAdvance(borderText(m)));
+	for (int m = conf.zx->vid->brdmin; m <= VID_BRD_OVERSCAN; m++)
+		wid = qMax(wid, ui.bszlab->fontMetrics().horizontalAdvance(borderText(m)));
 	ui.bszlab->setMinimumWidth(wid);
 }
 

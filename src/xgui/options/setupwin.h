@@ -190,7 +190,7 @@ class SetupWin : public QDialog {
 		QLabel *labRecSrc, *labRecOut, *labRecFfm, *labRecSize, *labRecFmt;
 		QToolButton* btnRecGet;
 		xElideLabel* labRecName;
-		QPushButton* btnRecAdv;
+		xSideButton* btnRecAdv;
 		QWidget* boxRecAdv;
 		int machColMin;		// the button columns as the .ui has them, the least they get
 		int appColMin;

@@ -1000,9 +1000,7 @@ bool MainWin::eventFilter(QObject* obj, QEvent* ev) {
 				// has asked for it, so a docked keyboard is told again from here
 				emit s_keywin_snap();
 #if defined(__linux__)
-				// fullscreen, the window manager has given the window another size
-				// than the one it was laid out for: laid out again for that (fsRoom),
-				// once for a burst of them, and only if it still is so by then
+				// fullscreen given another size by the WM: one refit per burst
 				if (!block && !fsRefit && conf.vid.fullScreen && (fsRoom() != size())) {
 					fsRefit = 1;
 					QTimer::singleShot(0, this, [this]() {
@@ -3161,11 +3159,8 @@ bool MainWin::fsCovers() {
 	return (fg.topLeft() == scr.topLeft()) && (fg.width() == scr.width()) && (fg.height() >= scr.height());
 }
 
-// The size fullscreen fits the picture to. On Linux the window manager sizes a
-// fullscreen window, and with screens that overlap (two outputs both at 0,0) it can
-// pick another one than the screen Qt names: once the window has the size of a
-// screen - the state alone is set before the window manager has answered - that
-// size is the one. Elsewhere: the screen's, the window is made to cover it.
+// KWin may fullscreen onto another of two overlapping screens: once the window has
+// a screen's size (the state comes before the WM's answer), that size is the room
 QSize MainWin::fsRoom() {
 #if defined(__linux__)
 	QWindow* win = frame->windowHandle();

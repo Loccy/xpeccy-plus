@@ -2,7 +2,6 @@
 #include "../../xcore/xcore.h"
 
 #include <QApplication>
-#include <QPalette>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -150,10 +149,7 @@ QVariant xHotkeyModel::headerData(int sec, Qt::Orientation ori, int role) const 
 	return ((sec >= 0) && (sec < 3)) ? QString(names[sec]) : QVariant();
 }
 
-// The section headings. The built-in colors are drawn for a light ground: under
-// System on a dark one (a dark desktop theme) they come from its palette instead,
-// the accent toned down into the table's ground. Colors other than the built-in
-// ones - a style's, the user's - are kept.
+// built-in header colors are for a light ground; dark System takes the palette's
 static QColor headingColor(bool ground) {
 	const char* name = ground ? "dbg.header.bg" : "dbg.header.txt";
 	QColor col = conf.pal.value(name);
@@ -201,7 +197,7 @@ QVariant xHotkeyModel::data(const QModelIndex& idx, int role) const {
 					.arg(base[col - 1].isEmpty() ? QString("none") : shortcutText(base[col - 1]));
 			}
 			break;
-		// a heading in the colors of the debugger's panel titles, which every style sets
+		// a heading: headingColor()
 		case Qt::BackgroundRole:
 		case Qt::ForegroundRole:
 			if (t < 0) var = headingColor(role == Qt::BackgroundRole);
