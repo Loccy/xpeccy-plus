@@ -164,6 +164,8 @@ on the numeric keypad: Alt+Num++ is Alt with the keypad plus.
 | Open | F3, Ctrl+O | F3 |
 | Recent Files | - | - |
 | Reload | - | - |
+| Next Side | Shift+F3 | Shift+F3 |
+| Previous Side | - | - |
 | Add to Favorites | - | - |
 | Save | F2, Ctrl+S | F2 |
 | Save Changed Disks | - | F9 |

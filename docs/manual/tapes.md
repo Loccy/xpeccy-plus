@@ -120,7 +120,10 @@ instead: when a program's own loader reads it again at its end, or a load throug
 asks for a block that is not on it, the next tape of the set goes in at its start and
 plays - side A, side B, then side A again - and the screen shows `tape: side b`. A game whose
 levels are on side B gets them after side A with no hand on the deck. **Play** rewinds the
-tape that is in, as above, and so does a tape you have recorded on.
+tape that is in, as above, and so does a tape you have recorded on. With **Next tape of a
+set** off (Options, see [Machine page](options-machine.md)) the tape that is in rewinds
+instead, as a lone one does: for a game that loads its levels again and again from side B
+and needs side A only to start. Shift+F3 still changes the side by hand.
 
 With this switch off, the tape stays at its end until you rewind it: turn it off for a game
 that asks you to turn the tape over, or the game gets the same side again. It is on by

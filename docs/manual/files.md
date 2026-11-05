@@ -133,6 +133,18 @@ and its gamepad bindings and its cheat file stay, as when the next tape of a set
 itself (see [Tapes](tapes.md)). The side goes in while the machine runs, with no pause in
 the picture or the sound.
 
+```{index} Next Side, Previous Side, side; changing by a key
+```
+
+**Media > Next Side**, Shift+F3, puts in the next side without a menu: side B after side A,
+disk 3 after disk 2, and the first after the last; **Previous Side** goes the other way and
+has no key at first (see [Hotkeys](hotkeys.md)). It works on the tape or the drive that the
+program used last, the one the window title names, and keeps to it while you press it again;
+before the program has used either, on the tape if it is one of a set, else on drive A. A
+playing tape is stopped first. A disk that is in another drive is passed over. The screen
+shows what went in, as `drive A: side b`, or `no other side`. Of the files of one side, as
+`Side A` and `Side A [a]`, the one with the same notes in brackets goes in.
+
 The set is found by the names: files named the same but for the side or the part, as
 `Game (Side A).tzx` and `Game (Side B).tzx`, `Game - Side 1.tzx`, `game_a.tap` and
 `game_b.tap`, `Game (Tape 1 of 2).tzx`, `Game - Disk 2.trd`. A number alone does not make a

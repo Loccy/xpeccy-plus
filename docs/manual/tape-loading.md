@@ -130,7 +130,8 @@ When the tape is one of a set (`Game (Side A).tzx`, `Game (Side B).tzx`... - see
 [The other sides beside an image](files.md#the-other-sides-beside-an-image)), a loader reading
 past its end, or a ROM load asking for a block it does not have, gets the next tape of the set
 instead of a rewind, and the picture says which side is in. **Play** still rewinds the tape that
-is in.
+is in. **Next tape of a set** off in Options leaves the set out: the tape rewinds as a lone
+one does.
 
 With **Rewind at end** off, the tape stays at its end, as a deck would leave it: a game that
 says "turn the tape over" expects that.
