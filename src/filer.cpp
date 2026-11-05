@@ -21,6 +21,7 @@
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileIconProvider>
+#include <QFileSystemModel>
 #include <QHash>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -34,6 +35,7 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSet>
+#include <QSortFilterProxyModel>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyleOptionViewItem>
@@ -76,22 +78,111 @@ private:
 	mutable QHash<QString, QIcon> icons;
 };
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+// Qt 5 runs a regex per pattern per file on the GUI thread: its model gets no patterns, this keeps files by suffix
+class xSuffixFilter : public QSortFilterProxyModel {
+public:
+	explicit xSuffixFilter(QObject* parent) : QSortFilterProxyModel(parent) {}
+	// takes the patterns the dialog has just given its model
+	void take() {
+		QFileSystemModel* fsm = static_cast<QFileSystemModel*>(sourceModel());
+		const QStringList pat = fsm->nameFilters();
+		if (pat.isEmpty()) return;
+		fsm->setNameFilters(QStringList());
+		exts.clear();
+		rest.clear();
+		all = false;
+		for (const QString& p : pat) {
+			const QString ext = p.mid(2);
+			bool plain = p.startsWith("*.") && !ext.isEmpty();	// one suffix, compared with the last one of a name
+			for (QChar c : ext)
+				plain &= (c != '*') && (c != '?') && (c != '[') && (c != '.');
+			if (p == "*")
+				all = true;
+			else if (plain)
+				exts.insert(ext.toLower());
+			else
+				rest.append(QRegularExpression(QRegularExpression::wildcardToRegularExpression(p), QRegularExpression::CaseInsensitiveOption));
+		}
+		invalidateFilter();
+	}
+	// the model's own order: folders first, names in natural order
+	void sort(int column, Qt::SortOrder order) override {sourceModel()->sort(column, order);}
+protected:
+	bool filterAcceptsRow(int row, const QModelIndex& parent) const override {
+		const QFileSystemModel* fsm = static_cast<const QFileSystemModel*>(sourceModel());
+		if (all || !fsm->nameFilters().isEmpty()) return true;	// a pattern typed as the name: Qt filters
+		const QModelIndex idx = fsm->index(row, 0, parent);
+		if (fsm->isDir(idx)) return true;
+		const QString name = fsm->fileName(idx);
+		const int dot = name.lastIndexOf('.');
+		if ((dot >= 0) && exts.contains(name.mid(dot + 1).toLower())) return true;
+		for (const QRegularExpression& re : rest)
+			if (re.match(name).hasMatch()) return true;
+		return false;
+	}
+private:
+	QSet<QString> exts;
+	QList<QRegularExpression> rest;
+	bool all = true;
+};
+#endif
+
+// After every setNameFilter / selectNameFilter of ours: Qt 5's patterns go to the suffix filter
+static void file_dialog_filtered(QFileDialog* dlg) {
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+	if (xSuffixFilter* sf = dynamic_cast<xSuffixFilter*>(dlg->proxyModel())) sf->take();
+#else
+	Q_UNUSED(dlg)
+#endif
+}
+
 // Must run after the views exist (a provider set before the model is dropped) and before the first listing.
 // Uniform rows stop the views measuring every row; List View gets them only while hidden, as one width would cut names when shown.
 static void file_dialog_tune(QFileDialog* dlg) {
 	QTreeView* tree = dlg->findChild<QTreeView*>("treeView");
 	if (!tree || dlg->property("xTuned").toBool()) return;	// native, or done
 	dlg->setProperty("xTuned", true);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+	if (!dlg->proxyModel() && dlg->findChild<QFileSystemModel*>()) {
+		xSuffixFilter* sf = new xSuffixFilter(dlg);
+		dlg->setProxyModel(sf);		// first: the views get it as their model
+		sf->take();
+		QObject::connect(dlg, &QFileDialog::filterSelected, sf, &xSuffixFilter::take);	// after Qt sets the user's pick
+	}
+#endif
 	static xFileTypes* types = new xFileTypes;	// never freed: a dialog may outlive any owner at exit
 	dlg->setIconProvider(types);
 	tree->setUniformRowHeights(true);
+	// The user's sort and view, over the header state Qt restores
+	tree->sortByColumn(conf.fdlg.sort, conf.fdlg.desc ? Qt::DescendingOrder : Qt::AscendingOrder);
+	dlg->setViewMode(conf.fdlg.list ? QFileDialog::List : QFileDialog::Detail);
+	QObject::connect(tree->header(), &QHeaderView::sortIndicatorChanged, tree, [](int col, Qt::SortOrder ord) {
+		conf.fdlg.sort = qBound(0, col, 3);
+		conf.fdlg.desc = (ord == Qt::DescendingOrder);
+	});
 	QListView* list = dlg->findChild<QListView*>("listView");
 	QStackedWidget* views = dlg->findChild<QStackedWidget*>("stackedWidget");
 	if (!list || !views) return;
 	list->setLayoutMode(QListView::Batched);
-	auto fit = [list, views]() {list->setUniformItemSizes(views->currentWidget() != list->parentWidget());};
+	auto fit = [list, views]() {
+		bool shown = (views->currentWidget() == list->parentWidget());
+		list->setUniformItemSizes(!shown);
+		conf.fdlg.list = shown;
+	};
 	QObject::connect(views, &QStackedWidget::currentChanged, list, fit);
 	fit();
+}
+
+// On each show: the sort and view last picked in any file dialog; sorted again only if changed
+static void file_dialog_recall(QFileDialog* dlg) {
+	QTreeView* tree = dlg->findChild<QTreeView*>("treeView");
+	if (!tree) return;
+	const Qt::SortOrder ord = conf.fdlg.desc ? Qt::DescendingOrder : Qt::AscendingOrder;
+	if ((tree->header()->sortIndicatorSection() != conf.fdlg.sort) || (tree->header()->sortIndicatorOrder() != ord))
+		tree->sortByColumn(conf.fdlg.sort, ord);
+	const QFileDialog::ViewMode mode = conf.fdlg.list ? QFileDialog::List : QFileDialog::Detail;
+	if (dlg->viewMode() != mode) dlg->setViewMode(mode);
 }
 
 // Built on first use, in the folder it is about to show: a Qt dialog built
@@ -376,6 +467,8 @@ static xFileTypeInfo ft_sltraw = {FL_SLT_BIN, 0, NULL, NULL, loadSlot, NULL, "RA
 static xFileTypeInfo ft_raw = {FL_RAW, 0, NULL, NULL, loadRaw, NULL, "RAW file to disk A"};
 static xFileTypeInfo ft_dum = {FL_NONE, 0, NULL, NULL, NULL, NULL, "Dummy entry"};
 
+#define DISK_TYPES FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0
+
 // 3rd parameter
 // < 0 : allways on
 // 0..3 : disk (must be inserted for save)
@@ -383,10 +476,12 @@ static xFileTypeInfo ft_dum = {FL_NONE, 0, NULL, NULL, NULL, NULL, "Dummy entry"
 static xFileGroupInfo fg_tab[] = {
 	{FG_SNAPSHOT, ".szx", -1, "Snapshot", NULL, {FL_SZX, FL_SNA, FL_Z80, FL_SPG, FL_NEX, FL_SNX, 0}},
 	{FG_TAPE, ".tap", 4, "Tape", NULL, {FL_TAP, FL_TZX, FL_WAV, 0}},
-	{FG_DISK_A, ".trd", 0,"Disk A", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_B, ".trd", 1, "Disk B", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_C, ".trd", 2, "Disk C", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_D, ".trd", 3, "Disk D", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
+	// before the drives: a filter's group is the last name it starts with
+	{FG_DISKS, ".trd", 0, "Disk", NULL, {DISK_TYPES}},
+	{FG_DISK_A, ".trd", 0, "Disk A", NULL, {DISK_TYPES}},
+	{FG_DISK_B, ".trd", 1, "Disk B", NULL, {DISK_TYPES}},
+	{FG_DISK_C, ".trd", 2, "Disk C", NULL, {DISK_TYPES}},
+	{FG_DISK_D, ".trd", 3, "Disk D", NULL, {DISK_TYPES}},
 	{FG_RAW, "", 0, "RAW file to disk", &ft_raw, {FL_RAW, 0}},
 	{FG_IF2_ROM, "", -1, "Cartridge image", &ft_sltraw, {FL_SLT_ROM, FL_SLT_BIN, 0}},
 	{FG_RZX, "", -1, "RZX playback", NULL, {FL_RZX, 0}},
@@ -402,7 +497,7 @@ static bool ft_export(xFileTypeInfo* inf) {
 }
 
 static xFileHWInfo fh_tab[] = {
-	{FH_SPECTRUM, {FG_SNAPSHOT, FG_TAPE, FG_DISK_A, FG_DISK_B, FG_DISK_C, FG_DISK_D, FG_RAW, FG_RZX, FG_IF2_ROM, FG_POK, 0}},
+	{FH_SPECTRUM, {FG_SNAPSHOT, FG_TAPE, FG_DISKS, FG_DISK_A, FG_DISK_B, FG_DISK_C, FG_DISK_D, FG_RAW, FG_RZX, FG_IF2_ROM, FG_POK, 0}},
 	{FH_ALF, {FG_IF2_ROM, FG_SNAPSHOT, 0}},
 	{FH_SLOTS, {FG_IF2_ROM, 0}},
 	{FH_DRIVE_A, {FG_DISK_A, FG_RAW, 0}},
@@ -570,12 +665,14 @@ QString file_get_hw_filter(Computer* comp, int id, int sv) {
 	int i;
 	xFileHWInfo* inf = file_find_hw(id);
 	if (inf->id > 0) {
-		i = 0;
-		while (inf->child[i] > 0) {
-			gfl = file_get_group_filter(comp, inf->child[i], sv);
-			if (!gfl.isEmpty())
-				flt.append(gfl);
-			i++;
+		bool disks = false;		// Open has one Disk group, Save one per drive
+		for (i = 0; inf->child[i] > 0; i++)
+			disks |= (inf->child[i] == FG_DISKS);
+		for (i = 0; inf->child[i] > 0; i++) {
+			int g = inf->child[i];
+			if (sv ? (g == FG_DISKS) : (disks && (g >= FG_DISK_A) && (g <= FG_DISK_D))) continue;
+			gfl = file_get_group_filter(comp, g, sv);
+			if (!gfl.isEmpty()) flt.append(gfl);
 		}
 	}
 	if ((flt.size() > 1) && !sv)
@@ -888,8 +985,10 @@ static QFileDialog* file_dialog_open_mode(const QString& title, const QString& f
 	QStringList want;
 	for (const QString& f : flt.split(flt.contains(";;") ? QString(";;") : QString("\n")))
 		want << f.simplified();
-	if ((filer->nameFilters() != want) || (filer->selectedNameFilter() != want.value(0)))
+	if ((filer->nameFilters() != want) || (filer->selectedNameFilter() != want.value(0))) {
 		filer->setNameFilter(flt);
+		file_dialog_filtered(filer);
+	}
 	filer->setDirectory(conf.lastDir.c_str());
 	filer->setHistory(QStringList());
 	return filer;
@@ -916,7 +1015,7 @@ QString file_ask_open(Computer* comp, int* id, int* drv) {
 	if (filer->exec()) {
 		path = filer->selectedFiles().first();
 		xFileGroupInfo* grp = file_detect_grp(filer->selectedNameFilter());
-		if (grp->id > 0) *id = grp->id;
+		if (grp->id > 0) *id = (grp->id == FG_DISKS) ? FG_DISK_A : grp->id;
 		if (*drv < 0) *drv = grp->drv;
 		conf.lastDir = std::string(QFileInfo(path).dir().absolutePath().toLocal8Bit().data());
 	}
@@ -1902,6 +2001,7 @@ int save_file(Computer* comp, const char* name, int id, int drv, int live, const
 			filer->setNameFilter(flt);
 			if (!preLine.isEmpty()) filer->selectNameFilter(preLine);
 			filer->setAcceptMode(QFileDialog::AcceptSave);
+			file_dialog_filtered(filer);
 			if (suggest.isEmpty()) {
 				filer->setDirectory(conf.lastDir.c_str());
 			} else {
@@ -2157,6 +2257,7 @@ QString file_ask_save(const char* title, const char* filter, const char* ext, co
 	filer->setWindowTitle(title);
 	filer->setNameFilter(filter);
 	filer->setAcceptMode(QFileDialog::AcceptSave);
+	file_dialog_filtered(filer);
 	if (suggest.isEmpty()) {
 		filer->setDirectory(conf.lastDir.c_str());
 	} else {
@@ -2205,6 +2306,8 @@ void fitFileDialog(QWidget* w) {
 	QTreeView* tree = dlg ? dlg->findChild<QTreeView*>("treeView") : nullptr;
 	if (!tree) return;
 	file_dialog_tune(dlg);
+	file_dialog_recall(dlg);
+	file_dialog_filtered(dlg);	// whatever patterns Qt put on the model since
 	QHeaderView* hdr = tree->header();
 	hdr->setSectionResizeMode(QHeaderView::ResizeToContents);
 	hdr->setSectionResizeMode(0, QHeaderView::Stretch);

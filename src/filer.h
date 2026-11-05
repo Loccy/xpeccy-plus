@@ -46,7 +46,8 @@ enum {
 	FG_HOBETA,
 	FG_RAW,
 	FG_IF2_ROM,
-	FG_POK
+	FG_POK,
+	FG_DISKS	// Open's one disk group: the same as Disk A
 };
 
 enum {
