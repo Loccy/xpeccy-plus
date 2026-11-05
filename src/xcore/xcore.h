@@ -1014,6 +1014,7 @@ struct xConfig {
 		unsigned flash:1;	// ...the rom's own loader is handed its blocks at once
 		unsigned edge:1;	// ...and a loader waiting for an edge gets it at once
 		unsigned rewind:1;	// play starts a tape played to its end over
+		unsigned setNext:1;	// ...or one of a set goes on to its next tape
 		wavExport exp;		// what the wav export writes
 	} tape;
 //	struct {

@@ -4099,13 +4099,16 @@ void MainWin::watchMedia() {
 
 // Another tape in the deck: whether it has a next one in its set, which auto play asks
 // for at its end (Rewind at end). The folder is read once a tape; the flag shares its
-// word with the ones the emulation sets, so it is written under the lock.
+// word with the ones the emulation sets, so it is written under the lock. With Next tape
+// of a set off, no tape is one: it starts over as a lone one does.
 void MainWin::watchTapeSet(Computer* comp) {
 	Tape* tap = comp->tape;
 	const QByteArray raw(tap->path ? tap->path : "");
-	if ((tap == setTape) && (raw == setRaw)) return;
+	const bool on = conf.tape.setNext;
+	if ((tap == setTape) && (raw == setRaw) && (on == setOn)) return;
 	setTape = tap;
 	setRaw = raw;
+	setOn = on;
 	const QString path = QString::fromLocal8Bit(raw);
 	if (!path.isEmpty()) {
 		tapeSeen.removeAll(path);
@@ -4113,7 +4116,7 @@ void MainWin::watchTapeSet(Computer* comp) {
 		while (tapeSeen.size() > 16) tapeSeen.removeLast();
 	}
 	QString place;
-	const QString next = path.isEmpty() ? QString() : media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, &place);
+	const QString next = (path.isEmpty() || !on) ? QString() : media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, &place);
 	const bool set = !next.isEmpty();
 	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
 	emu_lock();

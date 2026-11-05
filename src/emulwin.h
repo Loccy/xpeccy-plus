@@ -353,6 +353,7 @@ class MainWin : public QWidget {
 		void watchMedia();
 		Tape* setTape = nullptr;	// the tape whose set was looked for, and its path then
 		QByteArray setRaw;
+		bool setOn = false;	// and whether a set was looked for at all (Next tape of a set)
 		QStringList tapeSeen;	// the tapes that were in, newest first, for the side a set turns back to
 		void watchTapeSet(Computer*);
 		void spareTape(Computer*, const QString& next, const QString& place);
