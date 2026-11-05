@@ -282,8 +282,10 @@ void MainWin::socketRead() {
 			pic = QPixmap(frame->size() * widgetDpr(frame));
 			pic.setDevicePixelRatio(widgetDpr(frame));
 			pic.fill(Qt::black);
-			if (!around.isEmpty())		// an empty region would render the lot
-				frame->render(&pic, QPoint(), around);
+			// an empty region would render the lot; the region's corner goes to the
+			// offset given, so it is given where it is - the bars need not start at 0,0
+			if (!around.isEmpty())
+				frame->render(&pic, around.boundingRect().topLeft(), around);
 			QPainter pnt(&pic);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
 			pnt.drawImage(scr.topLeft(), img.flipped(Qt::Vertical));
