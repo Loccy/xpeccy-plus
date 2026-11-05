@@ -25,6 +25,7 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QLabel>
+#include <QListView>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
@@ -32,6 +33,7 @@
 #include <QScrollBar>
 #include <QSet>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QStyleOptionViewItem>
 #include <QTreeView>
 #include <QTreeWidget>
@@ -80,6 +82,23 @@ static QFileDialog* file_dialog() {
 	// the first files listed
 	static xFileTypes types;
 	fileDlg->setIconProvider(&types);
+	// Every row is one line high; told so, the views stop measuring each one.
+	// Detail View measured rows one by one to find where one is (End in 37k
+	// files held the window for 7 s), and List View, hidden behind it, laid
+	// out every name at the first click. Shown, List View measures again: one
+	// width for all would cut the names.
+	QTreeView* tree = fileDlg->findChild<QTreeView*>("treeView");
+	QListView* list = fileDlg->findChild<QListView*>("listView");
+	QStackedWidget* views = fileDlg->findChild<QStackedWidget*>("stackedWidget");
+	if (tree) tree->setUniformRowHeights(true);
+	if (list && views) {
+		auto fit = [list, views]() {
+			QWidget* page = views->currentWidget();
+			list->setUniformItemSizes(!page || !page->isAncestorOf(list));
+		};
+		QObject::connect(views, &QStackedWidget::currentChanged, list, fit);
+		fit();
+	}
 	fileDlg->resize(700, 480);
 	return fileDlg;
 }
