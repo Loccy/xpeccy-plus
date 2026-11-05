@@ -203,9 +203,8 @@ struct Video {
 	vCoord lcut;		// top left corner of the shown frame
 	vCoord rcut;		// bottom right corner (exclusive)
 	vCoord vsze;		// shown frame size
-	// What the Next draws of it: the most any window can show at this border
-	// size - the full border, or what Overscan shows - so a window fitted
-	// anew never shows an undrawn edge; the rest is left as it was.
+	// What the Next draws of it: the most any border size and window show
+	// (Overscan's frame), set with the layout; the rest is left as it was.
 	// drawAll: the whole raster (the bench's frame hashes).
 	vCoord dlt;		// top left corner of what is drawn
 	vCoord drb;		// bottom right corner (exclusive)

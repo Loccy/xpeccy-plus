@@ -321,15 +321,6 @@ void vid_widen_crop(Video* vid, int wid, int hei) {
 
 void vid_upd_crop(Video* vid) {
 	vid_crop_margin(vid, brd_margin(vid, vid->brdmode));
-	// what is drawn: what vid_widen_crop may widen the frame to
-	vCoord m = brd_margin(vid, (vid->brdmode > VID_BRD_FULL) ? vid->brdmode : VID_BRD_FULL);
-	vCoord lt = {vid->bord.x - m.x, vid->bord.y - m.y};
-	vCoord rb = {vid->send.x + m.x, vid->send.y + m.y};
-	// an edge drawn no more till now shows the frame of then: the next one is drawn
-	if ((lt.x < vid->dlt.x) || (lt.y < vid->dlt.y) || (rb.x > vid->drb.x) || (rb.y > vid->drb.y))
-		vid_still_break(vid);
-	vid->dlt = lt;
-	vid->drb = rb;
 }
 
 // new layout:
@@ -343,6 +334,13 @@ void vid_upd_layout(Video* vid) {
 	vid->send.x = vid->bord.x + vid->scrn.x;		// screen end column
 	vid->send.y = vid->bord.y + vid->scrn.y;		// screen end line
 	vid_upd_crop(vid);
+	// what is drawn: the most any border size shows (Overscan's frame), so a border
+	// change touches nothing the machine draws and shows a drawn picture, paused too
+	vCoord m = brd_margin(vid, VID_BRD_OVERSCAN);
+	vid->dlt.x = vid->bord.x - m.x;
+	vid->dlt.y = vid->bord.y - m.y;
+	vid->drb.x = vid->send.x + m.x;
+	vid->drb.y = vid->send.y + m.y;
 	vid->dotPerFrame = vid->full.y * vid->full.x;
 	vid_upd_timings(vid, vid->nsPerDotExact);
 }
