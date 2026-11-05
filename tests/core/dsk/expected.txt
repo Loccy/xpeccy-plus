@@ -104,3 +104,5 @@
   result 41 20 20, first half as stored: yes
   result 41 20 20, first half as stored: yes
   second halves all differ: yes
+== beta-after-p3
+  seek to 40: 0 ms, fast: yes

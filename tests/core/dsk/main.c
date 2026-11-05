@@ -154,6 +154,8 @@ static int rd(void) {
 	return r;
 }
 
+static int send_dos = 0;		// difOut's last argument: DIF_FROM_RAM for a game's own loader
+
 static int send(const unsigned char* b, int n) {
 	for (int i = 0; i < n; i++) {
 		int t = 0;
@@ -161,7 +163,7 @@ static int send(const unsigned char* b, int n) {
 			run(2000);
 			if (++t > 500000) return 0;
 		}
-		difOut(dif, 0x3ffd, b[i], 0);
+		difOut(dif, 0x3ffd, b[i], send_dos);
 		run(2000);
 	}
 	return 1;
@@ -410,6 +412,35 @@ static void weak_made(void) {
 	printf("  second halves all differ: %s\n", differ ? "yes" : "no");
 }
 
+// A +3 game's own loader reads in real time; the machine then turns into a Beta
+// disk one with fast access on: its WD1793 seeks fast, not as the +3 left it
+static void beta_after_p3(void) {
+	unsigned char b[9] = {0x46, 0x00, 0, 0, 1, 2, 1, 0x2a, 0xff};
+	unsigned char res[16];
+	printf("== beta-after-p3\n");
+	seek(0);
+	send_dos = DIF_FROM_RAM;
+	send(b, 9);
+	send_dos = 0;
+	take(data, 512, 10000);
+	result(res);
+	difSetHW(dif, DIF_BDI);
+	fdcFlag = FDC_FAST;
+	difOut(dif, 0xff, 0x3c, 1);		// drive A, out of reset, side 0
+	difOut(dif, 0x7f, 40, 1);		// the track to seek to
+	difOut(dif, 0x1f, 0x10, 1);		// seek, 6 ms a step
+	long ns = 0;
+	int st = 0x01;
+	while ((st & 0x01) && (ns < 2000000000L)) {
+		run(9999);
+		ns += 9999;
+		difIn(dif, 0x1f, &st, 1);
+	}
+	printf("  seek to 40: %ld ms, fast: %s\n", ns / 1000000, (ns < 50000000L) ? "yes" : "no");
+	fdcFlag = 0;
+	difSetHW(dif, DIF_P3DOS);
+}
+
 static void start(const char* path, const char* path_b) {
 	fdcFlag = 0;
 	dif = difCreate(DIF_P3DOS, dummy_irq, NULL);
@@ -467,6 +498,7 @@ static int cases(const char* tmp) {
 	cmd("turbo-multi", 0x46, 0, 0, 0, 1, 2, 3, 0xff, 0x10000);
 	cmd("turbo-overrun", 0x46, 0, 0, 0, 1, 2, 9, 0xff, 100);
 	fdcFlag = 0;
+	beta_after_p3();
 	difDestroy(dif);
 	roundtrip(tmp, "bench");
 	remove(tmp);
