@@ -1277,9 +1277,6 @@ void SetupWin::fillPages() {
 	shown.cpu = xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq);
 	shown.psg = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;
 	shown.mem = getRFIData(ui.mszbox);
-	shown.lay = getRFText(ui.geombox);
-	xLayout* lay = findLayout(shown.lay);
-	if (lay) shown.geom = lay->lay;
 }
 
 void SetupWin::apply() {
@@ -1389,10 +1386,11 @@ void SetupWin::applyMachine() {
 		zx_set_vmode(comp);
 	comp->vid->ula->enabled = ui.ulaPlus->isChecked() ? 1 : 0;
 	comp->flgDDP = ui.cbDDp->isChecked() ? 1 : 0;
-	// another layout, or this one edited (the border size goes on top of it in applyGlobal())
+	// another layout than the machine has, or this one edited - in the editor at
+	// any time, Cancel or not (the border size goes on top of it in applyGlobal())
 	std::string lay = getRFText(ui.geombox);
 	xLayout* nlay = findLayout(lay);
-	if ((lay != shown.lay) || !nlay || memcmp(&nlay->lay, &shown.geom, sizeof(vLayout)))
+	if (nlay && ((lay != conf.layName) || memcmp(&nlay->lay, &conf.layGeom, sizeof(vLayout))))
 		xm_set_layout(lay);
 // sound
 	int psg = getRFIData(cbPsgCount);
@@ -1472,8 +1470,6 @@ void SetupWin::applyMachine() {
 	shown.cpu = frq;
 	shown.psg = psgFrq;
 	shown.mem = msz;
-	shown.lay = lay;
-	if (nlay) shown.geom = nlay->lay;
 }
 
 // The emulator's own settings, and the user's that live on the machine (mouse,

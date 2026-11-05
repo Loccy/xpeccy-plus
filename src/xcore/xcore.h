@@ -853,6 +853,7 @@ struct xConfig {
 	int macStart;			// MS_*
 	std::string macStartId;		// the machine MS_THIS starts
 	std::string layName;		// screen layout
+	vLayout layGeom;		// the geometry xm_set_layout() last put on the machine
 	xRomset roms;			// what it loads: its own, that variant, your files
 	std::string palette;		// colour palette file
 	std::string kmapName;		// keyboard layout
