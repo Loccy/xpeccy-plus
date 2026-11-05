@@ -24,6 +24,13 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **Fullscreen on Linux with two screens at one place** (a docked Steam Deck with its own
+  screen on): the picture fits the window again instead of showing an enlarged corner of it.
+- **No text cut in Options on Linux**: the buttons of the Machine and Application pages, the
+  border size beside its slider, and with a style the OK, Apply and Cancel buttons, which are
+  now as tall as the font needs (on Windows two pixels taller).
+- **Hotkeys with the System style on a dark desktop theme**: the section rows take the
+  theme's colors instead of a bright blue.
 - **Copy-protected +3 disks**: Chase H.Q. and the other protected +3 games in `.dsk` images
   load and run, Fast Disk Access on or off, and such a disk saves back as it was. The Disk
   Manager says when a disk boots its own loader and has no +3DOS catalog.
