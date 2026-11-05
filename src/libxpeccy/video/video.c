@@ -1701,6 +1701,7 @@ int nxv_run(Video*, int);
 unsigned char* nxv_drawn(Video*);
 void nxv_frm(Video*);
 void nxv_wake(Video*);
+void nxv_sweep(Video*);
 void vts_line(Video*);
 void vts_frame(Video*);
 void vidDrawTSLNormal(Video*);
@@ -1729,7 +1730,7 @@ static xVideoMode vidModeTab[] = {
 	{VID_TSL_TEXT, NULL, vidDrawTSLText, vts_hblk, vts_line, NULL, vts_frame, NULL, VL_NONE},
 	{VID_PRF_MC, NULL, vidProfiScr, NULL, NULL, NULL, NULL, NULL, VL_NONE},
 	{VID_PRF_MONO, NULL, vidProfiMono, NULL, NULL, NULL, NULL, NULL, VL_NONE},
-	{VID_NEXT, NULL, nxv_dot, NULL, NULL, NULL, nxv_frm, nxv_run, VL_NONE, nxv_drawn, nxv_wake},
+	{VID_NEXT, NULL, nxv_dot, NULL, NULL, NULL, nxv_frm, nxv_run, VL_NONE, nxv_drawn, nxv_wake, nxv_sweep},
 
 
 	{VID_UNKNOWN, NULL, vidDrawBorder, NULL, NULL, NULL, NULL, NULL, VL_NONE}
@@ -1992,6 +1993,19 @@ static void vid_sweep_irq(int t, void* ptr) {
 void vid_sweep(Video* vid) {
 	static Video v;
 	unsigned char* scr = scrimg;
+	if (vid->cb && vid->cb->sweep) {
+		// a mode drawing behind the ray (VID_NEXT) draws the frame itself; the copy
+		// only swaps it in
+		vid->cb->sweep(vid);
+		v = *vid;
+		v.xirq = vid_sweep_irq;
+		v.nodraw = 0;
+		v.debug = 0;
+		vid_frame(&v);
+		vid->ray.lptr = scrimg + (vid->ray.lptr - scr);
+		vid->ray.ptr = scrimg + (vid->ray.ptr - scr);
+		return;
+	}
 	v = *vid;
 	v.xirq = vid_sweep_irq;
 	v.nodraw = 0;

@@ -105,6 +105,9 @@ typedef struct {
 	unsigned char* (*drawn)(Video*);
 	// a still frame ends here (vid_still_end): the mode takes the drawing up at the ray
 	cbvid wake;
+	// the whole frame from the memory as it stands, at once, into scrimg (vid_sweep),
+	// for a mode that does not draw by the dot; NULL: the dots are walked
+	cbvid sweep;
 } xVideoMode;
 
 // What a mode's dots leave behind that the machine can read: worked out from

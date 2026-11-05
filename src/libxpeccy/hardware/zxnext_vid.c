@@ -28,6 +28,7 @@
 #define NXV_RAM		0x040000	// SRAM of RAM page 0
 
 static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
+static int nxv_sweeping = 0;		// in nxv_sweep: no copper, no sprite pass
 static void nxv_flush(Computer* comp, long long end);
 
 // an SZX keeps nxVideo as one field, its length in 16 bits
@@ -1757,7 +1758,9 @@ static void nxv_fetch_to(Computer* comp, long long end) {
 	if (d >= end) return;
 	// a copper running may stop itself on the way (nx_cop_run then counts its edges as
 	// the stopped one does); a stopped one is not started by anything here
-	if (nx_cop_on(comp)) {
+	if (nxv_sweeping) {
+		// nxv_sweep: the machine's copper and sprite pass are not run for it
+	} else if (nx_cop_on(comp)) {
 		nx_cop_run(comp, (end - 1) * 4 + 4);
 		if (!V.live) return;		// it wrote a reset (NR 02): nothing more here
 		// stopped for room at edge copT (nx_cop_hold): the dots it has ended go first
@@ -1766,7 +1769,7 @@ static void nxv_fetch_to(Computer* comp, long long end) {
 	} else {
 		nxv_cop_idle(comp, end - 1);
 	}
-	nxs_run_to(comp, (end - 1) * 8 + 8);
+	if (!nxv_sweeping) nxs_run_to(comp, (end - 1) * 8 + 8);
 	const nxTiming* t = nx_tim(comp);
 	int L = t->L;
 	int F = nx_lines(comp);
@@ -1847,6 +1850,41 @@ static void nxv_flush(Computer* comp, long long end) {
 
 void nxv_line(Computer* comp) {
 	nxv_flush(comp, NX.frameBase);
+}
+
+// Fast mode's "memory dump" picture (vid_sweep): a whole frame from the memory and the
+// registers as they stand, drawn at once. It is drawn as the frame two ahead, past
+// every write, so each read sees the memory as it is now; no copper or sprite pass is
+// run for it, and the sprites are left out. All the drawing's own state is put back.
+void nxv_sweep(Video* vid) {
+	Computer* comp = (Computer*)vid->xptr;
+	static nxVideo keep;
+	keep = V;
+	__typeof__(NX.still) still = NX.still;
+	unsigned nodraw = vid->nodraw;
+	unsigned stillOn = vid->still;
+	vid->nodraw = 0;
+	vid->still = 0;
+	nxv_sweeping = 1;
+	int h, v;
+	nx_raw(comp, &h, &v);
+	long long frame = (long long)nx_tim(comp)->L * nx_lines(comp);
+	long long d0 = NX.frameBase - (long long)v * nx_tim(comp)->L + 2 * frame;	// raw (0, 0) of it
+	nxv_resync(comp, d0, 0, 0);
+	V.lastDot = d0 - 1;
+	V.f[NXF_SPREN] = 0;
+	V.dirty = 1;
+	// a line at a time, as nxv_line draws: the fetch's ring holds a line or so
+	int L = nx_tim(comp)->L;
+	for (long long e = d0 + L; e <= d0 + frame; e += L) {
+		nxv_fetch_to(comp, (e < d0 + frame) ? e : e + NXV_LAG);
+		nxv_render(comp, (e < d0 + frame) ? V.lastDot - NXV_LAG + 1 : e);
+	}
+	nxv_sweeping = 0;
+	vid->nodraw = nodraw;
+	vid->still = stillOn;
+	NX.still = still;
+	V = keep;
 }
 
 // A soft reset, before the registers go: the picture up to the ray as they stood, and
