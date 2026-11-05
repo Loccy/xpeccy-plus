@@ -63,6 +63,30 @@ public:
 	}
 };
 
+// What a Qt file dialog needs in a folder of tens of thousands of files; every
+// one of ours gets it once, after its views are built (with no model yet the
+// provider is dropped) and before the event loop takes the first files listed.
+// Every row is one line high; told so, the views stop measuring each one.
+// Detail View measured rows one by one to find where one is (End in 37k files
+// held the window for 7 s), and List View, hidden behind it, laid out every
+// name at the first click. Shown, List View measures again, as one width for
+// all would cut the names, and lays them out a batch at a time.
+static void file_dialog_tune(QFileDialog* dlg) {
+	QTreeView* tree = dlg->findChild<QTreeView*>("treeView");
+	if (!tree || dlg->property("xTuned").toBool()) return;	// native, or done
+	dlg->setProperty("xTuned", true);
+	static xFileTypes* types = new xFileTypes;	// never freed: a dialog may outlive any owner at exit
+	dlg->setIconProvider(types);
+	tree->setUniformRowHeights(true);
+	QListView* list = dlg->findChild<QListView*>("listView");
+	QStackedWidget* views = dlg->findChild<QStackedWidget*>("stackedWidget");
+	if (!list || !views) return;
+	list->setLayoutMode(QListView::Batched);
+	auto fit = [list, views]() {list->setUniformItemSizes(views->currentWidget() != list->parentWidget());};
+	QObject::connect(views, &QStackedWidget::currentChanged, list, fit);
+	fit();
+}
+
 // Built on first use, in the folder it is about to show: a Qt dialog built
 // without one lists and watches the cwd on the GUI thread, and started from a
 // 37k-file folder the window froze for seconds
@@ -76,29 +100,8 @@ static QFileDialog* file_dialog() {
 	fileDlg->setWindowModality(Qt::ApplicationModal);
 	fileDlg->setOption(QFileDialog::HideNameFilterDetails, false);
 	fileDlg->setOption(QFileDialog::DontConfirmOverwrite, false);
-	fileDlg->setOption(QFileDialog::DontUseNativeDialog, true);
-	// after the option above, which builds the views and their model (with
-	// no model yet the provider is dropped), and before the event loop takes
-	// the first files listed
-	static xFileTypes types;
-	fileDlg->setIconProvider(&types);
-	// Every row is one line high; told so, the views stop measuring each one.
-	// Detail View measured rows one by one to find where one is (End in 37k
-	// files held the window for 7 s), and List View, hidden behind it, laid
-	// out every name at the first click. Shown, List View measures again: one
-	// width for all would cut the names.
-	QTreeView* tree = fileDlg->findChild<QTreeView*>("treeView");
-	QListView* list = fileDlg->findChild<QListView*>("listView");
-	QStackedWidget* views = fileDlg->findChild<QStackedWidget*>("stackedWidget");
-	if (tree) tree->setUniformRowHeights(true);
-	if (list && views) {
-		auto fit = [list, views]() {
-			QWidget* page = views->currentWidget();
-			list->setUniformItemSizes(!page || !page->isAncestorOf(list));
-		};
-		QObject::connect(views, &QStackedWidget::currentChanged, list, fit);
-		fit();
-	}
+	fileDlg->setOption(QFileDialog::DontUseNativeDialog, true);	// builds the views
+	file_dialog_tune(fileDlg);
 	fileDlg->resize(700, 480);
 	return fileDlg;
 }
@@ -2187,11 +2190,14 @@ void initFileDialog(QWidget* par) {
 // Every Qt file dialog restores the column widths any Qt program last left in
 // the shared QtProject settings, and a long image name gets cut in them. Give
 // the name all the room the other columns do not need, whatever was stored.
-// Called on Show, after that restore; a native dialog has no tree and is skipped
+// Called on Show, after that restore; a native dialog has no tree and is skipped.
+// The dialogs of QFileDialog::get*() get their tuning here too: they may start
+// in the big folder the shared one was left in, as Qt remembers it for them
 void fitFileDialog(QWidget* w) {
 	QFileDialog* dlg = qobject_cast<QFileDialog*>(w);
 	QTreeView* tree = dlg ? dlg->findChild<QTreeView*>("treeView") : nullptr;
 	if (!tree) return;
+	file_dialog_tune(dlg);
 	QHeaderView* hdr = tree->header();
 	hdr->setSectionResizeMode(QHeaderView::ResizeToContents);
 	hdr->setSectionResizeMode(0, QHeaderView::Stretch);
