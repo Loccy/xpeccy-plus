@@ -27,6 +27,9 @@
 #define NXV_LAG		4		// dots the mixer keeps behind the fetch
 #define NXV_RAM		0x040000	// SRAM of RAM page 0
 
+static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
+static void nxv_flush(Computer* comp, long long end);
+
 // an SZX keeps nxVideo as one field, its length in 16 bits
 _Static_assert(sizeof(nxVideo) < 65536, "nxVideo does not fit an SZX field");
 
@@ -175,6 +178,21 @@ void nxv_memw(Computer* comp, int key, int old, long long w) {
 	e->old = old;
 	V.wrHead = (V.wrHead + 1) & (NXV_WRQ - 1);
 	V.wrT[key & (NXV_WRT - 1)] = (unsigned int)w;
+	// the next write takes the oldest one's place: if a read may still have to undo it
+	// (the mixer draws a line behind the ray, and reads up to 32 dots back), the picture
+	// is drawn up to this write first
+	if ((V.wr[V.wrHead].w > (V.cur - 32) * 4) && V.live && !comp->vid->nodraw && !comp->vid->still && !nxv_flushing) {
+		int h, v;
+		nx_raw(comp, &h, &v);
+		long long end = w >> 2;
+		long long ray = NX.frameBase + h;
+		nxv_flush(comp, (end < ray) ? end : ray);
+	}
+}
+
+// the byte at key as memory holds it now
+static inline int nxv_peek(Computer* comp, int key) {
+	return (key >= NXV_SHADOW) ? NX.shadow[key - NXV_SHADOW] : comp->mem->ramData[key];
 }
 
 // the byte at key as a read at CLK_28 r saw it: writes after r undone. The writes
@@ -341,7 +359,6 @@ static long long nxv_fall(Computer* comp, long long w) {
 // (the copper run there, nxv_fetch_to) the copper is stopped at the write instead
 // (nx_cop_hold), and the drawing goes on to there before it runs on.
 
-static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
 
 // the changes no read can reach any more go: those older than the next one before
 // dot from (whatever reads a value reads it at a dot past from)
@@ -374,25 +391,28 @@ static void nxv_hprune_all(Computer* comp, long long from) {
 	for (unsigned i = 0; i < sizeof(all) / sizeof(all[0]); i++) nxv_hprune(all[i], from);
 }
 
-static void nxv_flush(Computer* comp, long long end);
+// the queue has room for the changes of one more write (NXF_CMP at most)
+static inline int nxv_qroom(Computer* comp) {
+	return V.evN - V.evHead < NXV_EVQ - NXF_CMP - 2;
+}
 
-// w: the CLK_28 edge of the write coming - all before it has landed (the copper's
-// writes too: it stands at w when its own lands, nx_cop_run)
+// A write at CLK_28 w has left the queue or a history short of room for one more: all
+// before w has landed (the copper's writes too: it stands at w when its own lands,
+// nx_cop_run), so the picture is drawn up to w and what no read reaches goes
 static void nxv_room(Computer* comp, long long w) {
-	if ((V.evN - V.evHead < NXV_EVQ - NXF_CMP - 2) && nxv_hroom(comp)) return;
 	int h, v;
 	nx_raw(comp, &h, &v);
 	long long ray = NX.frameBase + h;
-	// the dot the reads start from: the mixer's when it draws, else the ray's, where
-	// the drawing is taken up
-	long long from = ray;
+	// the dot the reads start from: the mixer's when it draws, else the one the drawing
+	// is taken up at (the ray, or the dot of a reset)
+	long long from = ((V.upAt >= 0) && (V.upAt < ray)) ? V.upAt : ray;
 	if (V.live && !comp->vid->nodraw && !comp->vid->still) {
 		long long end = w >> 2;
 		if (end > ray) end = ray;
-		if (nxv_flushing)
-			nx_cop_hold = 1;
-		else
+		if (!nxv_flushing)
 			nxv_flush(comp, end);
+		else if (end > V.lastDot + 1)
+			nx_cop_hold = 1;	// a dot ended before the write: the drawing can go on to it
 		from = V.cur;
 	}
 	// what reads back past it: the tilemap's latch 15 dots, a take-up and the
@@ -403,7 +423,6 @@ static void nxv_room(Computer* comp, long long w) {
 // a register write landed at CLK_28 w: queue whatever the picture reads that moved
 void nxv_regs(Computer* comp, long long w) {
 	unsigned short q[NXF_CMP];
-	nxv_room(comp, w);
 	nxv_fields(comp, q);
 	// a still frame ends before the first change goes in
 	if (memcmp(q, V.q, sizeof(q)) || nx_cop_on(comp)) nxv_touch(comp);
@@ -429,14 +448,15 @@ void nxv_regs(Computer* comp, long long w) {
 	ch |= nxv_hpush(&V.hTmCtl, w, NX.nr[0x6b] & 0x7f);
 	ch |= nxv_hpush(&V.hTmAttr, w, NX.nr[0x6c]);
 	if (ch) nxv_touch(comp);
+	if (!nxv_qroom(comp) || (ch && !nxv_hroom(comp))) nxv_room(comp, w);
 }
 
 void nxv_pal(Computer* comp, int p, int idx, long long w) {
 	// sprites and the tilemap look up on the other CLK_28 (sc(0) = 1, zxnext.vhd 6981, 7033)
 	long long a = ((p & 3) >= 2) ? ((w >> 1) - 2) : nxv_at(NXC_PAL, w);
 	if (!comp->vid->still || (V.pal[p][idx & 0xff] != NX.pal[p][idx & 0xff])) nxv_touch(comp);
-	nxv_room(comp, w);
 	nxv_push(comp, a, NXF_PAL, (p << 8) | (idx & 0xff), NX.pal[p][idx & 0xff]);
+	if (!nxv_qroom(comp)) nxv_room(comp, w);
 }
 
 // == the ULA's fetch (zxula.vhd 194-306) ==
@@ -584,6 +604,10 @@ int nxv_float(Computer* comp, long long lt) {
 	long long dr = NX.frameBase + h;	// the dot the ray is on
 	long long p = (lt - 3) >> 2;		// the last update before the latch
 	long long g = (lt - 1) >> 2;		// the period the latch falls in
+	// the fetch, a line behind the ray, drawn up to the latch first: its registers are
+	// the ones read, with no dots run again here
+	if (V.live && !comp->vid->nodraw && !comp->vid->still && !nxv_flushing && (V.lastDot < p))
+		nxv_flush(comp, (p + 1 < dr) ? p + 1 : dr);
 	nxvFetch fe;
 	long long from;
 	if (V.live && (V.lastDot >= p - 32) && (V.lastDot <= p)) {
@@ -1633,7 +1657,7 @@ static void nxv_resync(Computer* comp, long long d, int h, int v) {
 	for (int k = 24; k > 0; k--) {
 		int hh = h, vv = v, hc, vc;
 		nxv_step(comp, &hh, &vv, -k);
-		nx_ula(comp, hh, vv, &hc, &vc, NULL);
+		nx_ula_seen(comp, hh, vv, &hc, &vc);	// d may be behind the ray (a reset's dot)
 		nxv_fetch(comp, &V.fe, d - k, hc, vc, 0);
 	}
 	V.cur = d - NXV_LAG + 1;
@@ -1656,17 +1680,22 @@ static inline void nxv_cop_idle(Computer* comp, long long d) {
 
 // flash_cnt counted at the (0, 0) dots the ray has passed undrawn (they count at the
 // end of the dot; the one under the ray has not ended)
-void nxv_settle(Computer* comp) {
-	if (!comp->vid->still || (NX.still.flashDot < 0) || (NX.still.frameDots <= 0)) return;
-	int h, v;
-	nx_raw(comp, &h, &v);
-	long long d = NX.frameBase + h;
+// ...before dot d: a still frame's, or an undrawn stretch's (no fetch counted them)
+static void nxv_flash_to(Computer* comp, long long d) {
+	if ((NX.still.flashDot < 0) || (NX.still.frameDots <= 0)) return;
 	while (NX.still.flashDot + NX.still.frameDots < d) {
 		NX.still.flashDot += NX.still.frameDots;
 		V.flash = (V.flash + 1) & 31;
 	}
 	V.f[NXF_FLASH] = V.flash;		// undrawn: in effect at once
 	V.dirty = 1;
+}
+
+void nxv_settle(Computer* comp) {
+	if (!comp->vid->still) return;
+	int h, v;
+	nx_raw(comp, &h, &v);
+	nxv_flash_to(comp, NX.frameBase + h);
 }
 
 void nxv_touch(Computer* comp) {
@@ -1813,8 +1842,15 @@ static void nxv_take_up(Computer* comp) {
 		nxv_step(comp, &h, &v, (int)(V.upAt - d));
 		d = V.upAt;
 	}
+	// flash_cnt counted at the (0, 0) dots the undrawn stretch passed; one the mixer
+	// draws again (from d - NXV_LAG + 1 on) goes in the queue, as in nxv_wake
+	nxv_flash_to(comp, d);
+	long long fd = NX.still.flashDot;
+	int late = (fd >= d - NXV_LAG + 1);
+	if (late) V.f[NXF_FLASH] = (V.flash - 1) & 31;
 	nxv_resync(comp, d, h, v);
 	V.lastDot = d - 1;
+	if (late) nxv_push(comp, fd * 2 + 1, NXF_FLASH, 0, V.flash);
 }
 
 // The picture up to dot end (the first one the ray has not ended): the fetch up to
@@ -1850,8 +1886,11 @@ long long nxv_before_reset(Computer* comp) {
 	if (!V.live || comp->vid->nodraw || comp->vid->still) return -1;
 	int h, v;
 	nx_raw(comp, &h, &v);
-	nxv_flush(comp, NX.frameBase + h);
-	return NX.frameBase + h;
+	long long d = NX.frameBase + h;
+	nxv_flush(comp, d);
+	// the mixer one dot on, to where the take-up at d starts it (nxv_resync)
+	nxv_render(comp, d - NXV_LAG + 1);
+	return d;
 }
 
 // the raw counters of the dot under the ray

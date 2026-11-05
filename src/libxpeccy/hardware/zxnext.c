@@ -1929,22 +1929,24 @@ void nx_cop_run(Computer* comp, long long t) {
 		} else {
 			NX.copDout = 0;
 		}
-		// the copper stands at e: a write landing may have the picture drawn up to it
-		// (nxv_room), which runs the copper to there - nothing to run again
-		NX.copT = e;
-		while (NX.copN && (NX.copQ[0].w <= e)) {
-			int reg = NX.copQ[0].reg;
-			int val = NX.copQ[0].val;
-			NX.copN--;
-			memmove(NX.copQ, NX.copQ + 1, NX.copN * sizeof(NX.copQ[0]));
-			nx_nr_land(comp, reg, val, 0, e, 1);
-			cDot = -1;
-		}
-		if (nx_cop_hold) {
-			// the picture's queues are full: it is drawn up to here before the copper
-			// runs on (nxv_fetch_to)
-			nx_cop_hold = 0;
-			return;
+		if (NX.copN && (NX.copQ[0].w <= e)) {
+			// the copper stands at e: a write landing may have the picture drawn up to
+			// it (nxv_room), which runs the copper to there - nothing to run again
+			NX.copT = e;
+			do {
+				int reg = NX.copQ[0].reg;
+				int val = NX.copQ[0].val;
+				NX.copN--;
+				memmove(NX.copQ, NX.copQ + 1, NX.copN * sizeof(NX.copQ[0]));
+				nx_nr_land(comp, reg, val, 0, e, 1);
+				cDot = -1;
+			} while (NX.copN && (NX.copQ[0].w <= e));
+			if (nx_cop_hold) {
+				// the picture's queues are full: it is drawn up to here before the
+				// copper runs on (nxv_fetch_to)
+				nx_cop_hold = 0;
+				return;
+			}
 		}
 	}
 	NX.copT = t;
@@ -2740,11 +2742,8 @@ static void nx_reset(Computer* comp) {
 	} else {
 		// the reset button: a soft reset (zxnext.vhd 1733-1738, 6370)
 		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
-		up = nxv_before_reset(comp);
-		const nxTiming* t0 = nx_tim(comp);
-		int f0 = nx_lines(comp);
+		up = nxv_before_reset(comp);	// the raster stays: it changes at a frame start only
 		nx_regs_reset(comp);
-		if ((nx_tim(comp) != t0) || (nx_lines(comp) != f0)) up = -1;	// another raster: at the ray
 		nx_layout(comp);
 	}
 	// a reset lets the I2C lines go (zxnext.vhd 3231-3252); the clock chip sees that

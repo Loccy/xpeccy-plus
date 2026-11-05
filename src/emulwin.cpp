@@ -758,7 +758,7 @@ void MainWin::slowHint() {
 	Computer* comp = conf.zx;
 	if (slowAsked || !comp || conf.vid.frameSkip || !conf.vid.skipHint) return;
 	int calm = !conf.emu.pause && !conf.emu.fast && (conf.emu.tmode == XTM_NONE) && (conf.emu.speed == 1.0)
-		&& !comp->vid->debug && frame_skip_allowed(comp)
+		&& !comp->vid->debug && frame_skip_ok()
 		&& (fpsmem.size() >= FPS_WINDOW) && (comp->vid->nsPerFrame > 0);
 	double rate = calm ? 1e9 / comp->vid->nsPerFrame : 0;
 	if (!calm || (conf.vid.curfps >= rate * SLOW_HINT_RATE)) {

@@ -37,6 +37,7 @@
 
 #include <string.h>
 #include <algorithm>
+#include <atomic>
 
 #include "xcore.h"
 #include "fastload.h"
@@ -676,6 +677,14 @@ int frame_skipping() {
 	return fs_said && conf.vid.frameSkip;
 }
 
+// frame_skip_allowed as the emulation's thread last found it (at a frame end), for
+// the gui's thread, which must not walk the machine's state itself
+static std::atomic<int> fs_ok{0};
+
+int frame_skip_ok() {
+	return fs_ok.load(std::memory_order_relaxed);
+}
+
 // a frame Frame skip held back is drawn after all
 static void fs_release(Video* vid) {
 	if (!fs_held) return;
@@ -713,6 +722,7 @@ void fast_picture_frame(Computer* comp) {
 	int drawn = (bufSwaps != fp_swaps);	// the frame that just ended swapped a picture in
 	fp_swaps = bufSwaps;
 	fp_last = drawn;
+	fs_ok.store(frame_skip_allowed(comp), std::memory_order_relaxed);
 	// a pause asked for in fast mode stops on a frame drawn whole, not on the
 	// picture of a while ago: the next one is drawn, then the machine stops
 	if (conf.emu.pauseReq) {
