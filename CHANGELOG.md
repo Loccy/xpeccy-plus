@@ -36,9 +36,10 @@ before that point is upstream's history and is not repeated here.
 
 - **The Debugger's dumps (disk, CMOS, registers) paint every line after a panel grows
   taller**: lines below its old height stayed blank while scrolling.
-- **A folder of tens of thousands of files opens in seconds**: the file dialog held the
-  program for minutes in one (a full TOSEC set) and then stuck for seconds on a click or a
-  jump to the end. The **Type** column names a file by its extension.
+- **The file dialog in a folder of tens of thousands of files** (a full TOSEC set): it lists
+  the folder in seconds instead of minutes, opens it again at once, and no longer sticks on a
+  click or on End. On Linux the first listing still takes a while. The **Type** column now
+  shows the file's extension.
 - **Fullscreen on Linux with two screens at one place** (a docked Steam Deck with its own
   screen on): the picture fits the window again instead of showing an enlarged corner of it.
 - **No text cut in Options on Linux**: the buttons of the Machine and Application pages, the
