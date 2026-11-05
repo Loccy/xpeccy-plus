@@ -173,6 +173,10 @@ void dif_plan_set(DiskIF*, int);
 // of layout 0 (2026.9) to where it is now.
 #define UPD_PLANS	1
 void upd_plan_v0(FDC*);
+// A Format in progress as a snapshot keeps it: the IDs it has taken (0 for any other
+// command), and one of them put back as the chip holds it
+int upd_format_ids(FDC*);
+void upd_form_id(FDC*, int i, const unsigned char* chrn);
 int dif_quiet(DiskIF*);		// its time may come in any pieces
 void dif_align_flps(DiskIF*, FDC*, int, int, int, int);
 

@@ -69,20 +69,6 @@ static int fld_get(void* base, const szxField* tab, const unsigned char* p, size
 	return got;
 }
 
-// 1 if the record has a field of that name, whatever its size
-static int fld_has(const unsigned char* p, size_t n, const char* name) {
-	size_t pos = 0;
-	size_t len = strlen(name);
-	while (pos < n) {
-		size_t k = p[pos++];
-		if (pos + k + 2 > n) break;
-		if ((k == len) && !memcmp(p + pos, name, k)) return 1;
-		pos += k;
-		pos += 2 + rd_word(p + pos);
-	}
-	return 0;
-}
-
 static void rec_begin(szxBuf* b, unsigned id, size_t* mark) {
 	sb_dword(b, id);
 	*mark = b->len;
@@ -847,9 +833,8 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		sb_byte(b, UPD_PLANS);
 		rec_end(b, mark);
 		FDC* fdc = comp->dif->fdc;
-		int nid = (int)(sizeof(fdc->slst) / sizeof(fdc->slst[0]));
-		if (fdc->scnt < nid) nid = fdc->scnt;
-		if ((comp->dif->type == DIF_P3DOS) && (nid > 0)) {
+		int nid = (comp->dif->type == DIF_P3DOS) ? upd_format_ids(fdc) : 0;
+		if (nid > 0) {
 			rec_begin(b, XR_FDCI, &mark);
 			for (i = 0; i < nid; i++) {
 				sb_byte(b, fdc->slst[i].trk);
@@ -1128,7 +1113,10 @@ static void ext_fm_load(Computer* comp, int n, const unsigned char* p, size_t le
 
 static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	FDC* fdc = comp->dif->fdc;
+	int xfer = fdc->xfer;
+	fdc->xfer = -1;			// stays so in the copy if the file has none
 	FDC* t = (FDC*)ext_take_head(fdc, offsetof(FDC, slst), fld_fdc, p, n);
+	fdc->xfer = xfer;
 	if (!t) return;
 	fdc->irq = t->irq;
 	fdc->drq = t->drq;
@@ -1170,7 +1158,7 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	fdc->resCnt = t->resCnt;
 	fdc->resPos = t->resPos;
 	// an older file's read hands the CPU the whole field
-	fdc->xfer = fld_has(p, n, "xfer") ? t->xfer : t->cnt;
+	fdc->xfer = (t->xfer >= 0) ? t->xfer : t->cnt;
 	fdc->scnt = t->scnt;
 	fdc->sr0 = t->sr0;
 	fdc->sr1 = t->sr1;
@@ -1366,16 +1354,8 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 			case XR_FDCI:
 				if (comp->dif && (comp->dif->type == DIF_P3DOS)) {
 					FDC* fdc = comp->dif->fdc;
-					for (size_t k = 0; (k + 4 <= n) && (k / 4 < sizeof(fdc->slst) / sizeof(fdc->slst[0])); k += 4) {
-						Sector* sc = &fdc->slst[k / 4];
-						sc->trk = p[k];
-						sc->head = p[k + 1];
-						sc->sec = p[k + 2];
-						sc->sz = p[k + 3];
-						sc->crc = -1;
-						sc->type = 0xfb;
-						memset(sc->data, fdc->comBuf[4], 4096);	// as utrkfrm02 fills it
-					}
+					for (size_t k = 0; (k + 4 <= n) && (k / 4 < sizeof(fdc->slst) / sizeof(fdc->slst[0])); k += 4)
+						upd_form_id(fdc, (int)(k / 4), p + k);
 				}
 				break;
 			case XR_FLP + (0u << 24): case XR_FLP + (1u << 24):

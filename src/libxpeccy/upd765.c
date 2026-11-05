@@ -834,6 +834,17 @@ void utrkfrm01(FDC* fdc) {		// wait for index
 void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount);
 int diskFormFits(Floppy* flp, Sector* sdata, int scount);
 
+void upd_form_id(FDC* fdc, int i, const unsigned char* chrn) {
+	Sector* s = &fdc->slst[i];
+	s->trk = chrn[0];
+	s->head = chrn[1];
+	s->sec = chrn[2];
+	s->sz = chrn[3];
+	s->crc = -1;			// to be worked out
+	s->type = 0xfb;			// a normal data mark
+	memset(s->data, fdc->comBuf[4], 4096);	// filled with D
+}
+
 void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors header data
 	if (!fdc->drq) {		// byte recieved
 		fdc->buf[fdc->cnt & 3] = fdc->data;
@@ -845,13 +856,7 @@ void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors he
 			// holds the sectors that fit, and no more IDs are asked for
 			int fit = (fdc->scnt < (int)(sizeof(fdc->slst) / sizeof(fdc->slst[0])));
 			if (fit) {
-				fdc->slst[fdc->scnt].trk = fdc->buf[0];		// C cylinder
-				fdc->slst[fdc->scnt].head = fdc->buf[1];	// H head
-				fdc->slst[fdc->scnt].sec = fdc->buf[2];		// R sec.num
-				fdc->slst[fdc->scnt].sz = fdc->buf[3];		// N sec.size
-				fdc->slst[fdc->scnt].crc = -1;			// to be calculated
-				fdc->slst[fdc->scnt].type = 0xfb;		// type: normal
-				memset(fdc->slst[fdc->scnt].data, fdc->comBuf[4], 4096);	// fill sector data
+				upd_form_id(fdc, fdc->scnt, fdc->buf);
 				fit = diskFormFits(fdc->flp, fdc->slst, fdc->scnt + 1);
 			}
 			if (fit) fdc->scnt++;				// next sector
@@ -890,6 +895,10 @@ void utrkfrm03(FDC* fdc) {		// emulate whole track writing
 }
 
 static fdcCall uFormat[] = {&uwargs,&utrkfrm00,&utrkfrm01,&utrkfrm02,&utrkfrm03,&ureadRS,&uTerm};
+
+int upd_format_ids(FDC* fdc) {
+	return ((fdc->plan == uFormat) && (fdc->pos >= 3)) ? fdc->scnt : 0;	// from utrkfrm02 on
+}
 
 // invalid op : R [SR0 = 0x80]
 
