@@ -352,6 +352,18 @@ static void compare(Floppy* flp, const unsigned char* file, long flen, int deriv
 	free(img);
 }
 
+// A disk read into a drive that held one with more tracks: nothing of the old one
+// stays past the new one's tracks
+static void cleared(const char* path) {
+	Floppy* flp = flpCreate(0, dummy_irq, NULL);
+	unsigned char raw[16] = {0};
+	memset(flp->data[200].byte, 0x55, flp->trklen);
+	flp_keep_raw(flp, 200, raw, sizeof(raw));
+	dsk_read(flp, path);
+	printf("== cleared\n  track 200 after a 5-track disk: byte %.2X, raw %d\n", flp->data[200].byte[0], flp->data[200].rawlen);
+	flpDestroy(flp);
+}
+
 static void roundtrip(const char* path, const char* name) {
 	long flen = 0;
 	unsigned char* file = read_all(path, &flen);
@@ -552,6 +564,7 @@ static int cases(const char* tmp) {
 	format("sc11", 3, 2, 11, 0x5a, 10);
 	format("sc255", 3, 0, 255, 0xa5, 29);
 	difDestroy(dif);
+	cleared(tmp);
 	roundtrip(tmp, "bench");
 	remove(tmp);
 	remove(tmp_b);
