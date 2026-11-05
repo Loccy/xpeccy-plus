@@ -1444,10 +1444,10 @@ QList<xSibling> media_siblings(Computer* comp, const QString& path, int id, int 
 
 // An archive's images that are a set by name: the archive's own list is not one, it
 // holds versions as often as sides (Gryzor - 48k / - 128k)
-static QList<xSibling> arc_siblings(Computer* comp, const QString& archive, const QString& entry, int* cur) {
+static QList<xSibling> arc_siblings(Computer* comp, const QString& archive, const QString& entry, int id, int drv, int* cur) {
 	QList<xSibling> res;
 	QString err;
-	const QStringList names = media_candidates(comp, archive, FG_TAPE, -1, &err);
+	const QStringList names = media_candidates(comp, archive, id, drv, &err);
 	const int at = int(names.indexOf(entry));
 	if ((names.size() < 2) || (at < 0)) return res;
 	std::vector<std::string> raw;
@@ -1474,12 +1474,13 @@ static const Qt::CaseSensitivity path_case = Qt::CaseInsensitive;
 static const Qt::CaseSensitivity path_case = Qt::CaseSensitive;
 #endif
 
-static QList<xSibling> tape_set(Computer* comp, const QString& path, int* cur) {
+// the set by name only: in an archive its members, else the folder
+static QList<xSibling> side_set(Computer* comp, const QString& path, int id, int drv, int* cur) {
 	QString archive, entry;
 	QList<xSibling> set;
 	*cur = -1;
-	if (arc_split(path, &archive, &entry)) set = arc_siblings(comp, archive, entry, cur);
-	if (set.isEmpty()) set = media_siblings(comp, path, FG_TAPE, -1, cur);
+	if (arc_split(path, &archive, &entry)) set = arc_siblings(comp, archive, entry, id, drv, cur);
+	if (set.isEmpty()) set = media_siblings(comp, path, id, drv, cur);
 	return set;
 }
 
@@ -1487,38 +1488,61 @@ static bool same_file(const QString& a, const QString& b) {
 	return !QDir::fromNativeSeparators(a).compare(QDir::fromNativeSeparators(b), path_case);
 }
 
-QString media_next_tape(Computer* comp, const QString& path, const QStringList& seen, QString* place) {
-	int cur;
-	const QList<xSibling> set = tape_set(comp, path, &cur);
-	if ((set.size() < 2) || (cur < 0)) return QString();
-	// the places in the set, in its order; the next one after this tape's
-	QStringList values;
-	for (const xSibling& sib : set) {
-		const QString val = sib_value_of(sib.name);
-		if (!values.contains(val)) values.append(val);
-	}
-	if (values.size() < 2) return QString();
-	const QString next = values[(values.indexOf(sib_value_of(set[cur].name)) + 1) % values.size()];
-	if (place) *place = next;
-	// A tape that was in and has this one in its set: the user's own side A[a], which
+static bool path_in(const QStringList& list, const QString& path) {
+	for (const QString& one : list)
+		if (same_file(one, path)) return true;
+	return false;
+}
+
+// Of the files at place next in the set (cur the image's own), the one to put in; empty
+// when every one is in skip
+static QString side_pick(Computer* comp, const QList<xSibling>& set, int cur, const QString& next, int id, int drv,
+		const QString& path, const QStringList& seen, const QStringList& skip) {
+	// An image that was in and has this one in its set: the user's own side A[a], which
 	// side B's set leaves out, its names matching with their [flags] first
 	for (const QString& was : seen) {
-		if (same_file(was, path)) continue;
+		if (same_file(was, path) || path_in(skip, was)) continue;
 		int at;
-		const QList<xSibling> its = tape_set(comp, was, &at);
+		const QList<xSibling> its = side_set(comp, was, id, drv, &at);
 		if ((at < 0) || (sib_value_of(its[at].name) != next)) continue;
 		for (const xSibling& sib : its)
 			if (same_file(sib.path, path)) return was;
 	}
 	QList<xSibling> take;
 	for (const xSibling& sib : set)
-		if (sib_value_of(sib.name) == next) take.append(sib);
+		if ((sib_value_of(sib.name) == next) && !path_in(skip, sib.path)) take.append(sib);
+	if (take.isEmpty()) return QString();
 	const QString flags = name_flags(set[cur].name);
 	for (const xSibling& sib : take)
 		if (name_flags(sib.name) == flags) return sib.path;
 	for (const xSibling& sib : take)
 		if (name_flags(sib.name).isEmpty()) return sib.path;
 	return take.first().path;
+}
+
+QString media_next_side(Computer* comp, const QString& path, int id, int drv, const QStringList& seen, int step,
+		const QStringList& skip, QString* place) {
+	int cur;
+	const QList<xSibling> set = side_set(comp, path, id, drv, &cur);
+	if ((set.size() < 2) || (cur < 0)) return QString();
+	// the places in the set, in its order
+	QStringList values;
+	for (const xSibling& sib : set) {
+		const QString val = sib_value_of(sib.name);
+		if (!values.contains(val)) values.append(val);
+	}
+	const int n = int(values.size());
+	if (n < 2) return QString();
+	const int me = int(values.indexOf(sib_value_of(set[cur].name)));
+	// step places on, round past either end; a place with every file skipped is passed
+	for (int k = 1; k < n; k++) {
+		const QString next = values[(((me + k * step) % n) + n) % n];
+		const QString res = side_pick(comp, set, cur, next, id, drv, path, seen, skip);
+		if (res.isEmpty()) continue;
+		if (place) *place = next;
+		return res;
+	}
+	return QString();
 }
 
 static QString arc_size_text(qint64 size) {

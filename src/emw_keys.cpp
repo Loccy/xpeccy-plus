@@ -329,6 +329,10 @@ void MainWin::xkey_press(int xkey, bool cmd) {
 			case XCUT_RELOAD:
 				setMessage(reloadMedia() ? " reloaded " : " nothing to reload ");
 				break;
+			case XCUT_SIDE_NEXT:
+			case XCUT_SIDE_PREV:
+				sideStep((xkey == XCUT_SIDE_NEXT) ? 1 : -1);
+				break;
 			case XCUT_QUICKSAVE:
 				quickSave();
 				break;

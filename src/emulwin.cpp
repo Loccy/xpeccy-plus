@@ -2086,7 +2086,7 @@ void MainWin::dropAsk(QString path) {
 // it anyway, so there is nothing to gain from letting it run a cycle first.
 // A tape or a disk put into the running machine goes in without holding it
 // (mountMedia); the machine is held only while a dialog can come up.
-void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned, bool side) {
+void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinned, bool side, const QString& note) {
 	Computer* comp = conf.zx;
 	const QString from = side ? mediaIn(id, drv) : QString();
 	bool held = false;
@@ -2131,7 +2131,7 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		if (!mac.empty()) setMachine(mac);
 		if ((run == AR_MOUNT) && mac.empty() && media_mount_can(comp, fpath, id, drv)) {
 			if (held) pause(false, PR_FILE);
-			mountMedia(fpath, id, drv, pinned, from);
+			mountMedia(fpath, id, drv, pinned, from, note);
 			return;
 		}
 		hold();
@@ -2145,8 +2145,10 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 			x_state_replaced();
 		int err = load_file(comp, loc.data(), id, drv);
 		emu_unlock();
-		if (err == ERR_OK)
+		if (err == ERR_OK) {
 			mediaOpened(fpath, id, drv, run, pinned, from, media_to_drive(comp, fpath, id));
+			if (!note.isEmpty()) setMessage(note);
+		}
 		media_autorun(comp, run);
 		// its reset starts the game, not ends it
 		if ((err == ERR_OK) && (drv < 1)) game_restamp();
@@ -2190,7 +2192,7 @@ void MainWin::mediaOpened(const QString& path, int id, int drv, int run, bool pi
 // runs on meanwhile, and the image goes in under the lock once it is whole. Held only
 // while the one it replaces is asked about. A mount started later wins: an earlier one
 // that ends after it is dropped.
-void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from) {
+void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from, const QString& note) {
 	Computer* comp = conf.zx;
 	std::shared_ptr<xMount> job = std::make_shared<xMount>();
 	bool ask = media_mount_asks(comp, path, id, drv);
@@ -2203,7 +2205,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, cons
 		return;
 	}
 	quint64 gen = ++mountGen;
-	auto done = [this, job, gen, path, id, drv, pinned, from]() {
+	auto done = [this, job, gen, path, id, drv, pinned, from, note]() {
 		int err = job->err;
 		if (gen != mountGen) {
 			err = ERR_CANCEL;
@@ -2217,6 +2219,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, cons
 		media_mount_free(job.get());		// what went out, or what did not go in
 		if (err != ERR_OK) return;
 		mediaOpened(path, id, drv, AR_MOUNT, pinned, from, job->disk);
+		if (!note.isEmpty()) setMessage(note);
 		if (drv < 1) game_restamp();
 		emit s_tape_upd(conf.zx->tape);
 		if (diskWin->isVisible()) diskWin->refresh();
@@ -3448,6 +3451,9 @@ void MainWin::initMachineMenus() {
 	// a menu of its own, filled with dskMenu's items: one QMenu under two different
 	// items in two menus re-pops on every mouse move under one of them
 	drvMenu = media->addMenu(QIcon(":/images/fdd.png"), "Floppy Drives");
+	// the image in use, the tape or a disk, turned over: no list to pick from, so a key
+	media->addAction(cutAct("Next Side", XCUT_SIDE_NEXT));
+	media->addAction(cutAct("Previous Side", XCUT_SIDE_PREV));
 	QAction* fdcFastAct = media->addAction("Fast Disk Access", this, [](bool on) {
 		setFlagBit(on, &fdcFlag, FDC_FAST);
 		saveConfig();
@@ -3850,6 +3856,7 @@ void MainWin::profileSelected(QAction* act) {
 
 void MainWin::showMedia(const QString& path, int src) {
 	mediaSrc = src;
+	sideSrc = ((src >= 0) && (src <= MEDIA_TAPE)) ? src : -1;
 	if (path == media_current()) return;
 	media_set_current(path);
 	vrec_note_image(media_image_name());	// a recording is named after it
@@ -4049,8 +4056,12 @@ void MainWin::watchMedia() {
 		if (qstrcmp(raw ? raw : "", mediaRaw[src].constData()) == 0) continue;
 		mediaRaw[src] = raw;
 		mediaSeen &= ~(1 << src);
-		if (src == mediaSrc)
+		if (src == mediaSrc) {
+			// the slot stays the one the side keys step: another side in it is read soon
+			const int side = sideSrc;
 			showMedia(QString(), MEDIA_SNAP);
+			sideSrc = side;
+		}
 	}
 	int seen = comp->tape->on ? (1 << MEDIA_TAPE) : 0;
 	for (int i = 0; i < 4; i++) {
@@ -4102,7 +4113,7 @@ void MainWin::watchTapeSet(Computer* comp) {
 		while (tapeSeen.size() > 16) tapeSeen.removeLast();
 	}
 	QString place;
-	const QString next = path.isEmpty() ? QString() : media_next_tape(comp, path, tapeSeen, &place);
+	const QString next = path.isEmpty() ? QString() : media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, &place);
 	const bool set = !next.isEmpty();
 	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
 	emu_lock();
@@ -4155,7 +4166,7 @@ void MainWin::tapeNext() {
 		&& media_mount_fits(tapeSpare.get())) ? tapeSpare : nullptr;
 	QString place = spare ? tapeSparePlace : QString();
 	const QString next = spare ? tapeSpareNext
-		: (tap->wantNext && !comp->rzx.play) ? media_next_tape(comp, now, tapeSeen, &place) : QString();
+		: (tap->wantNext && !comp->rzx.play) ? media_next_side(comp, now, FG_TAPE, -1, tapeSeen, 1, {}, &place) : QString();
 	bool done = false;
 	bool put = false;
 	emu_lock();

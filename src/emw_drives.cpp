@@ -132,6 +132,67 @@ int drive_count(Computer* comp) {
 	return (comp->dif->type == DIF_BDI) ? 4 : (comp->dif->type == DIF_P3DOS) ? 2 : 0;
 }
 
+// The Next/Previous Side keys: the next place of the set (Side A -> B, round past the
+// end) in the slot of the image in use - the tape or the drive the title names, or named
+// last while a side changes in it; none yet, the tape if it is of a set, else drive A.
+// It goes in as a pick from the menu does, a playing tape stopped first. A disk in
+// another drive is not taken.
+void MainWin::sideStep(int step) {
+	Computer* comp = conf.zx;
+	if (comp->rzx.play) {
+		setMessage(" not in RZX ");
+		return;
+	}
+	// what a slot holds: empty for none, or a drive the machine has not
+	auto held = [comp](int src) {
+		const char* raw = nullptr;
+		if (src == MEDIA_TAPE) {
+			if (comp->tape->blkCount > 0) raw = comp->tape->path;
+		} else if ((src >= 0) && (src < drive_count(comp)) && !comp->dif->out) {
+			Floppy* flp = comp->dif->flp[src];
+			if (flp->insert) raw = flp->path;
+		}
+		return QString::fromLocal8Bit((raw && *raw) ? raw : "");
+	};
+	auto next = [&](int src, QString* place) {
+		const QString path = held(src);
+		if (path.isEmpty()) return QString();
+		if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place);
+		QStringList skip;
+		for (int i = 0; i < 4; i++) {
+			const QString other = (i == src) ? QString() : held(i);
+			if (!other.isEmpty()) skip.append(other);
+		}
+		return media_next_side(comp, path, FH_DRIVE_A + src, src, {}, step, skip, place);
+	};
+	int src = sideSrc;
+	QString place;
+	QString path;
+	if (!held(src).isEmpty()) {
+		path = next(src, &place);
+	} else {
+		src = MEDIA_TAPE;
+		path = next(src, &place);
+		if (path.isEmpty()) {
+			src = 0;
+			path = next(src, &place);
+		}
+	}
+	if (path.isEmpty()) {
+		setMessage(" no other side ");
+		return;
+	}
+	sideSrc = src;
+	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be
+	if (src == MEDIA_TAPE) {
+		if (comp->tape->on) tapStateChanged(TW_STATE, TWS_STOP);
+		openMedia(path, FG_TAPE, -1, AR_MOUNT, true, true, QString(" tape: %0 ").arg(place));
+	} else {
+		openMedia(path, FH_DRIVE_A + src, src, AR_MOUNT, true, true,
+			QString(" drive %0: %1 ").arg(QChar('A' + src)).arg(place));
+	}
+}
+
 // an SD card by its place: -1 the Z-controller's, 0 and 1 a divMMC's slots
 static SDCard* sd_card(Computer* comp, int card) {
 	return (card < 0) ? comp->sdc : comp->div->card[card & 1];
