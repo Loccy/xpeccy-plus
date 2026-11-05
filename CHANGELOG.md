@@ -31,6 +31,8 @@ before that point is upstream's history and is not repeated here.
   beside the emulation, not in it - up to a quarter faster on a computer with two cores or
   more, with the sound the same to the bit. With **Sound > Enabled** off no sound is worked
   out at all.
+- **The file dialog keeps its sort and view (List or Detail) between runs**: sorted by
+  **Date Modified** once, a Downloads folder opens with the newest file at the top.
 
 ### Fixed
 
