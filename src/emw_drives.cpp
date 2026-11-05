@@ -155,8 +155,10 @@ void MainWin::sideStep(int step) {
 		return QString::fromLocal8Bit((raw && *raw) ? raw : "");
 	};
 	auto next = [&](int src, QString* place) {
-		const QString path = held(src);
+		QString path = held(src);
 		if (path.isEmpty()) return QString();
+		// a side the last press asked for and still being read: this one steps on from it
+		if ((src == sideWantSrc) && (path == sideFrom) && (mountEnded != mountGen)) path = sideWant;
 		if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place);
 		QStringList skip;
 		for (int i = 0; i < 4; i++) {
@@ -183,6 +185,9 @@ void MainWin::sideStep(int step) {
 		return;
 	}
 	sideSrc = src;
+	sideFrom = held(src);
+	sideWant = path;
+	sideWantSrc = src;
 	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be
 	if (src == MEDIA_TAPE) {
 		if (comp->tape->on) tapStateChanged(TW_STATE, TWS_STOP);

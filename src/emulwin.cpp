@@ -2206,6 +2206,7 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, cons
 	}
 	quint64 gen = ++mountGen;
 	auto done = [this, job, gen, path, id, drv, pinned, from, note]() {
+		if (gen == mountGen) mountEnded = gen;
 		int err = job->err;
 		if (gen != mountGen) {
 			err = ERR_CANCEL;
@@ -3452,8 +3453,8 @@ void MainWin::initMachineMenus() {
 	// items in two menus re-pops on every mouse move under one of them
 	drvMenu = media->addMenu(QIcon(":/images/fdd.png"), "Floppy Drives");
 	// the image in use, the tape or a disk, turned over: no list to pick from, so a key
-	media->addAction(cutAct("Next Side", XCUT_SIDE_NEXT));
-	media->addAction(cutAct("Previous Side", XCUT_SIDE_PREV));
+	cutAction(media, "Next Side", XCUT_SIDE_NEXT);
+	cutAction(media, "Previous Side", XCUT_SIDE_PREV);
 	QAction* fdcFastAct = media->addAction("Fast Disk Access", this, [](bool on) {
 		setFlagBit(on, &fdcFlag, FDC_FAST);
 		saveConfig();
@@ -4169,7 +4170,7 @@ void MainWin::tapeNext() {
 		&& media_mount_fits(tapeSpare.get())) ? tapeSpare : nullptr;
 	QString place = spare ? tapeSparePlace : QString();
 	const QString next = spare ? tapeSpareNext
-		: (tap->wantNext && !comp->rzx.play) ? media_next_side(comp, now, FG_TAPE, -1, tapeSeen, 1, {}, &place) : QString();
+		: (tap->wantNext && !comp->rzx.play && conf.tape.setNext) ? media_next_side(comp, now, FG_TAPE, -1, tapeSeen, 1, {}, &place) : QString();
 	bool done = false;
 	bool put = false;
 	emu_lock();
