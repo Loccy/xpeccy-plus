@@ -101,7 +101,11 @@ void xDiskDump::setRowBytes(int n) {
 	layoutColumns();
 }
 
+// the base sets the scroll range and the hidden row header's height, which
+// decides how far down rows are painted. A change of width alone updated them
+// through the columns; a change of height left them as they were
 void xDiskDump::resizeEvent(QResizeEvent* ev) {
+	QTableView::resizeEvent(ev);
 	if (ev->size().height() < 1) return;
 	layoutColumns();
 }
