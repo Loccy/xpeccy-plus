@@ -578,6 +578,7 @@ static const szxField fld_rtc[] = {
 #define XR_DIF	BID('D','I','F',' ')
 #define XR_FDC	BID('F','D','C',' ')
 #define XR_FDCP	BID('F','D','C','P')	// the command in progress: its plan, and where in it
+#define XR_FDCI	BID('F','D','C','I')	// a Format's IDs taken so far: C H R N each
 #define XR_FLP	BID('F','L','P','0')	// ..3
 #define XR_IDE	BID('I','D','E',' ')
 #define XR_ATA	BID('A','T','A','0')	// master, 1 slave
@@ -845,6 +846,19 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		sb_byte(b, sel);			// the drive selected, by the controller's numbering
 		sb_byte(b, UPD_PLANS);
 		rec_end(b, mark);
+		FDC* fdc = comp->dif->fdc;
+		int nid = (int)(sizeof(fdc->slst) / sizeof(fdc->slst[0]));
+		if (fdc->scnt < nid) nid = fdc->scnt;
+		if ((comp->dif->type == DIF_P3DOS) && (nid > 0)) {
+			rec_begin(b, XR_FDCI, &mark);
+			for (i = 0; i < nid; i++) {
+				sb_byte(b, fdc->slst[i].trk);
+				sb_byte(b, fdc->slst[i].head);
+				sb_byte(b, fdc->slst[i].sec);
+				sb_byte(b, fdc->slst[i].sz);
+			}
+			rec_end(b, mark);
+		}
 		for (i = 0; i < 4; i++)
 			if (comp->dif->flp[i]->fitted)
 				rec_fields(b, XR_FLP + ((unsigned)i << 24), comp->dif->flp[i], fld_flp);
@@ -1348,6 +1362,21 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 				break;
 			case XR_GSRAM:
 				if (comp->gs && comp->gs->enable) ext_gs_ram(comp->gs, p, n);
+				break;
+			case XR_FDCI:
+				if (comp->dif && (comp->dif->type == DIF_P3DOS)) {
+					FDC* fdc = comp->dif->fdc;
+					for (size_t k = 0; (k + 4 <= n) && (k / 4 < sizeof(fdc->slst) / sizeof(fdc->slst[0])); k += 4) {
+						Sector* sc = &fdc->slst[k / 4];
+						sc->trk = p[k];
+						sc->head = p[k + 1];
+						sc->sec = p[k + 2];
+						sc->sz = p[k + 3];
+						sc->crc = -1;
+						sc->type = 0xfb;
+						memset(sc->data, fdc->comBuf[4], 4096);	// as utrkfrm02 fills it
+					}
+				}
 				break;
 			case XR_FLP + (0u << 24): case XR_FLP + (1u << 24):
 			case XR_FLP + (2u << 24): case XR_FLP + (3u << 24):
