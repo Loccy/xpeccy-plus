@@ -98,10 +98,13 @@ off by default.
 - Every frame is drawn while a video is recorded, with run-ahead (see
   [Input lag](options-emulation.md#input-lag)), in the debugger, and while a breakpoint may
   stop the machine.
+- While frames are being left undrawn, [Anti-flicker](#anti-flicker) is off: the computer is
+  short of time already. It comes back a few seconds after the last frame left out.
 
 When the machine runs well under its frame rate for a few seconds at normal speed and
-**Frame skip** is off, Xpeccy+ offers to turn it on. **Not Now** asks again on the next
-start, **Don't Ask Again** never.
+**Frame skip** is off, Xpeccy+ offers to turn it on - not where Frame skip would draw every
+frame anyway (the cases above). **Not Now** asks again on the next start, **Don't Ask Again**
+never.
 
 ## Anti-flicker
 
