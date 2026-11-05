@@ -180,6 +180,8 @@ class MainWin : public QWidget {
 		// a tape or a disk, read in the background
 		void mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from, const QString& note = QString());
 		void sideStep(int step);	// the Next/Previous Side keys
+		void sideStepIn(int src, int step);	// ...the buttons: in the deck (MEDIA_TAPE) or a drive
+		bool hasSides(int src);
 		QString mediaIn(int id, int drv);
 		void mediaThread(std::function<void()> work, std::function<void()> done);
 		void mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk);
@@ -354,6 +356,10 @@ class MainWin : public QWidget {
 		Tape* setTape = nullptr;	// the tape whose set was looked for, and its path then
 		QByteArray setRaw;
 		bool setOn = false;	// and whether a set was looked for at all (Next tape of a set)
+		bool tapeSides = false;	// the deck's tape has others in its set
+		QString sideHeld(int src);
+		QString sideNext(int src, int step, QString* place);
+		void sidePut(int src, const QString& path, const QString& place);
 		QStringList tapeSeen;	// the tapes that were in, newest first, for the side a set turns back to
 		void watchTapeSet(Computer*);
 		void spareTape(Computer*, const QString& next, const QString& place);

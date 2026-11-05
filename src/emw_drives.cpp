@@ -132,65 +132,99 @@ int drive_count(Computer* comp) {
 	return (comp->dif->type == DIF_BDI) ? 4 : (comp->dif->type == DIF_P3DOS) ? 2 : 0;
 }
 
-// The Next/Previous Side keys: the next place of the set (Side A -> B, round past the
-// end) in the slot of the image in use - the tape or the drive the title names, or named
-// last while a side changes in it; none yet, the tape if it is of a set, else drive A.
-// It goes in as a pick from the menu does, a playing tape stopped first. A disk in
-// another drive is not taken.
-void MainWin::sideStep(int step) {
+// THE SIDES OF A SET
+//
+// The Next/Previous Side keys, and the Tape Player's and the Disk Manager's buttons: the
+// next place of the set (Side A -> B, round past the end) in the deck or a drive. It goes
+// in as a pick from the menu does, a playing tape stopped first. A disk in another drive
+// is not taken.
+
+// what the deck or a drive holds: empty for none, or a drive the machine has not
+QString MainWin::sideHeld(int src) {
+	Computer* comp = conf.zx;
+	const char* raw = nullptr;
+	if (src == MEDIA_TAPE) {
+		if (comp->tape->blkCount > 0) raw = comp->tape->path;
+	} else if ((src >= 0) && (src < drive_count(comp)) && !comp->dif->out) {
+		Floppy* flp = comp->dif->flp[src];
+		if (flp->insert) raw = flp->path;
+	}
+	return QString::fromLocal8Bit((raw && *raw) ? raw : "");
+}
+
+// the image step places on in the deck or a drive; empty when there is none
+QString MainWin::sideNext(int src, int step, QString* place) {
+	Computer* comp = conf.zx;
+	QString path = sideHeld(src);
+	if (path.isEmpty()) return QString();
+	// a side the last press asked for and still being read: this one steps on from it
+	if ((src == sideWantSrc) && (path == sideFrom) && (mountEnded != mountGen)) path = sideWant;
+	if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place);
+	QStringList skip;
+	for (int i = 0; i < 4; i++) {
+		const QString other = (i == src) ? QString() : sideHeld(i);
+		if (!other.isEmpty()) skip.append(other);
+	}
+	return media_next_side(comp, path, FH_DRIVE_A + src, src, {}, step, skip, place);
+}
+
+// Whether a drive's disk has another side to step to, for its buttons. The deck's tape
+// is looked at once a tape, by watchTapeSet.
+bool MainWin::hasSides(int src) {
+	return (src == MEDIA_TAPE) ? tapeSides : !sideNext(src, 1, nullptr).isEmpty();
+}
+
+// the next side into the deck or a drive, or why not
+void MainWin::sideStepIn(int src, int step) {
 	Computer* comp = conf.zx;
 	if (comp->rzx.play) {
 		setMessage(" not in RZX ");
 		return;
 	}
-	// what a slot holds: empty for none, or a drive the machine has not
-	auto held = [comp](int src) {
-		const char* raw = nullptr;
-		if (src == MEDIA_TAPE) {
-			if (comp->tape->blkCount > 0) raw = comp->tape->path;
-		} else if ((src >= 0) && (src < drive_count(comp)) && !comp->dif->out) {
-			Floppy* flp = comp->dif->flp[src];
-			if (flp->insert) raw = flp->path;
-		}
-		return QString::fromLocal8Bit((raw && *raw) ? raw : "");
-	};
-	auto next = [&](int src, QString* place) {
-		QString path = held(src);
-		if (path.isEmpty()) return QString();
-		// a side the last press asked for and still being read: this one steps on from it
-		if ((src == sideWantSrc) && (path == sideFrom) && (mountEnded != mountGen)) path = sideWant;
-		if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place);
-		QStringList skip;
-		for (int i = 0; i < 4; i++) {
-			const QString other = (i == src) ? QString() : held(i);
-			if (!other.isEmpty()) skip.append(other);
-		}
-		return media_next_side(comp, path, FH_DRIVE_A + src, src, {}, step, skip, place);
-	};
+	QString place;
+	const QString path = sideNext(src, step, &place);
+	if (path.isEmpty()) {
+		setMessage(" no other side ");
+		return;
+	}
+	sidePut(src, path, place);
+}
+
+// The keys: in the slot of the image in use - the tape or the drive the title names, or
+// named last while a side changes in it; none yet, the tape if it is of a set, else drive A
+void MainWin::sideStep(int step) {
+	if (conf.zx->rzx.play) {
+		setMessage(" not in RZX ");
+		return;
+	}
 	int src = sideSrc;
 	QString place;
 	QString path;
-	if (!held(src).isEmpty()) {
-		path = next(src, &place);
+	if (!sideHeld(src).isEmpty()) {
+		path = sideNext(src, step, &place);
 	} else {
 		src = MEDIA_TAPE;
-		path = next(src, &place);
+		path = sideNext(src, step, &place);
 		if (path.isEmpty()) {
 			src = 0;
-			path = next(src, &place);
+			path = sideNext(src, step, &place);
 		}
 	}
 	if (path.isEmpty()) {
 		setMessage(" no other side ");
 		return;
 	}
+	sidePut(src, path, place);
+}
+
+void MainWin::sidePut(int src, const QString& path, const QString& place) {
 	sideSrc = src;
-	sideFrom = held(src);
+	sideFrom = sideHeld(src);
 	sideWant = path;
 	sideWantSrc = src;
-	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be
+	// its place in the set, "side B": the OSD letters are ASCII, a file name may not be
 	if (src == MEDIA_TAPE) {
-		if (comp->tape->on) tapStateChanged(TW_STATE, TWS_STOP);
+		if (conf.zx->tape->on) tapStateChanged(TW_STATE, TWS_STOP);
 		openMedia(path, FG_TAPE, -1, AR_MOUNT, true, true, QString(" tape: %0 ").arg(place));
 	} else {
 		openMedia(path, FH_DRIVE_A + src, src, AR_MOUNT, true, true,

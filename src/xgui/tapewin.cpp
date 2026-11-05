@@ -40,6 +40,10 @@ TapeWin::TapeWin(QWidget *par):QDialog(par) {
 	connect(ui.cbAuto,SIGNAL(clicked(bool)),this,SLOT(setOptions()));
 	connect(ui.cbFast,SIGNAL(clicked(bool)),this,SLOT(setOptions()));
 	connect(ui.cbRewind,SIGNAL(clicked(bool)),this,SLOT(setOptions()));
+	connect(ui.tbPrevTape, &QToolButton::released, this, [this]() {if (side) side(-1);});
+	connect(ui.tbNextTape, &QToolButton::released, this, [this]() {if (side) side(1);});
+	// Next tape of a set, as Options has it: autoreverse on a deck
+	connect(ui.tbAutoRev, &QToolButton::clicked, this, [](bool on) {conf.tape.setNext = on ? 1 : 0;});
 }
 
 void TapeWin::show() {
@@ -89,6 +93,11 @@ void TapeWin::upd(Tape* tape) {
 	ui.stopBut->setEnabled(tape_running(tape));
 	ui.tbRewind->setEnabled(got && !tape->on);
 	ui.tbEject->setEnabled(got && !tape->on);
+	const bool sides = got && hasSides && hasSides();
+	ui.tbPrevTape->setEnabled(sides);
+	ui.tbNextTape->setEnabled(sides);
+	ui.tbAutoRev->setChecked(conf.tape.setNext);
+	ui.tbAutoRev->setEnabled(conf.tape.rewind);
 	ui.saveBut->setEnabled(got);
 	ui.tbToDisk->setEnabled(row >= 0);
 	ui.tbBlkUp->setEnabled(row > 0);

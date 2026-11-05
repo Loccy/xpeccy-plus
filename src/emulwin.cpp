@@ -2661,6 +2661,8 @@ void MainWin::initUserMenu() {
 	diskWin->tapeChanged = [this]() {emit s_tape_upd(conf.zx->tape);};
 	diskWin->diskOp = [this](int op, int drv) {diskOp(op, drv);};
 	diskWin->others = [this](QMenu* m, int drv) {otherImages(m, FH_DRIVE_A + drv, drv, nullptr, 999);};
+	diskWin->side = [this](int drv, int step) {sideStepIn(drv, step);};
+	diskWin->hasSides = [this](int drv) {return hasSides(drv);};
 	padWin = new xPadWin(this);
 	addSatellite(padWin);
 	padWin->gameEdited = [this]() {padGameEdited();};
@@ -4101,7 +4103,8 @@ void MainWin::watchMedia() {
 // Another tape in the deck: whether it has a next one in its set, which auto play asks
 // for at its end (Rewind at end). The folder is read once a tape; the flag shares its
 // word with the ones the emulation sets, so it is written under the lock. With Next tape
-// of a set off, no tape is one: it starts over as a lone one does.
+// of a set off, no tape is one: it starts over as a lone one does, though the Tape
+// Player's buttons still step its set.
 void MainWin::watchTapeSet(Computer* comp) {
 	Tape* tap = comp->tape;
 	const QByteArray raw(tap->path ? tap->path : "");
@@ -4117,13 +4120,14 @@ void MainWin::watchTapeSet(Computer* comp) {
 		while (tapeSeen.size() > 16) tapeSeen.removeLast();
 	}
 	QString place;
-	const QString next = (path.isEmpty() || !on) ? QString() : media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, &place);
-	const bool set = !next.isEmpty();
+	const QString next = path.isEmpty() ? QString() : media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, &place);
+	tapeSides = !next.isEmpty();		// the Tape Player's buttons, whatever the option says
+	const bool set = on && tapeSides;
 	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
 	emu_lock();
 	if (QByteArray(tap->path ? tap->path : "") == raw) tap->inSet = set;
 	emu_unlock();
-	spareTape(comp, next, place);
+	spareTape(comp, set ? next : QString(), place);
 }
 
 // past this a tape is not read ahead: a WAV of half an hour is hundreds of megabytes parsed
@@ -4193,7 +4197,7 @@ void MainWin::tapeNext() {
 	}
 	if (!done) return;
 	game_tape_next(now, next);
-	// its place in the set, "side b": the OSD letters are ASCII, a file name may not be
+	// its place in the set, "side B": the OSD letters are ASCII, a file name may not be
 	setMessage(QString(" tape: %0 ").arg(place));
 	emit s_tape_upd(tap);
 }

@@ -38,6 +38,8 @@ class xDiskWin : public QDialog {
 		std::function<void()> tapeChanged;	// files went onto the tape
 		std::function<void(int, int)> diskOp;	// DW_* on a drive, done by the main window
 		std::function<void(QMenu*, int)> others;	// the other disks of a drive's set, put in a menu
+		std::function<void(int, int)> side;	// a drive's previous (-1) or next (1) disk of its set in
+		std::function<bool(int)> hasSides;	// ...and whether there is one
 	private:
 		QTabBar* tabs;
 		QCheckBox* fast;
@@ -47,6 +49,8 @@ class xDiskWin : public QDialog {
 		QToolButton* btnSave;
 		QToolButton* btnSaveAs;
 		QToolButton* btnEject;
+		QToolButton* btnPrev;
+		QToolButton* btnNext;
 		QCheckBox* protect;
 		xDiskCatTable* list;
 		QLabel* note;
