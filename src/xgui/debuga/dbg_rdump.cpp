@@ -28,6 +28,7 @@ void xRDumpTable::update() {
 }
 
 void xRDumpTable::resizeEvent(QResizeEvent* e) {
+	QTableView::resizeEvent(e);
 	// one byte takes as much room as it does in the other dumps. The form asks
 	// for a wider minimum, which would clamp the default back up, and setupUi
 	// applies it after the constructor - so it has to be lowered here

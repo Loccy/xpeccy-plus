@@ -101,7 +101,9 @@ void xDiskDump::setRowBytes(int n) {
 	layoutColumns();
 }
 
+// the base sets the scroll range and the row header's height, which bounds the painted rows
 void xDiskDump::resizeEvent(QResizeEvent* ev) {
+	QTableView::resizeEvent(ev);
 	if (ev->size().height() < 1) return;
 	layoutColumns();
 }
