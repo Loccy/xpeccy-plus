@@ -79,7 +79,8 @@ QLineEdit:read-only {
 /* ---- buttons ------------------------------------------------------- */
 
 /* min-width and min-height keep the dialog buttons the size the platform
- * style gives them, so a style sheet does not reflow the button rows */
+ * style gives them, so a style sheet does not reflow the button rows; the
+ * height in em is the font's, which a fixed one cuts where the font is taller */
 
 QPushButton {
 	background-color: #383830;
@@ -88,7 +89,7 @@ QPushButton {
 	border-radius: 4px;
 	padding: 3px 9px;
 	min-width: 53px;
-	min-height: 14px;
+	min-height: 1em;
 }
 
 QPushButton:hover {
