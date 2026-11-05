@@ -1408,6 +1408,7 @@ void SetupWin::applyMachine() {
 	double psgFrq = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;	// 0: Auto
 	int tsType = (chips > 2) ? TS_ZXNEXT : (chips > 1) ? TS_NEDOPC : TS_NONE;
 	bool chipsNew = (comp->ts->type != tsType);
+	bool stereoNew = false;		// the chips' tick goes on: only the sound thread's copy is told
 	aymChip* chip[3] = {comp->ts->chipA, comp->ts->chipB, comp->ts->chipC};
 	for (int i = 0; i < 3; i++) {			// one setting for all the chips
 		int type = (i < chips) ? chtype : SND_NONE;
@@ -1417,7 +1418,7 @@ void SetupWin::applyMachine() {
 		}
 		if (chip[i]->stereo != chstereo) {
 			chip[i]->stereo = chstereo;
-			chipsNew = true;
+			stereoNew = true;
 		}
 	}
 	// a chip of another type takes its clock here too (a YM2203 runs at twice the AY's)
@@ -1425,6 +1426,8 @@ void SetupWin::applyMachine() {
 		ts_set_frq(comp->ts, psgFrq, comp->cpuFrq);
 		comp->ts->type = tsType;
 		comp->sndSeed = 1;		// the chips the sound thread mixes take all of it
+	} else if (stereoNew) {
+		comp->sndSeed = 1;
 	}
 	comp->gs->enable = gsBox->currentIndex();
 	comp->sdrv->type = getRFIData(sdrvBox);
