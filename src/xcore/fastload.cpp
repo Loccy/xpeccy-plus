@@ -667,10 +667,25 @@ static int fs_run = 0;			// frames drawn since the last one left out
 static int fs_said = 0;			// the log said it skips
 #define FS_QUIET	250		// frames drawn in a row that end a stretch of skipping (5 s)
 
+int frame_skip_allowed(Computer* comp) {
+	return !conf.emu.runahead && (vrec_state() == VREC_IDLE) && !fp_watched(comp) && !autostart_busy()
+		&& !fastload_busy() && !rzx_seeking() && !rewind_active();
+}
+
+int frame_skipping() {
+	return fs_said && conf.vid.frameSkip;
+}
+
+// a frame Frame skip held back is drawn after all
+static void fs_release(Video* vid) {
+	if (!fs_held) return;
+	vid_set_nodraw_next(vid, 0);
+	fs_held = 0;
+}
+
 static void fs_frame(Computer* comp) {
 	Video* vid = comp->vid;
-	int on = conf.vid.frameSkip && !conf.emu.runahead && !conf.emu.pause && (vrec_state() == VREC_IDLE)
-		&& !fp_watched(comp) && !autostart_busy() && !fastload_busy() && !rzx_seeking() && !rewind_active();
+	int on = conf.vid.frameSkip && !conf.emu.pause && frame_skip_allowed(comp);
 	long long frame = (long long)conf.snd.rate * vid->nsPerFrame / 1000000000LL;
 	int skip = on && (fs_run >= 2) && (conf.snd.need > frame);
 	if (skip) {
@@ -681,10 +696,7 @@ static void fs_frame(Computer* comp) {
 		fs_run = 0;
 		return;
 	}
-	if (fs_held) {
-		vid_set_nodraw_next(vid, 0);
-		fs_held = 0;
-	}
+	fs_release(vid);
 	if ((++fs_run >= FS_QUIET) && fs_said) {
 		xlog(XLG_VIDEO, XLL_INFO, "frame skip: caught up");
 		fs_said = 0;
@@ -704,6 +716,7 @@ void fast_picture_frame(Computer* comp) {
 	// a pause asked for in fast mode stops on a frame drawn whole, not on the
 	// picture of a while ago: the next one is drawn, then the machine stops
 	if (conf.emu.pauseReq) {
+		fs_release(vid);		// the frame after the pause is drawn
 		if (drawn || !fp_held) {
 			conf.emu.pause |= conf.emu.pauseReq;
 			conf.emu.pauseReq = 0;

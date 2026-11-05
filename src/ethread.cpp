@@ -537,7 +537,7 @@ static int ra_frames(Computer* comp, int* shown) {
 	if (conf.emu.tmode == XTM_FFWD) return *shown = 0;
 	int r = comp->rzx.play ? 0 : conf.emu.runahead;
 	int l = 0;
-	if (!conf.emu.fast && (noflic > 0) && noflicAhead
+	if (!conf.emu.fast && (noflic > 0) && noflicAhead && !frame_skipping()
 			&& ((noflicMode == AF_2C_ADAPTIVE) || (noflicMode == AF_3C_ADAPTIVE))
 			&& (comp->hw->id != HW_ZXNEXT))		// too dear there
 		l = AF_AHEAD;
@@ -933,9 +933,10 @@ void xThread::emuCycle(Computer* comp) {
 			}
 // process noflic/scanlines (if !fast ???)
 // buffers is already switches, bufimg - just painted (greyscale, if flag is set), scrimg - new
-			// fast forward's undrawn frames are not mixed, and its drawn ones follow on
+			// fast forward's undrawn frames are not mixed, and its drawn ones follow on;
+			// while Frame skip leaves frames out the host is short anyway: no mixing
 			int ffwd = fast_ffwd_frame();
-			if (!conf.emu.fast && (noflic > 0) && (ffwd >= 0)) {
+			if (!conf.emu.fast && (noflic > 0) && (ffwd >= 0) && !frame_skipping()) {
 				const uint32_t* ahead = ahead_ok ? af_look_ahead(comp, shown + 1, k - shown) : NULL;
 				scrMix(pscr, (unsigned char*)af_crop(comp->vid),
 					comp->vid->vsze.x * 2, comp->vid->vsze.y, bytesPerLine,

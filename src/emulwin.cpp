@@ -750,15 +750,15 @@ static struct {
 
 // The machine runs well short of its frame rate at normal speed, for seconds on end:
 // the computer cannot keep up with it. Frame skip is offered, once a run; closed, the
-// question comes again on the next start, and "Don't Ask Again" ends it for good.
+// question comes again on the next start, and "Don't Ask Again" ends it for good. Not
+// where Frame skip would not skip (run-ahead, recording, breakpoints...).
 #define SLOW_HINT_RATE	0.84		// of the machine's own rate (42 fps of 50)
 #define SLOW_HINT_TICKS	25		// fps ticks in a row: 5 seconds
 void MainWin::slowHint() {
-	static bool done = false;
 	Computer* comp = conf.zx;
-	if (done || !comp || conf.vid.frameSkip || !conf.vid.skipHint) return;
+	if (slowAsked || !comp || conf.vid.frameSkip || !conf.vid.skipHint) return;
 	int calm = !conf.emu.pause && !conf.emu.fast && (conf.emu.tmode == XTM_NONE) && (conf.emu.speed == 1.0)
-		&& !comp->vid->debug && !fastload_busy() && !autostart_busy() && !rzx_seeking() && !rewind_active()
+		&& !comp->vid->debug && frame_skip_allowed(comp)
 		&& (fpsmem.size() >= FPS_WINDOW) && (comp->vid->nsPerFrame > 0);
 	double rate = calm ? 1e9 / comp->vid->nsPerFrame : 0;
 	if (!calm || (conf.vid.curfps >= rate * SLOW_HINT_RATE)) {
@@ -766,7 +766,7 @@ void MainWin::slowHint() {
 		return;
 	}
 	if (++slowTicks < SLOW_HINT_TICKS) return;
-	done = true;
+	slowAsked = true;
 	xlog(XLG_VIDEO, XLL_INFO, "slow: %.1f fps of %.1f, Frame skip offered", conf.vid.curfps, rate);
 	pause(true, PR_EXTRA);
 	QMessageBox box(QMessageBox::Information, "Frame skip",

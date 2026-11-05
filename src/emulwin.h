@@ -318,6 +318,7 @@ class MainWin : public QWidget {
 		QMetaObject::Connection screenRateConnection;
 		int vsyncShown = 0;		// the rate x100 the VSync note last gave
 		int slowTicks = 0;		// fps ticks in a row the machine ran short of its rate
+		bool slowAsked = false;		// slowHint has asked, this run
 		QPoint fsHome;		// where the window goes back to from fullscreen, taken on the way in
 		QSize fsFree;		// and the size it goes back to, if it had one of its own (winFree)
 		QRect fsNormal;		// a maximized one: what Restore gives back afterwards

@@ -15,6 +15,10 @@ long long fast_refresh_ns();		// host ns between two pictures of fast mode
 void fast_picture_frame(Computer*);
 int fast_ffwd_frame();
 int fast_picture_busy();		// frames are being left undrawn
+// Frame skip (Options > Video): whether a frame may be left undrawn now, the option
+// aside (not run ahead, recorded, watched by a breakpoint, loaded or wound back)
+int frame_skip_allowed(Computer*);
+int frame_skipping();			// in a stretch of frames left undrawn: anti-flicker stands down
 void fast_picture_hold(int);		// the bench draws them itself
 // let the machine go now - the debugger is about to take it
 void fastload_stop(Computer*);
