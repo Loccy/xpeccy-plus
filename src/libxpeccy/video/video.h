@@ -105,6 +105,9 @@ typedef struct {
 	unsigned char* (*drawn)(Video*);
 	// a still frame ends here (vid_still_end): the mode takes the drawing up at the ray
 	cbvid wake;
+	// the whole frame from the memory as it stands, at once, into scrimg (vid_sweep),
+	// for a mode that does not draw by the dot; NULL: the dots are walked
+	cbvid sweep;
 } xVideoMode;
 
 // What a mode's dots leave behind that the machine can read: worked out from
@@ -203,6 +206,12 @@ struct Video {
 	vCoord lcut;		// top left corner of the shown frame
 	vCoord rcut;		// bottom right corner (exclusive)
 	vCoord vsze;		// shown frame size
+	// What the Next draws of it: the most any border size and window show
+	// (Overscan's frame), set with the layout; the rest is left as it was.
+	// drawAll: the whole raster (the bench's frame hashes).
+	vCoord dlt;		// top left corner of what is drawn
+	vCoord drb;		// bottom right corner (exclusive)
+	int drawAll;
 	vCoord intp;		// intp.y = the line TSConf raises its INT on
 	int intsize;
 	vCoord res;		// current resolution (-1 = from layout)
@@ -443,6 +452,7 @@ void vid_set_nodraw(Video*,int);
 void vid_set_nodraw_next(Video*,int);		// the same from the next frame start on
 void vid_still_end(Video*);			// a still frame drawn on from the ray
 void vid_still_break(Video*);			// ...and the picture touched from outside
+void vid_outside_write(Video*);			// ...before memory is written from outside (drawn up to the ray)
 extern int vid_still_on;			// still frames at all (--bench-nostill: 0)
 void vid_sweep(Video*);				// the memory now as a whole frame, into bufimg
 void vid_set_int_frame(Video*, int);		// dots left of the frame INT pulse, 0: none

@@ -1090,6 +1090,7 @@ void SetupWin::fillPages() {
 	fillToUi();
 	fillTake();
 	ui.cbVSync->setChecked(conf.vid.vsync);
+	ui.cbFrameSkip->setChecked(conf.vid.frameSkip);
 #if !defined(__WIN32) && !defined(__APPLE__)
 	// the swaps are the tick here, and only a GL context made with them waiting has them
 	ui.cbVSync->setEnabled(conf.vid.gl);
@@ -1522,6 +1523,7 @@ void SetupWin::applyGlobal() {
 	fillSet(getRFIData(ui.cbSideFill));
 	fillTake();		// the pop-up's values are in conf already: now they stay
 	conf.vid.vsync = ui.cbVSync->isChecked() ? 1 : 0;
+	conf.vid.frameSkip = ui.cbFrameSkip->isChecked() ? 1 : 0;
 	conf.vid.scale = getRFIData(ui.cbScale);
 	noflic = ui.sldNoflic->value();
 	noflicMode = ui.cbNoflicMode->currentIndex();

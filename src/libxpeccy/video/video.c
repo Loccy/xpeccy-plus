@@ -334,6 +334,13 @@ void vid_upd_layout(Video* vid) {
 	vid->send.x = vid->bord.x + vid->scrn.x;		// screen end column
 	vid->send.y = vid->bord.y + vid->scrn.y;		// screen end line
 	vid_upd_crop(vid);
+	// what is drawn: the most any border size shows (Overscan's frame), so a border
+	// change touches nothing the machine draws and shows a drawn picture, paused too
+	vCoord m = brd_margin(vid, VID_BRD_OVERSCAN);
+	vid->dlt.x = vid->bord.x - m.x;
+	vid->dlt.y = vid->bord.y - m.y;
+	vid->drb.x = vid->send.x + m.x;
+	vid->drb.y = vid->send.y + m.y;
 	vid->dotPerFrame = vid->full.y * vid->full.x;
 	vid_upd_timings(vid, vid->nsPerDotExact);
 }
@@ -962,7 +969,11 @@ static void vid_nodraw_to(Video* vid, int on) {
 	on = on ? 1 : 0;
 	if (on == vid->nodraw) return;
 	vid_latch_at(vid);
+	// a mode drawing behind the ray (VID_NEXT): the picture up to it as it was, and on
+	// from there as it now is
+	if (vid->cb && vid->cb->drawn) vid->cb->drawn(vid);
 	vid->nodraw = on;
+	if (vid->cb && vid->cb->drawn) vid->cb->drawn(vid);
 	if (on) vid->stillBreak = 1;		// the buffers fall behind the machine
 }
 
@@ -978,6 +989,14 @@ void vid_still_end(Video* vid) {
 void vid_still_break(Video* vid) {
 	vid_still_end(vid);
 	vid->stillBreak = 1;
+}
+
+// The memory about to be written past the machine's own writes (a tape trap, a cheat,
+// the debugger): a still picture ends, and a mode drawing behind the ray (VID_NEXT) draws
+// up to it first - the dots not drawn yet would show the new bytes before they came
+void vid_outside_write(Video* vid) {
+	vid_still_break(vid);
+	if (vid->cb && vid->cb->drawn) vid->cb->drawn(vid);
 }
 
 long long vid_quiet_dots(Video* vid, int lineInt) {
@@ -1690,6 +1709,7 @@ int nxv_run(Video*, int);
 unsigned char* nxv_drawn(Video*);
 void nxv_frm(Video*);
 void nxv_wake(Video*);
+void nxv_sweep(Video*);
 void vts_line(Video*);
 void vts_frame(Video*);
 void vidDrawTSLNormal(Video*);
@@ -1718,7 +1738,7 @@ static xVideoMode vidModeTab[] = {
 	{VID_TSL_TEXT, NULL, vidDrawTSLText, vts_hblk, vts_line, NULL, vts_frame, NULL, VL_NONE},
 	{VID_PRF_MC, NULL, vidProfiScr, NULL, NULL, NULL, NULL, NULL, VL_NONE},
 	{VID_PRF_MONO, NULL, vidProfiMono, NULL, NULL, NULL, NULL, NULL, VL_NONE},
-	{VID_NEXT, NULL, nxv_dot, NULL, NULL, NULL, nxv_frm, nxv_run, VL_NONE, nxv_drawn, nxv_wake},
+	{VID_NEXT, NULL, nxv_dot, NULL, NULL, NULL, nxv_frm, nxv_run, VL_NONE, nxv_drawn, nxv_wake, nxv_sweep},
 
 
 	{VID_UNKNOWN, NULL, vidDrawBorder, NULL, NULL, NULL, NULL, NULL, VL_NONE}
@@ -1740,7 +1760,9 @@ void vid_set_mode(Video* vid, int mode) {
 		i++;
 	}
 	vid_set_core(vid, &vidModeTab[i]);
-	vid->lazyDraw = (mode == VID_NEXT) ? 32 : 0;	// its queues hold what 32 dots can write
+	// the Next draws a line once the ray has left it (nxv_line): its queues hold what a
+	// line brings, and the ray goes on uncounted up to the next event
+	vid->lazyDraw = (mode == VID_NEXT) ? (1 << 20) : 0;
 	vid_latch_mark(vid);		// the new one reads back what was kept until its dots move it
 }
 
@@ -1821,8 +1843,9 @@ static int vid_run_len(Video* vid, int n) {
 	if (vid->full.x - 1 - x < k) k = vid->full.x - 1 - x;
 	if ((vid->vend.x > x) && (vid->vend.x - 1 - x < k)) k = vid->vend.x - 1 - x;
 	// the border edges only change what a dot draws: an undrawn run goes past them,
-	// hbrd is worked out where it ends (vid_run)
-	if (!vid_skips(vid)) {
+	// and so does a mode that draws its lines itself; hbrd is worked out where it ends
+	// (vid_run)
+	if (!vid_skips(vid) && !vid->lazyDraw) {
 		if ((vid->bord.x > x) && (vid->bord.x - 1 - x < k)) k = vid->bord.x - 1 - x;
 		if ((vid->send.x > x) && (vid->send.x - 1 - x < k)) k = vid->send.x - 1 - x;
 	}
@@ -1978,6 +2001,19 @@ static void vid_sweep_irq(int t, void* ptr) {
 void vid_sweep(Video* vid) {
 	static Video v;
 	unsigned char* scr = scrimg;
+	if (vid->cb && vid->cb->sweep) {
+		// a mode drawing behind the ray (VID_NEXT) draws the frame itself; the copy
+		// only swaps it in
+		vid->cb->sweep(vid);
+		v = *vid;
+		v.xirq = vid_sweep_irq;
+		v.nodraw = 0;
+		v.debug = 0;
+		vid_frame(&v);
+		vid->ray.lptr = scrimg + (vid->ray.lptr - scr);
+		vid->ray.ptr = scrimg + (vid->ray.ptr - scr);
+		return;
+	}
 	v = *vid;
 	v.xirq = vid_sweep_irq;
 	v.nodraw = 0;

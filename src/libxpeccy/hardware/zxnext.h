@@ -39,6 +39,7 @@ static inline int nx_vact(Computer* comp) {
 long long nx_now(Computer*);
 void nx_raw(Computer*, int*, int*);
 void nx_ula(Computer*, int, int, int*, int*, int*);
+void nx_ula_seen(Computer*, int, int, int*, int*);
 void nx_raw_at(Computer*, long long, int*, int*);
 // a / b rounded down, b > 0
 static inline long long nx_fdiv(long long a, long long b) {
@@ -46,6 +47,9 @@ static inline long long nx_fdiv(long long a, long long b) {
 }
 
 void nx_cop_run(Computer*, long long);
+// set by a copper write landing that fills the picture's queues (nxv_room): nx_cop_run
+// stops at that edge, its copT there
+extern int nx_cop_hold;
 // the copper runs (or has a write still to make)
 static inline int nx_cop_on(Computer* comp) {
 	return (NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN;
@@ -58,6 +62,9 @@ void nxv_pal(Computer*, int, int, long long);
 void nxv_memw(Computer*, int, int, long long);
 int nxv_float(Computer*, long long);
 void nxv_retime(Computer*, long long, int);
+void nxv_line(Computer*);		// a raw line starts: the one before is drawn
+long long nxv_before_reset(Computer*, long long);	// a soft reset at clk28 w (-1: now)
+void nxv_after_reset(Computer*, long long);
 void nxv_touch(Computer*);		// something the picture reads moved: a still frame ends
 
 // the board's CLK_28 against 28 MHz, as a period: 1 at VGA 0 (zxnext.c, NR 11)
@@ -153,9 +160,12 @@ void nxs_run(Computer*, long long);
 static inline void nxs_run_to(Computer* comp, long long t2) {
 	if (t2 >= NX.spr.idleTo) nxs_run(comp, t2);
 }
-// the line buffer the display reads during dot d (the one before the swap or after)
+// The line buffer the display reads during dot d: the one after the last swap, or
+// one the pass cleared at a swap since, kept for the picture drawn after the ray
 static inline unsigned short* nxs_line(Computer* comp, long long d) {
-	return NX.spr.buf[(d > NX.spr.dispSwap) ? NX.spr.dispNew : NX.spr.dispOld];
+	if (d > NX.spr.dispSwap) return NX.spr.buf[NX.spr.dispNew];
+	int k = NX.v.sprKeepNew;
+	return NX.v.sprKeep[(d > NX.v.sprKeepTo[k ^ 1]) ? k : k ^ 1];
 }
 void nxs_nr(Computer*, int, int, long long);
 void nxs_out(Computer*, int, int, long long);

@@ -206,9 +206,9 @@ static void pk_write(Computer* comp, xPoke* pk, int val) {
 	unsigned char* p = pk_byte(comp, pk->bank, pk->adr, &err);
 	int v = pk_val(pk, val);
 	pk->saved = (*p == v && pk->org) ? pk->org : *p;
+	vid_outside_write(comp->vid);	// a still picture goes, the rest drawn first
 	*p = v;
 	x_input_bump();		// the memory changed from outside: frames run ahead go
-	vid_still_break(comp->vid);	// ...and a still picture
 }
 
 int pok_apply(Computer* comp, xTrainer* tr, int val) {
@@ -223,6 +223,7 @@ int pok_apply(Computer* comp, xTrainer* tr, int val) {
 // backwards, so an address poked twice gets its first saved byte last
 void pok_undo(Computer* comp, xTrainer* tr) {
 	int i, err;
+	vid_outside_write(comp->vid);
 	for (i = tr->cnt - 1; i >= 0; i--) {
 		xPoke* pk = &tr->pokes[i];
 		if (pk->saved < 0) continue;
@@ -231,7 +232,6 @@ void pok_undo(Computer* comp, xTrainer* tr) {
 		pk->saved = -1;
 	}
 	x_input_bump();
-	vid_still_break(comp->vid);
 }
 
 static int pk_same_place(const xPoke* a, const xPoke* b) {

@@ -265,8 +265,8 @@ int comp_cell_poke(Computer* comp, int area, int page, int ofs, int val, int rom
 	if (comp_cell_rom(area) && !romWrite) return 0;
 	unsigned char* ptr = comp_cell_ptr(comp, area, page, ofs);
 	if (!ptr) return 0;
+	vid_outside_write(comp->vid);		// past the Next's write log: drawn up to here first
 	*ptr = val & 0xff;
-	vid_still_break(comp->vid);		// past the Next's write log: drawn again
 	if ((area == CELL_DIVROM) && comp->div && !comp_is_next(comp)) comp->div->eeDirty = 1;
 	return 1;
 }

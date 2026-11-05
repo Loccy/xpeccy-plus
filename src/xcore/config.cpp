@@ -174,6 +174,7 @@ void conf_init(char* confdir) {
 	conf.fold.rw = 1;
 	conf.fold.trash = 1;
 	conf.fold.asked = 0;
+	conf.vid.skipHint = 1;
 	conf.saves.perGame = 1;
 	conf.saves.carry = 1;
 	conf.saves.snapMedia = SNAP_MEDIA_ASK;
@@ -342,6 +343,8 @@ void saveConfig() {
 	fprintf(cfile, "statusbar = %s\n", YESNO(conf.win.statusbar));
 	fprintf(cfile, "lowlatency = %s\n", YESNO(conf.vid.lowLatency));
 	fprintf(cfile, "vsync = %s\n", YESNO(conf.vid.vsync));
+	fprintf(cfile, "frameskip = %s\n", YESNO(conf.vid.frameSkip));
+	fprintf(cfile, "frameskip.hint = %s\n", YESNO(conf.vid.skipHint));
 	// kept beside lowlatency: the two are one page in the options, and moving
 	// a key between sections later would orphan everyone's setting
 	fprintf(cfile, "runahead = %i\n", conf.emu.runahead);
@@ -1270,6 +1273,8 @@ void loadConfig() {
 					if (pnam=="statusbar") conf.win.statusbar = arg.b;
 					if (pnam=="lowlatency") conf.vid.lowLatency = arg.b;
 					if (pnam=="vsync") conf.vid.vsync = arg.b;
+					if (pnam=="frameskip") conf.vid.frameSkip = arg.b;
+					if (pnam=="frameskip.hint") conf.vid.skipHint = arg.b;
 					if (pnam=="runahead") conf.emu.runahead = getRanged(arg.s, 0, 2);
 					if (pnam=="slowmo") conf.emu.slowDiv = xtime_fit(xtime_slow_steps, atoi(arg.s));
 					if (pnam=="ffwd") conf.emu.ffMul = xtime_fit(xtime_ffwd_steps, atoi(arg.s));

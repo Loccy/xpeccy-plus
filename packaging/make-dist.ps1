@@ -5,6 +5,9 @@
 #   .\make-dist.ps1 -Clean -Zip         # from scratch + archive
 #   .\make-dist.ps1 -Manual             # with the user manual (docs/manual/README.md)
 #   .\make-dist.ps1 -SysNext            # with System/Next beside the program, for tests
+#   .\make-dist.ps1 -Pgo                # profile-guided: built, trained, built again
+#   .\make-dist.ps1 -Pgo -PgoExtra D:\nex   # ...the .nex programs under D:\nex trained on too
+#   .\make-dist.ps1 -Pgo -PgoCard D:\card   # ...on that card, not the System/Next of build\deps
 #
 # What goes into the folder is defined by the install() rules in CMakeLists.txt and
 # cmake/windeploy.cmake.in; this script only picks a toolchain and drives cmake.
@@ -22,6 +25,9 @@ param(
 	[switch]$Full,		# keep everything windeployqt copied, skip the trim step
 	[switch]$Manual,	# build the user manual (tools/manual.py) and put it in the folder
 	[switch]$SysNext,	# put System/Next beside the program: the Next's card with none made
+	[switch]$Pgo,		# profile-guided (pgo-train.ps1): needs a card, System/Next by default
+	[string[]]$PgoExtra = @(),	# folders whose .nex programs the training runs too
+	[string]$PgoCard,	# the card the training boots the Next from (default: System/Next of build\deps)
 	[int]$Jobs = 16,
 	# a build agent installs Qt and MinGW wherever it likes, and has cmake in
 	# PATH already; locally the table below is right and none of this is needed
@@ -82,7 +88,9 @@ foreach ($p in @($tc.QtDir, $tc.MinGW)) {
 $baseVer = (Get-Content (Join-Path $srcRoot 'VERSION') -TotalCount 1).Trim()
 $version = if ($Release) { $baseVer } else { "$baseVer-dev+$(Get-Date -Format 'yyyyMMdd')" }
 
-$buildDir = Join-Path $buildRoot "out\$Preset"
+# a profile-guided build in a folder of its own: its flags would rebuild everything in
+# the usual one, and back again on the next plain build
+$buildDir = Join-Path $buildRoot "out\$Preset$(if ($Pgo) { '-pgo' })"
 $distName = "xpeccy-plus-$version-$($tc.Package)"
 $distDir = Join-Path $buildRoot "dist\$distName"
 
@@ -186,6 +194,34 @@ if ($SysNext -and (Test-Path $sysnextDir)) {
 } else {
 	if ($SysNext) { Write-Host "System/Next $($sn.release) is missing (packaging\fetch-deps.ps1 -SysNext)" -ForegroundColor Yellow }
 	$cmakeArgs += '-DSYSNEXT_DIR='
+}
+
+# --- profile-guided: an instrumented build trained first ---
+# It writes its counts (.gcda) beside its objects in $buildDir; the build after reads
+# them there. Code the training never ran is optimized as usual, not for size, where
+# gcc can (10 and later): a machine left out of the training loses nothing.
+if ($Pgo) {
+	if (-not $PgoCard) { $PgoCard = $sysnextDir }
+	if (-not (Test-Path $PgoCard)) { throw "pgo: no card at $PgoCard (packaging\fetch-deps.ps1 -SysNext)" }
+	$gen = '-fprofile-generate'
+	$use = '-fprofile-use -fprofile-correction -Wno-missing-profile'
+	$gcc = (& (Join-Path $tc.MinGW 'bin\gcc.exe') -dumpversion).Trim()
+	if ([int]$gcc.Split('.')[0] -ge 10) { $use += ' -fprofile-partial-training' }
+	if (Test-Path $buildDir) { Get-ChildItem $buildDir -Recurse -File -Filter '*.gcda' | Remove-Item -Force }
+	Write-Host '--- pgo: instrumented build ---' -ForegroundColor Cyan
+	& cmake @cmakeArgs "-DCMAKE_C_FLAGS=$gen" "-DCMAKE_CXX_FLAGS=$gen"
+	if ($LASTEXITCODE -ne 0) { throw 'pgo: configure failed' }
+	& cmake --build $buildDir --target all -j $Jobs
+	if ($LASTEXITCODE -ne 0) { throw 'pgo: build failed' }
+	$trainDir = Join-Path $buildRoot "out\$Preset-pgo-train"
+	if (Test-Path $trainDir) { Remove-Item $trainDir -Recurse -Force }
+	& cmake --install $buildDir --prefix $trainDir
+	if ($LASTEXITCODE -ne 0) { throw 'pgo: install failed' }
+	Write-Host '--- pgo: training ---' -ForegroundColor Cyan
+	& (Join-Path $PSScriptRoot 'pgo-train.ps1') -App $trainDir -SysNext $PgoCard -Extra $PgoExtra
+	Remove-Item $trainDir -Recurse -Force
+	Write-Host '--- pgo: the build by the profile ---' -ForegroundColor Cyan
+	$cmakeArgs += "-DCMAKE_C_FLAGS=$use", "-DCMAKE_CXX_FLAGS=$use"
 }
 
 & cmake @cmakeArgs

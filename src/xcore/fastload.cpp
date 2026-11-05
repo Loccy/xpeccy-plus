@@ -37,6 +37,7 @@
 
 #include <string.h>
 #include <algorithm>
+#include <atomic>
 
 #include "xcore.h"
 #include "fastload.h"
@@ -44,6 +45,7 @@
 #include "rewind.h"
 #include "cheats.h"
 #include "rzxseek.h"
+#include "vidrec.h"
 #include "../libxpeccy/cpu/Z80/z80.h"
 #include "../libxpeccy/hardware/hardware.h"
 #include "../libxpeccy/xstate.h"
@@ -656,6 +658,75 @@ int fast_ffwd_frame() {
 	return fp_last ? 1 : -1;
 }
 
+// Frame skip (Options > Video): a host short of time leaves a frame undrawn while
+// the emulation is a frame or more behind the clock - the sound it owes (conf.snd.need)
+// - and catches up on what an undrawn frame does not cost. One frame in three at most,
+// so a sprite flickered on every other frame still shows both of its phases. Not
+// while the frames are recorded, run ahead, or something may stop the machine mid-frame.
+static int fs_held = 0;			// the next frame was left undrawn here
+static int fs_undrawn = 0;		// ...and that frame, the one now running (fs_release let it go)
+static int fs_run = 0;			// frames drawn since the last one left out
+static int fs_said = 0;			// the log said it skips
+#define FS_QUIET	250		// frames drawn in a row that end a stretch of skipping (5 s)
+
+int frame_skip_allowed(Computer* comp) {
+	return !conf.emu.runahead && (vrec_state() == VREC_IDLE) && !fp_watched(comp) && !autostart_busy()
+		&& !fastload_busy() && !rzx_seeking() && !rewind_active();
+}
+
+int frame_skipping() {
+	return fs_said && conf.vid.frameSkip;
+}
+
+// frame_skip_allowed as the emulation's thread last found it (at a frame end), for
+// the gui's thread, which must not walk the machine's state itself
+static std::atomic<int> fs_ok{0};
+
+int frame_skip_ok() {
+	return fs_ok.load(std::memory_order_relaxed);
+}
+
+// the frame now going is drawn from here on after all (the debugger takes the machine
+// mid-frame and steps through it)
+void frame_skip_stop(Computer* comp) {
+	if (!fs_held && !fs_undrawn) return;
+	vid_set_nodraw(comp->vid, 0);	// the coming one too
+	fs_held = 0;
+	fs_undrawn = 0;
+}
+
+// Frame skip lets go of its hold: the frame starting now (its nodraw already taken at
+// the frame start) is the one left undrawn, the next is drawn
+static void fs_release(Video* vid) {
+	if (!fs_held) return;
+	vid_set_nodraw_next(vid, 0);
+	fs_held = 0;
+	fs_undrawn = vid->nodraw;
+}
+
+static void fs_frame(Computer* comp) {
+	Video* vid = comp->vid;
+	fs_undrawn = 0;				// the frame it was is over
+	// at normal speed only: slowed down, every frame is wanted
+	int on = conf.vid.frameSkip && !conf.emu.pause && (conf.emu.tmode == XTM_NONE) && (conf.emu.speed == 1.0)
+		&& frame_skip_allowed(comp);
+	long long frame = (long long)conf.snd.rate * vid->nsPerFrame / 1000000000LL;
+	int skip = on && (fs_run >= 2) && (conf.snd.need > frame);
+	if (skip) {
+		if (!fs_said) xlog(XLG_VIDEO, XLL_INFO, "frame skip: behind the clock, frames left undrawn");
+		fs_said = 1;
+		vid_set_nodraw_next(vid, 1);
+		fs_held = 1;
+		fs_run = 0;
+		return;
+	}
+	fs_release(vid);
+	if ((++fs_run >= FS_QUIET) && fs_said) {
+		xlog(XLG_VIDEO, XLL_INFO, "frame skip: caught up");
+		fs_said = 0;
+	}
+}
+
 void fast_picture_frame(Computer* comp) {
 	Video* vid = comp->vid;
 	// A still frame keeps the last picture and leaves the dots undrawn: not while
@@ -666,9 +737,11 @@ void fast_picture_frame(Computer* comp) {
 	int drawn = (bufSwaps != fp_swaps);	// the frame that just ended swapped a picture in
 	fp_swaps = bufSwaps;
 	fp_last = drawn;
+	fs_ok.store(frame_skip_allowed(comp), std::memory_order_relaxed);
 	// a pause asked for in fast mode stops on a frame drawn whole, not on the
 	// picture of a while ago: the next one is drawn, then the machine stops
 	if (conf.emu.pauseReq) {
+		fs_release(vid);		// the frame after the pause is drawn
 		if (drawn || !fp_held) {
 			conf.emu.pause |= conf.emu.pauseReq;
 			conf.emu.pauseReq = 0;
@@ -686,7 +759,13 @@ void fast_picture_frame(Computer* comp) {
 		&& !rewind_active() && !fp_watched(comp);
 	if (!want) {
 		fp_release(comp);
+		fs_frame(comp);
 		return;
+	}
+	if (fs_held || fs_undrawn) {		// fast mode takes the frames over
+		fs_held = 0;
+		fs_undrawn = 0;
+		fs_run = 0;
 	}
 	if (!fp_held) {
 		fp_held = 1;

@@ -146,12 +146,15 @@ typedef struct {
 	int snaps;		// the start and the joins
 } rzxRecPos;
 
-// The Next's picture (hardware/zxnext_vid.c): the ULA's fetch as it runs with the
-// ray, and the mixer a few dots behind it, with every register change queued for
-// the pixel the core shows it on
-#define NXV_ULA		64		// dots of ULA output kept
-#define NXV_EVQ		256		// register changes waiting for their pixel
+// The Next's picture (hardware/zxnext_vid.c): the ULA's fetch and the mixer, run over
+// a line once the ray has passed it, with every register change queued for the pixel
+// the core shows it on. The queues hold what a line and a bit can bring; the whole of
+// nxVideo stays under 64 KB (an SZX field's length is 16 bits)
+#define NXV_ULA		1024		// dots of ULA output kept
+#define NXV_EVQ		1024		// register changes waiting for their pixel
 #define NXV_WRQ		1024		// memory writes kept, for a read the core made before them
+#define NXV_WRT		1024		// the last write to each key & (NXV_WRT - 1) (a power of 2)
+#define NXV_LIVE_ANEW	0xff		// nxVideo.live of a snapshot whose nxVideo did not fit: made anew from the registers
 #define NXV_HIST	128		// changes kept of each value the ULA fetch samples (a power of 2)
 #define NXV_FIELDS	56
 
@@ -215,10 +218,15 @@ typedef struct {
 	int late;			// changes that came after their pixel was drawn (should stay 0)
 	nxvWrite wr[NXV_WRQ];
 	int wrHead;
+	unsigned int wrT[NXV_WRT];	// low 32 bits of the clk28 of the last write to a key of each slot
+	unsigned short sprKeep[2][320];	// sprite line buffers the pass cleared before they were drawn
+	long long sprKeepTo[2];		// ...the last dot each was shown on (-1 none)
+	unsigned char sprKeepNew;	// the newer of the two
+	long long upAt;			// the dot a reset left the drawing at, to take it up there (-1 none)
 	long long lastDot;	// the dot the fetch did last
 	long long cur;		// the next dot to draw
 	int rx, ry;		// its raw counters
-	unsigned char live;	// set once the state is in step with the machine
+	unsigned char live;	// set once the state is in step with the machine (NXV_LIVE_ANEW: see szx_ext.c)
 	unsigned char dirty;	// f[] moved since dv was worked out
 	nxvDerived dv;
 } nxVideo;

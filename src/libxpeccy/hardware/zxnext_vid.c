@@ -3,19 +3,21 @@
 // mixer (zxnext.vhd, video pipeline stages 0-2), and the tilemap (video/tilemap.vhd).
 // Sprites are in zxnext_spr.c.
 //
-// Time. The ULA's fetch runs with the ray, one call at the end of each dot
-// (nxv_dot), and reads memory as it stood when the core read it: a write made
-// since is kept with its old byte (nxvWrite) and undone for the read. The mixer
-// draws a few dots behind the ray, and a register change is queued for the first
-// half-pixel the core shows it on (nxv_at), so a mid-line write lands where it
-// does on the board. A pixel is addressed by A = 2 D + half, D the absolute dot
-// whose phc is the pixel's.
+// Time. The ULA's fetch and the mixer run over a line once the ray has left it
+// (nxv_line, as the next one starts), and read what they would have read with the
+// ray on each dot: memory as it stood when the core read it (a write made since is
+// kept with its old byte, nxvWrite, and undone for the read), the values the fetch
+// samples with the time each changed, and every register change queued for the
+// first half-pixel the core shows it on (nxv_at), so a mid-line write lands where
+// it does on the board. The mixer keeps a few dots behind the fetch. A pixel is
+// addressed by A = 2 D + half, D the absolute dot whose phc is the pixel's.
 //
 // Still frames. A frame in which nothing the picture reads moves draws what the one
 // before drew: it runs as an undrawn frame (vid->still) with both buffers holding
 // that picture, and the first change takes the drawing up at the ray, the state
 // there worked out as after any undrawn stretch (nxv_resync).
 
+#include <stddef.h>
 #include <string.h>
 #include <limits.h>
 
@@ -25,6 +27,25 @@
 #define NXV_SHADOW	0x200000	// a memory key past the 2 MB: NX.shadow[]
 #define NXV_LAG		4		// dots the mixer keeps behind the fetch
 #define NXV_RAM		0x040000	// SRAM of RAM page 0
+
+static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
+static int nxv_sweeping = 0;		// in nxv_sweep: no copper, no sprite pass
+static void nxv_flush(Computer* comp, long long end);
+
+// the dot under the ray (the video walked to the cpu first)
+static inline long long nxv_ray_dot(Computer* comp) {
+	int h, v;
+	nx_raw(comp, &h, &v);
+	return NX.frameBase + h;
+}
+
+// the picture is being drawn: in step with the machine, the frame drawn and not still
+static inline int nxv_drawing(Computer* comp) {
+	return V.live && !comp->vid->nodraw && !comp->vid->still;
+}
+
+// an SZX keeps nxVideo as one field, its length in 16 bits
+_Static_assert(sizeof(nxVideo) < 65536, "nxVideo does not fit an SZX field");
 
 // what the mixer reads, as the registers hold it
 enum {
@@ -170,14 +191,31 @@ void nxv_memw(Computer* comp, int key, int old, long long w) {
 	e->key = key;
 	e->old = old;
 	V.wrHead = (V.wrHead + 1) & (NXV_WRQ - 1);
+	V.wrT[key & (NXV_WRT - 1)] = (unsigned int)w;
+	// the next write takes the oldest one's place: if a read may still have to undo it
+	// (the mixer draws a line behind the ray, and reads up to 32 dots back), the picture
+	// is drawn up to this write first
+	if ((V.wr[V.wrHead].w > (V.cur - 32) * 4) && nxv_drawing(comp) && !nxv_flushing) {
+		long long end = w >> 2;
+		long long ray = nxv_ray_dot(comp);
+		nxv_flush(comp, (end < ray) ? end : ray);
+	}
+}
+
+// the byte at key as memory holds it now
+static inline int nxv_peek(Computer* comp, int key) {
+	return (key >= NXV_SHADOW) ? NX.shadow[key - NXV_SHADOW] : comp->mem->ramData[key];
 }
 
 // the byte at key as a read at CLK_28 r saw it: writes after r undone. The writes
-// come in time order, so most often the newest is before r and there is none to undo
+// come in time order; most often none is after r, or none after r to a key of the
+// same slot (the two are never 2^31 clk28 apart the wrong way: an old slot only asks
+// for the walk)
 static int nxv_mem(Computer* comp, int key, long long r) {
-	int v = (key >= NXV_SHADOW) ? NX.shadow[key - NXV_SHADOW] : comp->mem->ramData[key];
+	int v = nxv_peek(comp, key);
 	int i = V.wrHead;
 	if (V.wr[(i - 1) & (NXV_WRQ - 1)].w <= r) return v;
+	if ((int)(V.wrT[key & (NXV_WRT - 1)] - (unsigned int)r) <= 0) return v;
 	for (int k = 0; k < NXV_WRQ; k++) {
 		i = (i - 1) & (NXV_WRQ - 1);
 		nxvWrite* e = &V.wr[i];
@@ -187,18 +225,25 @@ static int nxv_mem(Computer* comp, int key, long long r) {
 	return v;
 }
 
-// an SRAM byte: pages 0A, 0B, 0E are the copies behind the CPU's BRAM
-static int nxv_sram(Computer* comp, int adr, long long r) {
+// the key of an SRAM byte: pages 0A, 0B, 0E are the copies behind the CPU's BRAM
+static inline int nxv_key_sram(int adr) {
 	int pg = (adr - NXV_RAM) >> 13;
 	if ((adr >= NXV_RAM) && ((pg == 0x0a) || (pg == 0x0b) || (pg == 0x0e)))
-		return nxv_mem(comp, NXV_SHADOW + (((pg == 0x0e) ? 0x4000 : ((pg - 0x0a) << 13)) | (adr & 0x1fff)), r);
-	return nxv_mem(comp, adr & 0x1fffff, r);
+		return NXV_SHADOW + (((pg == 0x0e) ? 0x4000 : ((pg - 0x0a) << 13)) | (adr & 0x1fff));
+	return adr & 0x1fffff;
 }
 
-// bank 5 (16K) or bank 7 (8K) BRAM
+// the key of a bank 5 (16K) or bank 7 (8K) BRAM byte
+static inline int nxv_key_bram(int bank7, int adr) {
+	return bank7 ? NXV_RAM + (0x0e << 13) + (adr & 0x1fff) : NXV_RAM + (0x0a << 13) + (adr & 0x3fff);
+}
+
+static int nxv_sram(Computer* comp, int adr, long long r) {
+	return nxv_mem(comp, nxv_key_sram(adr), r);
+}
+
 static int nxv_bram(Computer* comp, int bank7, int adr, long long r) {
-	int key = bank7 ? NXV_RAM + (0x0e << 13) + (adr & 0x1fff) : NXV_RAM + (0x0a << 13) + (adr & 0x3fff);
-	return nxv_mem(comp, key, r);
+	return nxv_mem(comp, nxv_key_bram(bank7, adr), r);
 }
 
 // == the events ==
@@ -224,7 +269,7 @@ static inline void nxv_apply_to(Computer* comp, long long a) {
 }
 
 static void nxv_push(Computer* comp, long long t, int f, int x, int v) {
-	if (comp->vid->nodraw || comp->vid->still || !V.live) {
+	if (!nxv_drawing(comp)) {
 		// nothing is drawn: the change is in effect at once
 		nxv_apply(comp, LLONG_MAX);
 		if (f == NXF_PAL) {
@@ -326,6 +371,82 @@ static long long nxv_fall(Computer* comp, long long w) {
 	return t + r;
 }
 
+// == room for a line of changes ==
+// The mixer draws a line behind the ray, so the changes of a whole line wait in the
+// queue and the histories. Before one more could overflow them, the picture is drawn up
+// to the write, as when it was drawn a few dots behind the ray. From inside the drawing
+// (the copper run there, nxv_fetch_to) the copper is stopped at the write instead
+// (nx_cop_hold), and the drawing goes on to there before it runs on.
+
+
+// the changes no read can reach any more go: those older than the next one before
+// dot from (whatever reads a value reads it at a dot past from)
+static void nxv_hprune(nxvHist* h, long long from) {
+	long long t = from * 4;
+	while ((h->n > 1) && (h->t[(h->head + 1) & (NXV_HIST - 1)] < t)) {
+		h->v0 = h->v[h->head];
+		h->head = (h->head + 1) & (NXV_HIST - 1);
+		h->n--;
+	}
+	if ((h->n == 1) && (h->t[h->head] < t)) {
+		h->v0 = h->v[h->head];
+		h->n = 0;
+		h->head = 0;
+	}
+}
+
+#define NXV_HFULL	(NXV_HIST - 2)
+
+// every history of nxVideo, for what walks them all (one added goes here too)
+static const size_t nxv_hists[] = {
+	offsetof(nxVideo, hBrd), offsetof(nxVideo, hPff), offsetof(nxVideo, hShadow),
+	offsetof(nxVideo, hSx), offsetof(nxVideo, hSy), offsetof(nxVideo, hFine),
+	offsetof(nxVideo, hTmSx), offsetof(nxVideo, hTmSy), offsetof(nxVideo, hTmMap),
+	offsetof(nxVideo, hTmTile), offsetof(nxVideo, hTmCtl), offsetof(nxVideo, hTmAttr)
+};
+#define NXV_NHISTS	(sizeof(nxv_hists) / sizeof(nxv_hists[0]))
+
+static inline nxvHist* nxv_hist(Computer* comp, unsigned i) {
+	return (nxvHist*)((char*)&V + nxv_hists[i]);
+}
+
+static int nxv_hroom(Computer* comp) {
+	for (unsigned i = 0; i < NXV_NHISTS; i++)
+		if (nxv_hist(comp, i)->n >= NXV_HFULL) return 0;
+	return 1;
+}
+
+static void nxv_hprune_all(Computer* comp, long long from) {
+	for (unsigned i = 0; i < NXV_NHISTS; i++) nxv_hprune(nxv_hist(comp, i), from);
+}
+
+// the queue has room for the changes of one more write (NXF_CMP at most)
+static inline int nxv_qroom(Computer* comp) {
+	return V.evN - V.evHead < NXV_EVQ - NXF_CMP - 2;
+}
+
+// A write at CLK_28 w has left the queue or a history short of room for one more: all
+// before w has landed (the copper's writes too: it stands at w when its own lands,
+// nx_cop_run), so the picture is drawn up to w and what no read reaches goes
+static void nxv_room(Computer* comp, long long w) {
+	long long ray = nxv_ray_dot(comp);
+	// the dot the reads start from: the mixer's when it draws, else the one the drawing
+	// is taken up at (the ray, or the dot of a reset)
+	long long from = ((V.upAt >= 0) && (V.upAt < ray)) ? V.upAt : ray;
+	if (nxv_drawing(comp)) {
+		long long end = w >> 2;
+		if (end > ray) end = ray;
+		if (!nxv_flushing)
+			nxv_flush(comp, end);
+		else if (end > V.lastDot + 1)
+			nx_cop_hold = 1;	// a dot ended before the write: the drawing can go on to it
+		from = V.cur;
+	}
+	// what reads back past it: the tilemap's latch 15 dots, a take-up and the
+	// floating bus 24 before the ray (which is at or past the mixer)
+	nxv_hprune_all(comp, from - 24);
+}
+
 // a register write landed at CLK_28 w: queue whatever the picture reads that moved
 void nxv_regs(Computer* comp, long long w) {
 	unsigned short q[NXF_CMP];
@@ -354,6 +475,7 @@ void nxv_regs(Computer* comp, long long w) {
 	ch |= nxv_hpush(&V.hTmCtl, w, NX.nr[0x6b] & 0x7f);
 	ch |= nxv_hpush(&V.hTmAttr, w, NX.nr[0x6c]);
 	if (ch) nxv_touch(comp);
+	if (!nxv_qroom(comp) || (ch && !nxv_hroom(comp))) nxv_room(comp, w);
 }
 
 void nxv_pal(Computer* comp, int p, int idx, long long w) {
@@ -361,6 +483,7 @@ void nxv_pal(Computer* comp, int p, int idx, long long w) {
 	long long a = ((p & 3) >= 2) ? ((w >> 1) - 2) : nxv_at(NXC_PAL, w);
 	if (!comp->vid->still || (V.pal[p][idx & 0xff] != NX.pal[p][idx & 0xff])) nxv_touch(comp);
 	nxv_push(comp, a, NXF_PAL, (p << 8) | (idx & 0xff), NX.pal[p][idx & 0xff]);
+	if (!nxv_qroom(comp)) nxv_room(comp, w);
 }
 
 // == the ULA's fetch (zxula.vhd 194-306) ==
@@ -508,6 +631,10 @@ int nxv_float(Computer* comp, long long lt) {
 	long long dr = NX.frameBase + h;	// the dot the ray is on
 	long long p = (lt - 3) >> 2;		// the last update before the latch
 	long long g = (lt - 1) >> 2;		// the period the latch falls in
+	// the fetch, a line behind the ray, drawn up to the latch first: its registers are
+	// the ones read, with no dots run again here
+	if (nxv_drawing(comp) && !nxv_flushing && (V.lastDot < p))
+		nxv_flush(comp, (p + 1 < dr) ? p + 1 : dr);
 	nxvFetch fe;
 	long long from;
 	if (V.live && (V.lastDot >= p - 32) && (V.lastDot <= p)) {
@@ -626,12 +753,16 @@ static int nxv_tm_load(Computer* comp, long long D, int whc, int wvc) {
 }
 
 // and the pixel of half h, by the fields as they are
+static inline int nxv_tm_pickw(Computer* comp, int w80, int whc, int h, int inwin, int tmtr) {
+	int p = V.tmPix[(w80 ? (whc << 1) | h : whc) & 7];
+	int en = inwin && ((p & 0x200) || ((p & 15) != tmtr));
+	return p | (en << 10);
+}
+
 static inline int nxv_tm_pick(Computer* comp, int w80, int whc, int wvc, int h) {
 	const unsigned short* f = V.f;
-	int p = V.tmPix[(w80 ? (whc << 1) | h : whc) & 7];
-	int en = (whc >= (f[NXF_TCX1] << 1)) && (whc <= ((f[NXF_TCX2] << 1) | 1)) && (wvc >= f[NXF_TCY1]) && (wvc <= f[NXF_TCY2]);
-	if (en && !(p & 0x200) && ((p & 15) == f[NXF_TMTR])) en = 0;
-	return p | (en << 10);
+	int inwin = (whc >= (f[NXF_TCX1] << 1)) && (whc <= ((f[NXF_TCX2] << 1) | 1)) && (wvc >= f[NXF_TCY1]) && (wvc <= f[NXF_TCY2]);
+	return nxv_tm_pickw(comp, w80, whc, h, inwin, f[NXF_TMTR]);
 }
 
 static int nxv_tm_pixel(Computer* comp, long long D, int whc, int wvc, int h) {
@@ -642,10 +773,10 @@ static int nxv_tm_pixel(Computer* comp, long long D, int whc, int wvc, int h) {
 // == the mixer ==
 
 // the mixer (zxnext.vhd 7100-7356): the layers in their order, or blended
-static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, int s, int s_t, int fin, int fin_t,
-		int umix, int umix_t, int u, int u_t, int tm, int tm_t, int below, int bad, int fb9) {
+static inline __attribute__((always_inline)) int nxv_mixo(int order, int blend, int l2, int l2_t, int l2p, int s, int s_t,
+		int fin, int fin_t, int umix, int umix_t, int u, int u_t, int tm, int tm_t, int below, int bad, int fb9) {
 	int mix, mix_t, top, top_t, bot, bot_t;
-	switch (f[NXF_BLEND]) {
+	switch (blend) {
 		case 0:
 			mix = umix; mix_t = umix_t;
 			top = tm; top_t = tm_t || below;
@@ -674,7 +805,7 @@ static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, in
 	}
 	int out = fb9;
 	int bx = bad && tm_t && !s_t;
-	switch (f[NXF_ORDER]) {
+	switch (order) {
 		case 0:		// SLU
 			if (l2p) out = l2;
 			else if (!s_t) out = s;
@@ -713,7 +844,7 @@ static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, in
 			int ch[3];
 			for (int k = 0; k < 3; k++) {
 				int sum = ((l2 >> (6 - 3 * k)) & 7) + ((mix >> (6 - 3 * k)) & 7);
-				if (f[NXF_ORDER] == 6) {
+				if (order == 6) {
 					if (sum > 7) sum = 7;
 				} else if (!mix_t) {
 					if (sum <= 4) sum = 0;
@@ -734,7 +865,7 @@ static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, in
 	return out;
 }
 
-// nxv_mix in orders 0-5 with the tilemap off: fin = u, fin_t = u_t, bx = bad && !s_t
+// nxv_mixo in orders 0-5 with the tilemap off: fin = u, fin_t = u_t, bx = bad && !s_t
 static inline int nxv_mix6(int order, int l2, int l2_t, int l2p, int s, int s_t, int u, int u_t, int bx, int fb9) {
 	switch (order) {
 		case 0:		// SLU
@@ -811,205 +942,312 @@ static void nxv_derive(Computer* comp) {
 	V.dirty = 0;
 }
 
-// One dot where no field moves between its two half-pixels (nearly all of them): what
-// the two share - clip, LoRes, the sprite pixel, layer 2's byte - is worked out once.
-// The same mix as nxv_draw's loop, which takes every dot something changes inside.
-static void nxv_draw_dot(Computer* comp, unsigned int* ptr, long long D, int phc, int vc, int wvc, int whc, int bad, int sb, int ui) {
+// What a dot reads that holds while no field moves: taken once for a run of dots
+// (nxv_span_draw) or for one dot (nxv_draw_dot). The plain path (ULA, layer 2, sprites)
+// reads the first part, the general one all of it.
+typedef struct {
+	const unsigned short* upal;
+	const unsigned short* lpal;
+	const unsigned short* spal;
+	int tr, fb9, fmt, flashOn, ulaOff;
+	int ucx1, ucx2, ucy1, ucy2;
+	int sprOn, sxs, sxe, sys, sye, sover;
+	int l2On, wide, res, l2cx1, l2cx2, l2cy1, l2cy2, l2sx, l2sy, l2ofs, l2bank;
+	int direct;		// no memory write after the first layer 2 read
+	// the rest of the general path: LoRes, ULA+, the tilemap, stencil, blend
+	const unsigned short* tpal;
+	int ulap, ulaen, blend, stencil;
+	int loen, losx, losy, lomode, lobase, loofs, lohi;
+	int tmen, tmenb, tmtop, tmtr, tcx1, tcx2, tcy1, tcy2;
+} nxvSpan;
+
+static void nxv_span_set(Computer* comp, nxvSpan* sp, long long D) {
 	if (V.dirty) nxv_derive(comp);
 	const nxvDerived* g = &V.dv;
 	const unsigned short* f = V.f;
-	const unsigned short* upal = V.pal[g->upal];
-	int inwin = (phc >= g->ucx1) && (phc <= g->ucx2) && (vc >= g->ucy1) && (vc <= g->ucy2);
+	sp->upal = V.pal[g->upal];
+	sp->lpal = V.pal[g->l2pal];
+	sp->spal = V.pal[g->spal];
+	sp->tr = f[NXF_TR];
+	sp->fb9 = g->fb9;
+	sp->fmt = f[NXF_ULANEXT] ? f[NXF_FMT] : -1;
+	sp->flashOn = g->flashOn;
+	sp->ulaOff = !f[NXF_ULAEN];
+	sp->ucx1 = g->ucx1;
+	sp->ucx2 = g->ucx2;
+	sp->ucy1 = g->ucy1;
+	sp->ucy2 = g->ucy2;
+	sp->sprOn = f[NXF_SPREN];
+	sp->sxs = g->sxs;
+	sp->sxe = g->sxe;
+	sp->sys = g->sys;
+	sp->sye = g->sye;
+	sp->sover = f[NXF_SOVER];
+	sp->l2On = f[NXF_L2EN];
+	sp->res = f[NXF_L2RES];
+	sp->wide = (sp->res != 0);
+	sp->l2cx1 = g->l2cx1;
+	sp->l2cx2 = g->l2cx2;
+	sp->l2cy1 = f[NXF_L2CY1];
+	sp->l2cy2 = f[NXF_L2CY2];
+	sp->l2sx = f[NXF_L2SX];
+	sp->l2sy = f[NXF_L2SY];
+	sp->l2ofs = f[NXF_L2OFS];
+	sp->l2bank = f[NXF_L2BANK];
+	// nxv_mem's first test: the newest write is before the read, so is every later read's
+	sp->direct = (V.wr[(V.wrHead - 1) & (NXV_WRQ - 1)].w <= (D - 1) * 4 + 2);
+	sp->tpal = V.pal[g->tmpal];
+	sp->ulap = f[NXF_ULAP];
+	sp->ulaen = f[NXF_ULAEN];
+	sp->blend = f[NXF_BLEND];
+	sp->stencil = f[NXF_STENCIL] && f[NXF_ULAEN] && f[NXF_TMEN];
+	sp->loen = f[NXF_LOEN];
+	sp->losx = f[NXF_LOSX];
+	sp->losy = f[NXF_LOSY];
+	sp->lomode = f[NXF_LOMODE];
+	sp->lobase = (f[NXF_DFILE] ^ f[NXF_LOXOR]) << 13;
+	sp->loofs = f[NXF_LOOFS];
+	sp->lohi = f[NXF_LORAD] ? (0x0c | (sp->loofs & 3)) : sp->loofs;
+	sp->tmen = f[NXF_TMEN];
+	sp->tmenb = f[NXF_TMENB];
+	sp->tmtop = f[NXF_TMTOP];
+	sp->tmtr = f[NXF_TMTR];
+	sp->tcx1 = f[NXF_TCX1] << 1;
+	sp->tcx2 = (f[NXF_TCX2] << 1) | 1;
+	sp->tcy1 = f[NXF_TCY1];
+	sp->tcy2 = f[NXF_TCY2];
+}
+
+// layer 2's byte for the dot, -1 outside its area (one read; 4-bit pixels take a nibble a half)
+static inline int nxv_span_l2(Computer* comp, const nxvSpan* sp, int phc, int vc, int wvc, long long D) {
+	int c = sp->wide ? ((phc + 32) & 0x1ff) : phc;
+	int yv = sp->wide ? wvc : vc;
+	int hv = sp->wide ? (c < 320) : (c < 256);
+	int vv = sp->wide ? (yv < 256) : (yv < 192);
+	if (!(hv && vv && (c >= sp->l2cx1) && (c <= sp->l2cx2) && (yv >= sp->l2cy1) && (yv <= sp->l2cy2))) return -1;
+	int xpre = c + sp->l2sx;
+	int xx = sp->wide ? ((xpre >= 320) ? (((xpre & 0x1ff) + 192) & 0x1ff) : xpre) : (xpre & 0xff);
+	int ypre = (yv + sp->l2sy) & 0x1ff;
+	int yy = (!sp->wide && ((ypre & 0x100) || ((ypre & 0xc0) == 0xc0))) ? ((ypre + 0x40) & 0xff) : (ypre & 0xff);
+	int adr = sp->wide ? ((xx << 8) | yy) : ((yy << 8) | xx);
+	int bank = sp->l2bank + (adr >> 14);
+	if (bank >= 112) return -1;
+	int key = nxv_key_sram(NXV_RAM + bank * 0x4000 + (adr & 0x3fff));
+	// no write after the run's first read: memory as it stands
+	return sp->direct ? nxv_peek(comp, key) : nxv_mem(comp, key, (D - 1) * 4 + 2);
+}
+
+// == pieces of a dot, shared by the paths below (inlined into each) ==
+
+#define NXV_INL static inline __attribute__((always_inline))
+
+// the dot's two halves alike in the ULA's pixel and attribute
+NXV_INL int nxv_alike(Computer* comp, int ui, int bits) {
+	return (V.ula[ui].attr[0] == V.ula[ui].attr[1]) && !((bits ^ (bits >> 1)) & 1);
+}
+
+// ULANext's paper: the attribute's bits above the ink mask, past 0x80; -1 for a mask not
+// of that shape (the fallback colour)
+NXV_INL int nxv_unext_paper(int fmt, int attr) {
+	switch (fmt) {
+		case 0x01: return 0x80 | (attr >> 1);
+		case 0x03: return 0x80 | (attr >> 2);
+		case 0x07: return 0x80 | (attr >> 3);
+		case 0x0f: return 0x80 | (attr >> 4);
+		case 0x1f: return 0x80 | (attr >> 5);
+		case 0x3f: return 0x80 | (attr >> 6);
+		case 0x7f: return 0x80 | (attr >> 7);
+		default: return -1;
+	}
+}
+
+// the sprite pixel of the dot, in the span's window: 0 and its colour in *s, else 1
+NXV_INL int nxv_span_spr(Computer* comp, const nxvSpan* sp, long long D, int whc, int wvc, int* s) {
+	*s = 0;
+	if (sp->sprOn && (whc < 320) && (wvc < 256)) {
+		int sb = nxs_line(comp, D)[whc];
+		if ((sb & 0x100) && (whc >= sp->sxs) && (whc <= sp->sxe) && (wvc >= sp->sys) && (wvc <= sp->sye) && (sp->sover || (wvc < 224))) {
+			*s = sp->spal[sb & 0xff] & 0x1ff;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+// layer 2's colour of half h from the dot's byte (-1: none): 0 and the colour and its
+// priority bit, else 1
+NXV_INL int nxv_span_l2pix(const nxvSpan* sp, int l2byte, int h, int* l2, int* l2p) {
+	*l2 = 0;
+	*l2p = 0;
+	if (l2byte < 0) return 1;
+	int px = (sp->res & 2) ? (h ? (l2byte & 15) : (l2byte >> 4)) : l2byte;
+	int li = ((((px >> 4) + sp->l2ofs) & 15) << 4) | (px & 15);
+	int w = sp->lpal[li];
+	int rgb = w & 0x1ff;
+	if ((rgb >> 1) == sp->tr) return 1;
+	*l2 = rgb;
+	*l2p = (w >> 10) & 1;
+	return 0;
+}
+
+// one dot on the plain path: the ULA, layer 2 and the sprite pixel, mixed in the order
+NXV_INL void nxv_plain_dot(Computer* comp, const nxvSpan* sp, const int order,
+		long long D, int phc, int vc, int wvc, int bad, int whc, unsigned int* ptr) {
+	int s;
+	int s_t = nxv_span_spr(comp, sp, D, whc, wvc, &s);
+	int l2byte = sp->l2On ? nxv_span_l2(comp, sp, phc, vc, wvc, D) : -1;
+	int ui = (int)(D & (NXV_ULA - 1));
 	int bits = V.ula[ui].bits;
-	int tr = f[NXF_TR];
-	int fb9 = g->fb9;
-	if (g->ulaOnly && !(sb && f[NXF_SPREN])) {
-		int clip = !(inwin || bad) || !f[NXF_ULAEN];
-		for (int h = 0; h < 2; h++) {
-			int attr = V.ula[ui].attr[h];
-			int pen = (((bits >> h) & 1) ^ ((attr >> 7) & g->flashOn)) & !bad;
+	int inwin = (phc >= sp->ucx1) && (phc <= sp->ucx2) && (vc >= sp->ucy1) && (vc <= sp->ucy2);
+	int clip = !(inwin || bad) || sp->ulaOff;
+	int bx = bad && !s_t;
+	// the two halves alike (and layer 2's byte not split in nibbles): the first one's
+	// colour is the second's
+	int one = nxv_alike(comp, ui, bits) && !((l2byte >= 0) && (sp->res & 2));
+	for (int h = 0; h < 2 - one; h++) {
+		int attr = V.ula[ui].attr[h];
+		int pen = (((bits >> h) & 1) ^ ((attr >> 7) & sp->flashOn)) & !bad;
+		int urgb;
+		if (sp->fmt < 0) {
 			int ink = attr & 7;
 			int paper = (attr >> 3) & 7;
-			int sidx = ((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | (paper ^ ((ink ^ paper) & -pen));
-			int urgb = upal[sidx] & 0x1ff;
-			ptr[h] = nxv_col[(((urgb >> 1) == tr) || clip) ? fb9 : urgb];
+			urgb = sp->upal[((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | (paper ^ ((ink ^ paper) & -pen))] & 0x1ff;
+		} else if (bad) {
+			urgb = (sp->fmt == 0xff) ? sp->fb9 : sp->upal[0x80 | ((attr >> 3) & 7)] & 0x1ff;
+		} else if (pen) {
+			urgb = sp->upal[attr & sp->fmt] & 0x1ff;
+		} else {
+			int idx = nxv_unext_paper(sp->fmt, attr);
+			urgb = (idx < 0) ? sp->fb9 : sp->upal[idx] & 0x1ff;
 		}
-		return;
+		int u_t = ((urgb >> 1) == sp->tr) || clip;
+		int u = u_t ? 0 : urgb;
+		int l2, l2p;
+		int l2_t = nxv_span_l2pix(sp, l2byte, h, &l2, &l2p);
+		ptr[h] = nxv_col[nxv_mix6(order, l2, l2_t, l2p, s, s_t, u, u_t, bx, sp->fb9) & 0x1ff];
 	}
-	// the sprite pixel in its window
-	int s_t = 1;
-	int s = 0;
-	if (sb && f[NXF_SPREN] && (whc >= g->sxs) && (whc <= g->sxe) && (wvc >= g->sys) && (wvc <= g->sye) && (f[NXF_SOVER] || (wvc < 224))) {
-		s = V.pal[g->spal][sb & 0xff] & 0x1ff;
-		s_t = 0;
-	}
-	// layer 2's byte (one read for the dot; 4-bit pixels take a nibble each half)
-	int res = f[NXF_L2RES];
-	int l2byte = -1;
-	if (f[NXF_L2EN]) {
-		int wide = (res != 0);
-		int c = wide ? ((phc + 32) & 0x1ff) : phc;
-		int yv = wide ? wvc : vc;
-		int hv = wide ? (c < 320) : (c < 256);
-		int vv = wide ? (yv < 256) : (yv < 192);
-		if (hv && vv && (c >= g->l2cx1) && (c <= g->l2cx2) && (yv >= f[NXF_L2CY1]) && (yv <= f[NXF_L2CY2])) {
-			int xpre = c + f[NXF_L2SX];
-			int xx = wide ? ((xpre >= 320) ? (((xpre & 0x1ff) + 192) & 0x1ff) : xpre) : (xpre & 0xff);
-			int ypre = (yv + f[NXF_L2SY]) & 0x1ff;
-			int yy = (!wide && ((ypre & 0x100) || ((ypre & 0xc0) == 0xc0))) ? ((ypre + 0x40) & 0xff) : (ypre & 0xff);
-			int adr = wide ? ((xx << 8) | yy) : ((yy << 8) | xx);
-			int bank = f[NXF_L2BANK] + (adr >> 14);
-			if (bank < 112)
-				l2byte = nxv_sram(comp, NXV_RAM + bank * 0x4000 + (adr & 0x3fff), (D - 1) * 4 + 2);
-		}
-	}
-	if (g->plain) {
-		// ULA, layer 2 and sprites: nxv_mix with the tilemap's terms gone
-		int clip = !(inwin || bad) || !f[NXF_ULAEN];
-		int bx = bad && !s_t;
-		const unsigned short* lpal = V.pal[g->l2pal];
-		int fmt = f[NXF_ULANEXT] ? f[NXF_FMT] : -1;
-		for (int h = 0; h < 2; h++) {
-			int attr = V.ula[ui].attr[h];
-			int pen = (((bits >> h) & 1) ^ ((attr >> 7) & g->flashOn)) & !bad;
-			int urgb;
-			if (fmt < 0) {
-				int ink = attr & 7;
-				int paper = (attr >> 3) & 7;
-				urgb = upal[((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | (paper ^ ((ink ^ paper) & -pen))] & 0x1ff;
-			} else if (bad) {
-				urgb = (fmt == 0xff) ? fb9 : upal[0x80 | ((attr >> 3) & 7)] & 0x1ff;
-			} else if (pen) {
-				urgb = upal[attr & fmt] & 0x1ff;
-			} else {
-				// paper: the bits above the ink mask, past 0x80; a mask not of that shape takes the fallback
-				switch (fmt) {
-					case 0x01: urgb = upal[0x80 | (attr >> 1)] & 0x1ff; break;
-					case 0x03: urgb = upal[0x80 | (attr >> 2)] & 0x1ff; break;
-					case 0x07: urgb = upal[0x80 | (attr >> 3)] & 0x1ff; break;
-					case 0x0f: urgb = upal[0x80 | (attr >> 4)] & 0x1ff; break;
-					case 0x1f: urgb = upal[0x80 | (attr >> 5)] & 0x1ff; break;
-					case 0x3f: urgb = upal[0x80 | (attr >> 6)] & 0x1ff; break;
-					case 0x7f: urgb = upal[0x80 | (attr >> 7)] & 0x1ff; break;
-					default: urgb = fb9; break;
-				}
-			}
-			int u_t = ((urgb >> 1) == tr) || clip;
-			int u = u_t ? 0 : urgb;
-			int l2 = 0, l2_t = 1, l2p = 0;
-			if (l2byte >= 0) {
-				int px = (res & 2) ? (h ? (l2byte & 15) : (l2byte >> 4)) : l2byte;
-				int li = ((((px >> 4) + f[NXF_L2OFS]) & 15) << 4) | (px & 15);
-				int w = lpal[li];
-				int rgb = w & 0x1ff;
-				if ((rgb >> 1) != tr) {
-					l2 = rgb;
-					l2_t = 0;
-					l2p = (w >> 10) & 1;
-				}
-			}
-			ptr[h] = nxv_col[nxv_mix6(f[NXF_ORDER], l2, l2_t, l2p, s, s_t, u, u_t, bx, fb9) & 0x1ff];
-		}
-		return;
-	}
+	if (one) ptr[1] = ptr[0];
+}
+
+// nxv_plain_dot for one dot, kept out of nxv_draw_dot (inlined there it slows the other paths)
+static __attribute__((noinline)) void nxv_plain_one(Computer* comp, long long D, int phc, int vc, int wvc, int bad, int whc, unsigned int* ptr) {
+	nxvSpan sp;
+	nxv_span_set(comp, &sp, D);
+	nxv_plain_dot(comp, &sp, V.f[NXF_ORDER], D, phc, vc, wvc, bad, whc, ptr);
+}
+
+// one dot on the general path (LoRes, ULANext/ULA+, the tilemap, blend): nxv_draw's mix
+// with the fields taken from the span. Memory reads as nxv_mem makes them: straight
+// from memory when the span saw no write after its first read.
+static inline __attribute__((always_inline)) void nxv_gen_dot(Computer* comp, const nxvSpan* sp, const int order,
+		long long D, int phc, int vc, int wvc, int bad, int whc, unsigned int* ptr) {
+	int s;
+	int s_t = nxv_span_spr(comp, sp, D, whc, wvc, &s);
+	int l2byte = sp->l2On ? nxv_span_l2(comp, sp, phc, vc, wvc, D) : -1;
+	int ui = (int)(D & (NXV_ULA - 1));
+	int bits = V.ula[ui].bits;
+	int inwin = (phc >= sp->ucx1) && (phc <= sp->ucx2) && (vc >= sp->ucy1) && (vc <= sp->ucy2);
 	// LoRes, in the ULA's clip window: one read for the dot
-	int lpen = inwin && f[NXF_LOEN];
+	int lpen = inwin && sp->loen;
 	int lidx = 0;
 	if (lpen) {
-		int x = (phc + f[NXF_LOSX]) & 0xff;
-		int ypre = (vc + f[NXF_LOSY]) & 0x1ff;
+		int x = (phc + sp->losx) & 0xff;
+		int ypre = (vc + sp->losy) & 0x1ff;
 		int y = (ypre >= 192) ? ((ypre + 0x40) & 0xff) : ypre;
-		int ofs = f[NXF_LOOFS];
 		int a;
-		if (f[NXF_LOMODE]) {
-			a = ((f[NXF_DFILE] ^ f[NXF_LOXOR]) << 13) | ((y >> 1) << 6) | (x >> 2);
+		if (sp->lomode) {
+			a = sp->lobase | ((y >> 1) << 6) | (x >> 2);
 		} else {
 			a = ((y >> 1) << 7) | (x >> 1);
 			if (y >= 96) a = (a + 0x800) & 0x3fff;
 		}
-		int b = nxv_bram(comp, 0, a, D * 4 + 2);
-		if (f[NXF_LOMODE]) {
+		int key = nxv_key_bram(0, a);
+		int b = sp->direct ? nxv_peek(comp, key) : nxv_mem(comp, key, D * 4 + 2);
+		if (sp->lomode) {
 			int nib = (x & 2) ? (b & 15) : (b >> 4);
-			int hi = f[NXF_LORAD] ? (0x0c | (ofs & 3)) : ofs;
-			lidx = (hi << 4) | nib;
+			lidx = (sp->lohi << 4) | nib;
 		} else {
-			lidx = ((((b >> 4) + ofs) & 15) << 4) | (b & 15);
+			lidx = ((((b >> 4) + sp->loofs) & 15) << 4) | (b & 15);
 		}
 	}
 	int uclip = !(inwin || bad) && !lpen;
 	// the tilemap's group, for both halves
 	int tmw80 = -1;
-	if ((f[NXF_TMEN] || f[NXF_TMENB]) && (whc < 320) && (wvc < 256))
+	if ((sp->tmen || sp->tmenb) && (whc < 320) && (wvc < 256))
 		tmw80 = nxv_tm_load(comp, D, whc, wvc);
-	for (int h = 0; h < 2; h++) {
+	int tmwin = (whc >= sp->tcx1) && (whc <= sp->tcx2) && (wvc >= sp->tcy1) && (wvc <= sp->tcy2);
+	// the two halves alike: as nxv_plain_dot, and the tilemap not in 80 columns (the ULA+
+	// bits b2, b3 are set together)
+	int one = nxv_alike(comp, ui, bits) && !((l2byte >= 0) && (sp->res & 2)) && (tmw80 != 1);
+	for (int h = 0; h < 2 - one; h++) {
 		int attr = V.ula[ui].attr[h];
 		int pix = (bits >> h) & 1;
 		int m2 = (bits >> (2 + h)) & 1;
-		int pen = (pix ^ ((attr >> 7) & g->flashOn)) & !bad;
+		int pen = (pix ^ ((attr >> 7) & sp->flashOn)) & !bad;
 		int idx = 0;
 		int bg = 0;
-		if (f[NXF_ULANEXT]) {
-			int fmt = f[NXF_FMT];
+		if (sp->fmt >= 0) {
 			if (bad) {
-				if (fmt == 0xff) bg = 1;
+				if (sp->fmt == 0xff) bg = 1;
 				idx = 0x80 | ((attr >> 3) & 7);
 			} else if (pen) {
-				idx = attr & fmt;
+				idx = attr & sp->fmt;
 			} else {
-				switch (fmt) {
-					case 0x01: idx = 0x80 | (attr >> 1); break;
-					case 0x03: idx = 0x80 | (attr >> 2); break;
-					case 0x07: idx = 0x80 | (attr >> 3); break;
-					case 0x0f: idx = 0x80 | (attr >> 4); break;
-					case 0x1f: idx = 0x80 | (attr >> 5); break;
-					case 0x3f: idx = 0x80 | (attr >> 6); break;
-					case 0x7f: idx = 0x80 | (attr >> 7); break;
-					default: bg = 1; break;
-				}
+				idx = nxv_unext_paper(sp->fmt, attr);
+				bg = (idx < 0);
+				if (bg) idx = 0;
 			}
 		} else {
 			int ink = attr & 7;
 			int paper = (attr >> 3) & 7;
 			int col = paper ^ ((ink ^ paper) & -pen);
-			if (f[NXF_ULAP])
+			if (sp->ulap)
 				idx = 0xc0 | ((attr >> 6) << 4) | ((m2 | (pen ^ 1)) << 3) | col;
 			else
 				idx = ((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | col;
 		}
-		int urgb = (lpen ? upal[lidx] : bg ? fb9 : upal[idx]) & 0x1ff;
-		int umix_t = ((urgb >> 1) == tr) || uclip;
+		int urgb = (lpen ? sp->upal[lidx] : bg ? sp->fb9 : sp->upal[idx]) & 0x1ff;
+		int umix_t = ((urgb >> 1) == sp->tr) || uclip;
 		int umix = umix_t ? 0 : urgb;
-		int u_t = umix_t || !f[NXF_ULAEN];
+		int u_t = umix_t || !sp->ulaen;
 		int u = u_t ? 0 : urgb;
-		// the tilemap
-		int tp = (tmw80 >= 0) ? nxv_tm_pick(comp, tmw80, whc, wvc, h) : 0;
-		int tm = V.pal[g->tmpal][tp & 0xff] & 0x1ff;
-		int tm_t = !(tp & 0x400) || ((tp & 0x200) && ((tm >> 1) == tr)) || !f[NXF_TMEN];
+		// the tilemap, in the span's window
+		int tp = (tmw80 >= 0) ? nxv_tm_pickw(comp, tmw80, whc, h, tmwin, sp->tmtr) : 0;
+		int tm = sp->tpal[tp & 0xff] & 0x1ff;
+		int tm_t = !(tp & 0x400) || ((tp & 0x200) && ((tm >> 1) == sp->tr)) || !sp->tmen;
 		if (tm_t) tm = 0;
-		int below = f[NXF_TMENB] ? (tp >> 8) & 1 : !f[NXF_TMTOP];
+		int below = sp->tmenb ? (tp >> 8) & 1 : !sp->tmtop;
 		int fin, fin_t;
-		if (f[NXF_STENCIL] && f[NXF_ULAEN] && f[NXF_TMEN]) {
+		if (sp->stencil) {
 			fin_t = u_t || tm_t;
 			fin = fin_t ? 0 : (u & tm);
 		} else {
 			fin_t = u_t && tm_t;
 			fin = (!tm_t && (!below || u_t)) ? tm : u;
 		}
-		// layer 2's pixel
-		int l2 = 0, l2_t = 1, l2p = 0;
-		if (l2byte >= 0) {
-			int px = (res & 2) ? (h ? (l2byte & 15) : (l2byte >> 4)) : l2byte;
-			int li = ((((px >> 4) + f[NXF_L2OFS]) & 15) << 4) | (px & 15);
-			int w = V.pal[g->l2pal][li];
-			int rgb = w & 0x1ff;
-			if ((rgb >> 1) != tr) {
-				l2 = rgb;
-				l2_t = 0;
-				l2p = (w >> 10) & 1;
-			}
-		}
-		ptr[h] = nxv_col[nxv_mix(f, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9) & 0x1ff];
+		int l2, l2p;
+		int l2_t = nxv_span_l2pix(sp, l2byte, h, &l2, &l2p);
+		ptr[h] = nxv_col[nxv_mixo(order, sp->blend, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, sp->fb9) & 0x1ff];
 	}
+	if (one) ptr[1] = ptr[0];
+}
+
+// nxv_gen_dot for one dot, kept out of nxv_draw_dot
+static __attribute__((noinline)) void nxv_gen_one(Computer* comp, long long D, int phc, int vc, int wvc, int bad, int whc, unsigned int* ptr) {
+	nxvSpan sp;
+	nxv_span_set(comp, &sp, D);
+	nxv_gen_dot(comp, &sp, V.f[NXF_ORDER], D, phc, vc, wvc, bad, whc, ptr);
+}
+
+// One dot drawn on its own where no field moves between its two half-pixels (the dot of
+// an event that lands past it): the plain path or the general one, as a run of such
+// dots would take (nxv_span_draw)
+static void nxv_draw_dot(Computer* comp, unsigned int* ptr, long long D, int phc, int vc, int wvc, int whc, int bad) {
+	if (V.dirty) nxv_derive(comp);
+	if (V.dv.plain)
+		nxv_plain_one(comp, D, phc, vc, wvc, bad, whc, ptr);
+	else
+		nxv_gen_one(comp, D, phc, vc, wvc, bad, whc, ptr);
 }
 
 // what a raw line gives every dot of it: vc_ula and wvc before and after they step
@@ -1017,6 +1255,9 @@ typedef struct {
 	int ry;
 	int vcA, vcB;		// lv = ry, ry - 1
 	int wvcA, wvcB;		// wl = ry, ry - 1
+	// the raster drawn (vid->dlt, drb), in raw counters: the dot of raw rx goes
+	// to column rx - 1, so rx from cx0 to cx1 (exclusive), lines cy0 to cy1
+	int cx0, cx1, cy0, cy1;
 } nxvLine;
 
 static void nxv_line_set(nxvLine* ln, int ry, int F, int vact) {
@@ -1026,6 +1267,14 @@ static void nxv_line_set(nxvLine* ln, int ry, int F, int vact) {
 	ln->vcB = (prev >= vact) ? prev - vact : 0x1ff;
 	ln->wvcA = (ry >= vact - 34) ? ry - vact + 32 : 0x1ff;
 	ln->wvcB = (prev >= vact - 34) ? prev - vact + 32 : 0x1ff;
+}
+
+// the counters of the pixel period of the dot at raw rx on the line: phc, vc_ula, wvc
+// (zxula_timing.vhd 423-520)
+NXV_INL void nxv_rx_ctr(const nxTiming* t, int L, const nxvLine* ln, int rx, int* phc, int* vc, int* wvc) {
+	*phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
+	*vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
+	*wvc = (rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
 }
 
 static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, const nxvLine* ln) {
@@ -1039,15 +1288,14 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 		ix = L - 1;
 		iy = (iy + F - 1) % F;
 	}
-	if ((ix < t->hblank) || (iy < t->vblank) || comp->vid->nodraw) {
+	if ((ix < ln->cx0 - 1) || (ix >= ln->cx1 - 1) || (iy < ln->cy0) || (iy >= ln->cy1) || comp->vid->nodraw) {
 		nxv_apply_to(comp, A + 1);
 		return;
 	}
 	unsigned int* ptr = (unsigned int*)(scrimg + (iy - t->vblank) * bytesPerLine + (ix - t->hblank) * 8);
 	// the counters of this pixel's period: phc, vc_ula, wvc (zxula_timing.vhd 423-520)
-	int phc = ((V.rx >= t->hact - 47) ? V.rx - t->hact - 1 : V.rx + L - t->hact - 1) & 0x1ff;
-	int vc = (V.rx >= t->hact - 11) ? ln->vcA : ln->vcB;
-	int wvc = (V.rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
+	int phc, vc, wvc;
+	nxv_rx_ctr(t, L, ln, V.rx, &phc, &vc, &wvc);
 	int bad = (phc & 0x100) || nxv_vbord(vc);	// border_active
 	int whc = (phc + 32) & 0x1ff;
 	int sb = 0;					// the sprite line buffer's entry for whc
@@ -1058,7 +1306,7 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 	int ui = (int)(D & (NXV_ULA - 1));
 	nxv_apply_to(comp, A);
 	if (!((V.evHead < V.evN) && (V.ev[V.evHead].t <= A + 1)) && !((NX.timing == NXT_PENT) && bad)) {
-		nxv_draw_dot(comp, ptr, D, phc, vc, wvc, whc, bad, sb, ui);
+		nxv_draw_dot(comp, ptr, D, phc, vc, wvc, whc, bad);
 		return;
 	}
 	for (int h = 0; h < 2; h++) {
@@ -1081,21 +1329,6 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 		}
 		int flash = (f[NXF_FLASH] >> 4) & 1;
 		int pen = (pix ^ ((attr >> 7) & flash & !f[NXF_ULANEXT] & !f[NXF_ULAP])) & !bad;
-		if (!f[NXF_L2EN] && !f[NXF_TMEN] && !f[NXF_TMENB] && !f[NXF_LOEN] && !f[NXF_ULANEXT] && !f[NXF_ULAP]
-				&& (f[NXF_ORDER] < 6) && !(sb && f[NXF_SPREN])) {
-			// the ULA alone (no layer 2, tilemap, LoRes, sprite pixel, blend): the mixer
-			// below comes down to the ULA's colour or the fallback
-			int ink = attr & 7;
-			int paper = (attr >> 3) & 7;
-			int sidx = ((pen ^ 1) << 4) | (((attr >> 6) & 1) << 3) | (paper ^ ((ink ^ paper) & -pen));
-			int y2 = ((f[NXF_UCY2] & 0xc0) == 0xc0) ? 0xbf : f[NXF_UCY2];
-			int inwin = (phc >= f[NXF_UCX1]) && (phc <= f[NXF_UCX2]) && (vc >= f[NXF_UCY1]) && (vc <= y2);
-			int fb9 = (f[NXF_FB] << 1) | (((f[NXF_FB] >> 1) | f[NXF_FB]) & 1);
-			int urgb = V.pal[(f[NXF_SEL43] & 1) << 2][sidx] & 0x1ff;
-			int u_t = ((urgb >> 1) == f[NXF_TR]) || !(inwin || bad) || !f[NXF_ULAEN];
-			ptr[h] = nxv_col[u_t ? fb9 : urgb];
-			continue;
-		}
 		int idx = 0;
 		int bg = 0;
 		if (f[NXF_ULANEXT]) {
@@ -1106,16 +1339,9 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 			} else if (pen) {
 				idx = attr & fmt;
 			} else {
-				switch (fmt) {
-					case 0x01: idx = 0x80 | (attr >> 1); break;
-					case 0x03: idx = 0x80 | (attr >> 2); break;
-					case 0x07: idx = 0x80 | (attr >> 3); break;
-					case 0x0f: idx = 0x80 | (attr >> 4); break;
-					case 0x1f: idx = 0x80 | (attr >> 5); break;
-					case 0x3f: idx = 0x80 | (attr >> 6); break;
-					case 0x7f: idx = 0x80 | (attr >> 7); break;
-					default: bg = 1; break;
-				}
+				idx = nxv_unext_paper(fmt, attr);
+				bg = (idx < 0);
+				if (bg) idx = 0;
 			}
 		} else {
 			// ink or paper by the pixel bit, without a branch: the bit is random, a
@@ -1236,14 +1462,64 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 				}
 			}
 		}
-		int out = nxv_mix(f, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9);
+		int out = nxv_mixo(f[NXF_ORDER], f[NXF_BLEND], l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9);
 		ptr[h] = nxv_col[out & 0x1ff];
 	}
 }
 
+// A run of dots on one line with no event in it, on the plain (gen 0) or the general
+// path: what holds over the run is taken once, and the path and the layer order are
+// constants of each copy of the loop
+static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, const nxvSpan* sp, const int gen, const int order,
+		const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
+	for (; rx < rxe; rx++, D++, ptr += 2) {
+		int phc, vc, wvc;
+		nxv_rx_ctr(t, L, ln, rx, &phc, &vc, &wvc);
+		int bad = (phc & 0x100) || nxv_vbord(vc);
+		if (gen)
+			nxv_gen_dot(comp, sp, order, D, phc, vc, wvc, bad, (phc + 32) & 0x1ff, ptr);
+		else
+			nxv_plain_dot(comp, sp, order, D, phc, vc, wvc, bad, (phc + 32) & 0x1ff, ptr);
+	}
+}
+
+// the dot of raw rx is border (border_active), as nxv_draw has it
+static inline int nxv_bad_at(const nxTiming* t, int L, const nxvLine* ln, int rx) {
+	int phc, vc, wvc;
+	nxv_rx_ctr(t, L, ln, rx, &phc, &vc, &wvc);
+	return (phc & 0x100) || nxv_vbord(vc);
+}
+
+static void nxv_span_draw(Computer* comp, const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
+	nxvSpan sp;
+	nxv_span_set(comp, &sp, D);
+	if (V.dv.plain) {
+		switch (V.f[NXF_ORDER]) {
+			case 0: nxv_span_run(comp, &sp, 0, 0, t, L, ln, rx, rxe, D, ptr); break;
+			case 1: nxv_span_run(comp, &sp, 0, 1, t, L, ln, rx, rxe, D, ptr); break;
+			case 2: nxv_span_run(comp, &sp, 0, 2, t, L, ln, rx, rxe, D, ptr); break;
+			case 3: nxv_span_run(comp, &sp, 0, 3, t, L, ln, rx, rxe, D, ptr); break;
+			case 4: nxv_span_run(comp, &sp, 0, 4, t, L, ln, rx, rxe, D, ptr); break;
+			default: nxv_span_run(comp, &sp, 0, 5, t, L, ln, rx, rxe, D, ptr); break;
+		}
+		return;
+	}
+	switch (V.f[NXF_ORDER]) {
+		case 0: nxv_span_run(comp, &sp, 1, 0, t, L, ln, rx, rxe, D, ptr); break;
+		case 1: nxv_span_run(comp, &sp, 1, 1, t, L, ln, rx, rxe, D, ptr); break;
+		case 2: nxv_span_run(comp, &sp, 1, 2, t, L, ln, rx, rxe, D, ptr); break;
+		case 3: nxv_span_run(comp, &sp, 1, 3, t, L, ln, rx, rxe, D, ptr); break;
+		case 4: nxv_span_run(comp, &sp, 1, 4, t, L, ln, rx, rxe, D, ptr); break;
+		case 5: nxv_span_run(comp, &sp, 1, 5, t, L, ln, rx, rxe, D, ptr); break;
+		case 6: nxv_span_run(comp, &sp, 1, 6, t, L, ln, rx, rxe, D, ptr); break;
+		default: nxv_span_run(comp, &sp, 1, 7, t, L, ln, rx, rxe, D, ptr); break;
+	}
+}
+
 // Nothing pushes an event while the mixer draws, so the dots of a line before the next
-// one is due need no apply: an undrawn stretch is passed over whole, and a drawn dot goes
-// straight to nxv_draw_dot with its counters worked out here. The rest take nxv_draw.
+// one is due need no apply: an undrawn stretch is passed over whole, a drawn one goes to
+// nxv_span_draw (the ULA alone: the loop here) with its counters worked out here. The
+// dot of an event and a line's first dot take nxv_draw.
 static void nxv_render(Computer* comp, long long end) {
 	const nxTiming* t = nx_tim(comp);
 	int L = t->L;
@@ -1253,6 +1529,18 @@ static void nxv_render(Computer* comp, long long end) {
 	int pent = (NX.timing == NXT_PENT);
 	nxvLine ln;
 	ln.ry = -1;
+	Video* vid = comp->vid;
+	if (vid->drawAll) {
+		ln.cx0 = t->hblank + 1;
+		ln.cx1 = L + 1;
+		ln.cy0 = t->vblank;
+		ln.cy1 = F;
+	} else {
+		ln.cx0 = t->hblank + 1 + vid->dlt.x;
+		ln.cx1 = t->hblank + 1 + vid->drb.x;
+		ln.cy0 = t->vblank + vid->dlt.y;
+		ln.cy1 = t->vblank + vid->drb.y;
+	}
 	while (V.cur < end) {
 		if (V.ry != ln.ry) nxv_line_set(&ln, V.ry, F, vact);
 		// the dots with 2D + 1 short of the next event, on this line
@@ -1263,23 +1551,25 @@ static void nxv_render(Computer* comp, long long end) {
 			nxv_draw(comp, t, L, F, vact, &ln);
 			V.cur++;
 			V.rx++;
-		} else if (nodraw || (V.ry < t->vblank)) {
+		} else if (nodraw || (V.ry < ln.cy0) || (V.ry >= ln.cy1)) {
 			V.rx += (int)(stop - V.cur);
 			V.cur = stop;
 		} else {
 			int rx = V.rx;
-			int rxe = rx + (int)(stop - V.cur);
+			int rxa = rx + (int)(stop - V.cur);	// where the run ends
+			int rxe = (rxa < ln.cx1) ? rxa : ln.cx1;	// and its drawn part
 			long long D = V.cur;
-			if (rx <= t->hblank) {
-				int k = ((rxe < t->hblank + 1) ? rxe : t->hblank + 1) - rx;
+			if (rx < ln.cx0) {
+				int k = ((rxe < ln.cx0) ? rxe : ln.cx0) - rx;
+				if (k < 0) k = 0;
 				rx += k;
 				D += k;
 			}
 			unsigned int* ptr = (unsigned int*)(scrimg + (V.ry - t->vblank) * bytesPerLine + (rx - 1 - t->hblank) * 8);
 			if (V.dirty) nxv_derive(comp);
 			if (!pent && V.dv.ulaOnly && !V.f[NXF_SPREN]) {
-				// The ULA alone and no sprites (an editor, a menu): nxv_draw_dot's first
-				// case, with what holds over the run taken once - no field moves in it
+				// The ULA alone and no sprites (an editor, a menu): what holds over the
+				// run taken once - no field moves in it
 				const nxvDerived* g = &V.dv;
 				const unsigned short* upal = V.pal[g->upal];
 				int tr = V.f[NXF_TR];
@@ -1287,14 +1577,15 @@ static void nxv_render(Computer* comp, long long end) {
 				int off = !V.f[NXF_ULAEN];
 				int fl = g->flashOn;
 				for (; rx < rxe; rx++, D++, ptr += 2) {
-					int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
-					int vc = (rx >= t->hact - 11) ? ln.vcA : ln.vcB;
+					int phc, vc, wvc;
+					nxv_rx_ctr(t, L, &ln, rx, &phc, &vc, &wvc);
 					int bad = (phc & 0x100) || nxv_vbord(vc);
 					int inwin = (phc >= g->ucx1) && (phc <= g->ucx2) && (vc >= g->ucy1) && (vc <= g->ucy2);
 					int clip = !(inwin || bad) || off;
 					int ui = (int)(D & (NXV_ULA - 1));
 					int bits = V.ula[ui].bits;
-					for (int h = 0; h < 2; h++) {
+					int one = nxv_alike(comp, ui, bits);
+					for (int h = 0; h < 2 - one; h++) {
 						int attr = V.ula[ui].attr[h];
 						int pen = (((bits >> h) & 1) ^ ((attr >> 7) & fl)) & !bad;
 						int ink = attr & 7;
@@ -1303,27 +1594,37 @@ static void nxv_render(Computer* comp, long long end) {
 						int urgb = upal[sidx] & 0x1ff;
 						ptr[h] = nxv_col[(((urgb >> 1) == tr) || clip) ? fb9 : urgb];
 					}
+					if (one) ptr[1] = ptr[0];
 				}
 			}
-			for (; rx < rxe; rx++, D++, ptr += 2) {
-				// as nxv_draw has them
-				int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
-				int vc = (rx >= t->hact - 11) ? ln.vcA : ln.vcB;
-				int wvc = (rx >= t->hact - 47) ? ln.wvcA : ln.wvcB;
-				int bad = (phc & 0x100) || nxv_vbord(vc);
-				if (pent && bad) {
+			if (!pent && (rx < rxe)) {
+				nxv_span_draw(comp, t, L, &ln, rx, rxe, D, ptr);
+				D += rxe - rx;
+				rx = rxe;
+			}
+			// the Pentagon takes its border colour again on every CLK_14 edge (nxv_draw):
+			// the border dot by dot, the paper between as a run
+			while (rx < rxe) {
+				if (nxv_bad_at(t, L, &ln, rx)) {
 					V.cur = D;
 					V.rx = rx;
 					nxv_draw(comp, t, L, F, vact, &ln);
+					rx++;
+					D++;
+					ptr += 2;
 					continue;
 				}
-				int whc = (phc + 32) & 0x1ff;
-				int sb = 0;
-				if ((whc < 320) && (wvc < 256)) {
-					sb = nxs_line(comp, D)[whc];
-					if (!(sb & 0x100)) sb = 0;
-				}
-				nxv_draw_dot(comp, ptr, D, phc, vc, wvc, whc, bad, sb, (int)(D & (NXV_ULA - 1)));
+				int r2 = rx + 1;
+				while ((r2 < rxe) && !nxv_bad_at(t, L, &ln, r2)) r2++;
+				nxv_span_draw(comp, t, L, &ln, rx, r2, D, ptr);
+				D += r2 - rx;
+				ptr += 2 * (r2 - rx);
+				rx = r2;
+			}
+			// the run's dots past the drawn part are passed over
+			if (rx < rxa) {
+				D += rxa - rx;
+				rx = rxa;
 			}
 			V.cur = D;
 			V.rx = rx;
@@ -1343,7 +1644,7 @@ static void nxv_resync(Computer* comp, long long d, int h, int v) {
 	for (int k = 24; k > 0; k--) {
 		int hh = h, vv = v, hc, vc;
 		nxv_step(comp, &hh, &vv, -k);
-		nx_ula(comp, hh, vv, &hc, &vc, NULL);
+		nx_ula_seen(comp, hh, vv, &hc, &vc);	// d may be behind the ray (a reset's dot)
 		nxv_fetch(comp, &V.fe, d - k, hc, vc, 0);
 	}
 	V.cur = d - NXV_LAG + 1;
@@ -1351,6 +1652,7 @@ static void nxv_resync(Computer* comp, long long d, int h, int v) {
 	V.ry = v;
 	nxv_step(comp, &V.rx, &V.ry, -NXV_LAG + 1);
 	V.live = 1;
+	V.upAt = -1;
 }
 
 // the copper stopped: nx_cop_run's own shortcut, its edges counted up to the end of dot d
@@ -1365,17 +1667,20 @@ static inline void nxv_cop_idle(Computer* comp, long long d) {
 
 // flash_cnt counted at the (0, 0) dots the ray has passed undrawn (they count at the
 // end of the dot; the one under the ray has not ended)
-void nxv_settle(Computer* comp) {
-	if (!comp->vid->still || (NX.still.flashDot < 0) || (NX.still.frameDots <= 0)) return;
-	int h, v;
-	nx_raw(comp, &h, &v);
-	long long d = NX.frameBase + h;
+// ...before dot d: a still frame's, or an undrawn stretch's (no fetch counted them)
+static void nxv_flash_to(Computer* comp, long long d) {
+	if ((NX.still.flashDot < 0) || (NX.still.frameDots <= 0)) return;
 	while (NX.still.flashDot + NX.still.frameDots < d) {
 		NX.still.flashDot += NX.still.frameDots;
 		V.flash = (V.flash + 1) & 31;
 	}
 	V.f[NXF_FLASH] = V.flash;		// undrawn: in effect at once
 	V.dirty = 1;
+}
+
+void nxv_settle(Computer* comp) {
+	if (!comp->vid->still) return;
+	nxv_flash_to(comp, nxv_ray_dot(comp));
 }
 
 void nxv_touch(Computer* comp) {
@@ -1421,10 +1726,12 @@ static int nxv_still_ok(Computer* comp) {
 	Video* vid = comp->vid;
 	if (!vid_still_on || !vid->stillOk || vid->nodraw || vid->debug) return 0;
 	if ((NX.still.clean < 2) || (NX.still.flashDot < 0) || NX.powerFrame) return 0;
-	if (!V.live || (V.evHead != V.evN) || nx_cop_on(comp)) return 0;
+	if ((!V.live && !vid->still) || (V.evHead != V.evN) || nx_cop_on(comp)) return 0;
 	if (!((V.flash + 1) & 15) && !V.q[NXF_ULANEXT] && !V.q[NXF_ULAP]) return 0;
 	return 1;
 }
+
+static void nxv_take_up(Computer* comp);
 
 // The frame start (VID_NEXT's frm): the frame that ended counted clean or not, and
 // the one starting made still or drawn
@@ -1449,39 +1756,184 @@ void nxv_frm(Video* vid) {
 		for (int y = 0; y < rows; y++)
 			memcpy(scrimg + y * bytesPerLine, bufimg + y * bytesPerLine, len);
 		vid->still = 1;
+		// the drawing stops at lastDot: whatever ends the still (nxv_wake, or a state or
+		// snapshot loaded with still off) takes it up at the ray, not from there
+		V.live = 0;
 	} else if (!ok && vid->still) {
 		vid_still_end(vid);
 	}
+	// a drawn frame after undrawn ones: the drawing taken up at its first dot
+	if (!vid->nodraw && !vid->still && !V.live) nxv_take_up(comp);
 }
 
-// the end of dot (h, v), the ray on it, hc_ula/vc_ula of it. cop: the copper runs;
-// stopped, nothing in a run of dots starts it, and its edges are counted at the end
-static inline void nxv_dot_at(Computer* comp, int h, int v, int hc, int vc, int cop) {
-	long long d = NX.frameBase + h;
-	if (!V.live || (d != V.lastDot + 1))
-		nxv_resync(comp, d, h, v);
-	if ((hc & 1) || ((hc & 7) == 4))	// an even dot other than n = 4, C does nothing
-		nxv_fetch(comp, &V.fe, d, hc, vc, 0);
-	// the copper's edges up to the end of this dot
-	if (cop) nx_cop_run(comp, d * 4 + 4);
-	nxs_run_to(comp, d * 8 + 8);		// the sprite pass too
-	if (!hc && !vc) {
-		// flash_cnt counts at the end of (0, 0); pixel_en uses it from the next half-pixel on
-		V.flash = (V.flash + 1) & 31;
-		nxv_push(comp, d * 2 + 1, NXF_FLASH, 0, V.flash);
-		NX.still.flashDot = d;
-		NX.still.frameDots = (long long)nx_tim(comp)->L * nx_lines(comp);
-		if (!(V.flash & 15) && !V.q[NXF_ULANEXT] && !V.q[NXF_ULAP])
-			NX.still.dirty = 1;		// FLASH turned over
+// The fetch over the dots from lastDot + 1 to end - 1, the ray past them: their
+// counters as it had them. What the fetch and the mixer read is kept with its time
+// (the queued changes, the samples, the write log), so it reads what it read with the
+// ray on the dot. The copper and the sprite pass are run up to there first.
+static void nxv_fetch_to(Computer* comp, long long end) {
+	long long d = V.lastDot + 1;
+	if (d >= end) return;
+	// a copper running may stop itself on the way (nx_cop_run then counts its edges as
+	// the stopped one does); a stopped one is not started by anything here
+	if (nxv_sweeping) {
+		// nxv_sweep: the machine's copper and sprite pass are not run for it
+	} else if (nx_cop_on(comp)) {
+		nx_cop_run(comp, (end - 1) * 4 + 4);
+		if (!V.live) return;		// it wrote a reset (NR 02): nothing more here
+		// stopped for room at edge copT (nx_cop_hold): the dots it has ended go first
+		long long e = NX.copT >> 2;
+		if ((e < end) && (e > d)) end = e;
+	} else {
+		nxv_cop_idle(comp, end - 1);
 	}
-	V.lastDot = d;
+	if (!nxv_sweeping) nxs_run_to(comp, (end - 1) * 8 + 8);
+	const nxTiming* t = nx_tim(comp);
+	int L = t->L;
+	int F = nx_lines(comp);
+	int r0 = t->hact - 11;		// hc_ula 0, where vc_ula steps: nx_ula again there
+	int h, v, hc, vc;
+	nx_raw(comp, &h, &v);
+	nxv_step(comp, &h, &v, (int)(d - (NX.frameBase + h)));
+	nx_ula_seen(comp, h, v, &hc, &vc);
+	for (; d < end; d++) {
+		if ((hc & 1) || ((hc & 7) == 4))	// an even dot other than n = 4, C does nothing
+			nxv_fetch(comp, &V.fe, d, hc, vc, 0);
+		if (!hc && !vc) {
+			// flash_cnt counts at the end of (0, 0); pixel_en uses it from the next half-pixel on
+			V.flash = (V.flash + 1) & 31;
+			nxv_push(comp, d * 2 + 1, NXF_FLASH, 0, V.flash);
+			NX.still.flashDot = d;
+			NX.still.frameDots = (long long)L * F;
+			if (!(V.flash & 15) && !V.q[NXF_ULANEXT] && !V.q[NXF_ULAP])
+				NX.still.dirty = 1;		// FLASH turned over
+		}
+		if (++h == L) {
+			h = 0;
+			if (++v == F) v = 0;
+			nx_ula_seen(comp, h, v, &hc, &vc);
+		} else if (h == r0) {
+			nx_ula_seen(comp, h, v, &hc, &vc);
+		} else {
+			hc++;
+		}
+	}
+	V.lastDot = end - 1;
 }
 
-// The mixer NXV_LAG dots behind the fetch, drawn after a run of them: what it reads
-// is kept with its time, the run is shorter than the fetch's ring of dots, and the
-// sprite buffers swap at whc 511, a run away from the last sprite pixel at whc 319
-static inline void nxv_catch_up(Computer* comp) {
-	nxv_render(comp, V.lastDot - NXV_LAG + 1);
+// the drawing taken up at the dot a reset left it at, or else at the dot under the
+// ray, as after any undrawn stretch
+static void nxv_take_up(Computer* comp) {
+	int h, v;
+	nx_raw(comp, &h, &v);
+	long long d = NX.frameBase + h;
+	if ((V.upAt >= 0) && (V.upAt < d)) {
+		nxv_step(comp, &h, &v, (int)(V.upAt - d));
+		d = V.upAt;
+	}
+	// flash_cnt counted at the (0, 0) dots the undrawn stretch passed; one the mixer
+	// draws again (from d - NXV_LAG + 1 on) goes in the queue, as in nxv_wake
+	nxv_flash_to(comp, d);
+	long long fd = NX.still.flashDot;
+	int late = (fd >= d - NXV_LAG + 1);
+	if (late) V.f[NXF_FLASH] = (V.flash - 1) & 31;
+	nxv_resync(comp, d, h, v);
+	V.lastDot = d - 1;
+	if (late) nxv_push(comp, fd * 2 + 1, NXF_FLASH, 0, V.flash);
+}
+
+// The picture up to dot end (the first one the ray has not ended): the fetch up to
+// there, the mixer NXV_LAG dots behind it, as a change queued at the ray may still
+// show a dot or so back
+static void nxv_flush(Computer* comp, long long end) {
+	Video* vid = comp->vid;
+	if (vid->still) return;
+	if (vid->nodraw) {
+		V.live = 0;		// taken up afresh when the drawing is (nxv_frm)
+		V.upAt = -1;
+		return;
+	}
+	if (!V.live) nxv_take_up(comp);
+	// from inside one (a reset the copper writes, nxv_before_reset): this one draws only
+	// up to where the copper stands, the outer one goes on
+	int outer = nxv_flushing;
+	nxv_flushing = 1;
+	for (;;) {
+		// the fetch stops short where the copper was stopped for room (nxv_room): drawn
+		// to there, then on
+		do {
+			nxv_fetch_to(comp, end);
+			if (!V.live) break;		// a reset the copper wrote (NR 02)
+			nxv_render(comp, V.lastDot - NXV_LAG + 1);
+		} while (V.lastDot + 1 < end);
+		if (V.live || outer || (V.upAt < 0)) break;
+		nxv_take_up(comp);			// ...on from the reset's dot
+	}
+	nxv_flushing = outer;
+	if (!outer) nx_cop_hold = 0;
+}
+
+void nxv_line(Computer* comp) {
+	nxv_flush(comp, NX.frameBase);
+}
+
+// Fast mode's "memory dump" picture (vid_sweep): a whole frame from the memory and the
+// registers as they stand, drawn at once. It is drawn as the frame two ahead, past
+// every write, so each read sees the memory as it is now; no copper or sprite pass is
+// run for it, and the sprites are left out. All the drawing's own state is put back.
+void nxv_sweep(Video* vid) {
+	Computer* comp = (Computer*)vid->xptr;
+	static nxVideo keep;
+	keep = V;
+	__typeof__(NX.still) still = NX.still;
+	unsigned nodraw = vid->nodraw;
+	unsigned stillOn = vid->still;
+	vid->nodraw = 0;
+	vid->still = 0;
+	nxv_sweeping = 1;
+	int h, v;
+	nx_raw(comp, &h, &v);
+	long long frame = (long long)nx_tim(comp)->L * nx_lines(comp);
+	long long d0 = NX.frameBase - (long long)v * nx_tim(comp)->L + 2 * frame;	// raw (0, 0) of it
+	nxv_resync(comp, d0, 0, 0);
+	V.lastDot = d0 - 1;
+	V.f[NXF_SPREN] = 0;
+	V.dirty = 1;
+	// a line at a time, as nxv_line draws: the fetch's ring holds a line or so
+	int L = nx_tim(comp)->L;
+	for (long long e = d0 + L; e <= d0 + frame; e += L) {
+		nxv_fetch_to(comp, (e < d0 + frame) ? e : e + NXV_LAG);
+		nxv_render(comp, (e < d0 + frame) ? V.lastDot - NXV_LAG + 1 : e);
+	}
+	nxv_sweeping = 0;
+	vid->nodraw = nodraw;
+	vid->still = stillOn;
+	NX.still = still;
+	V = keep;
+}
+
+// A soft reset written at CLK_28 w (-1: the button, at the ray), before the registers
+// go: the picture up to it as they stood, and the dot to take the drawing up at after it
+// (-1: at the ray when it is drawn again). A copper writing it stands at w, inside the
+// drawing (nxv_fetch_to) or not, so drawing up to w runs it no further.
+long long nxv_before_reset(Computer* comp, long long w) {
+	// a still frame ends first (the write's own nxv_touch comes after the reset): the
+	// drawing taken up at the ray, and on as for any reset
+	vid_still_end(comp->vid);
+	if (comp->vid->nodraw || comp->vid->still) return -1;
+	if (!V.live) return V.upAt;		// one not taken up yet (in this line): from its dot
+	long long d = nxv_ray_dot(comp);
+	if ((w >= 0) && ((w >> 2) < d)) d = w >> 2;
+	nxv_flush(comp, d);
+	// the mixer one dot on, to where the take-up at d starts it (nxv_resync)
+	nxv_render(comp, d - NXV_LAG + 1);
+	return d;
+}
+
+// ...and after it (nxv_reset done): taken up at that dot at once, so what lands next
+// goes in the queue at its own time. From inside the drawing the outer nxv_flush does it.
+void nxv_after_reset(Computer* comp, long long up) {
+	V.upAt = up;
+	if ((up >= 0) && !nxv_flushing && !comp->vid->nodraw && !comp->vid->still) nxv_take_up(comp);
 }
 
 // the raw counters of the dot under the ray
@@ -1500,52 +1952,27 @@ static inline void nxv_ray_hv(Computer* comp, Video* vid, int* h, int* v) {
 	*v = y;
 }
 
-// The dot callback (VID_NEXT): the end of the dot under the ray
+// The dot callback (VID_NEXT): the end of the dot under the ray. The lines draw
+// themselves as the ray leaves them (nxv_line); the debugger, stepping, wants the
+// picture up to the ray at every step
 void nxv_dot(Video* vid) {
+	if (!vid->debug) return;
 	Computer* comp = (Computer*)vid->xptr;
-	int h, v, hc, vc;
+	int h, v;
 	nxv_ray_hv(comp, vid, &h, &v);
-	nx_ula(comp, h, v, &hc, &vc, NULL);
-	int cop = nx_cop_on(comp);
-	nxv_dot_at(comp, h, v, hc, vc, cop);
-	if (!cop) nxv_cop_idle(comp, V.lastDot);
-	nxv_catch_up(comp);
+	nxv_flush(comp, NX.frameBase + h + 1);
 }
 
-// A run of k dots: the ray steps over them one by one, as the dot callback would see
-// it, the raw counters counted on (worked out again where the raw line starts)
+// a run of dots: nothing to do but count them, but under the debugger (a dot at a time)
 int nxv_run(Video* vid, int k) {
-	Computer* comp = (Computer*)vid->xptr;
-	int h = 0, v = 0, hc = 0, vc = 0;
-	int x = vid->ray.x;
-	int r0 = nx_tim(comp)->hact - 11;	// hc_ula 0, where vc_ula steps: nx_ula again there
-	// a copper running may stop itself in the run (nx_cop_run then counts its edges as
-	// the stopped one does); a stopped one is not started by anything here
-	int cop = nx_cop_on(comp);
-	for (int i = 0; i < k; i++) {
-		// the fetch writes 8 dots ahead into a ring of NXV_ULA: the mixer reads them
-		// before a lazy run of 40-odd dots goes round it
-		if (i && !(i & 31)) nxv_catch_up(comp);
-		vid->ray.x = x + i;
-		if ((i == 0) || (x + i == vid->vend.x)) {
-			nxv_ray_hv(comp, vid, &h, &v);
-			nx_ula(comp, h, v, &hc, &vc, NULL);
-		} else if (++h == r0) {
-			nx_ula(comp, h, v, &hc, &vc, NULL);
-		} else {
-			hc++;
-		}
-		nxv_dot_at(comp, h, v, hc, vc, cop);
-	}
-	if (!cop && (k > 0)) nxv_cop_idle(comp, V.lastDot);
-	nxv_catch_up(comp);
-	return k;
+	return vid->debug ? 0 : k;
 }
 
 // Where the picture stops in the buffer: the mixer's next dot, placed as nxv_render
-// places it (raw line V.ry, dot V.rx at column V.rx - 1 - hblank)
+// places it (raw line V.ry, dot V.rx at column V.rx - 1 - hblank), drawn up to the ray
 unsigned char* nxv_drawn(Video* vid) {
 	Computer* comp = (Computer*)vid->xptr;
+	nxv_flush(comp, nxv_ray_dot(comp));
 	if (!V.live) return vid->ray.ptr;
 	const nxTiming* t = nx_tim(comp);
 	int row = V.ry - t->vblank;
@@ -1580,6 +2007,11 @@ void nxv_reset(Computer* comp) {
 	V.evHead = V.evN = 0;
 	memset(V.wr, 0, sizeof(V.wr));
 	V.wrHead = 0;
+	memset(V.wrT, 0, sizeof(V.wrT));
+	memset(V.sprKeep, 0, sizeof(V.sprKeep));
+	V.sprKeepTo[0] = V.sprKeepTo[1] = -1;
+	V.sprKeepNew = 0;
+	V.upAt = -1;
 	nxv_hset(&V.hBrd, NX.pfe & 7);
 	nxv_hset(&V.hPff, NX.pff & 0x3f);
 	nxv_hset(&V.hShadow, (NX.p7ffd >> 3) & 1);

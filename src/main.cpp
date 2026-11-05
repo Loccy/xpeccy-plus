@@ -129,6 +129,7 @@ void help() {
 	printf("--bench-state FILE\tthe raw machine state at the end, sizes of its parts in FILE.idx\n");
 	printf("--bench-nodraw\t\tdraw no picture\n");
 	printf("--bench-nostill\t\tdraw every frame, the still ones too\n");
+	printf("--bench-crop\t\tthe Next draws only what a window can show; the frames hash covers that\n");
 	printf("--bench-hash-every N\tonly every Nth frame goes into the frames hash\n");
 	printf("--bench-draw-every N\tthe same, and the frames between are not drawn\n");
 	printf("--bench-heat\t\tcollect the memory heat map, hashed with --bench-hash\n");
@@ -807,6 +808,8 @@ int main(int ac,char** av) {
 			bnNodraw = 1;
 		} else if (!strcmp(parg,"--bench-nostill")) {
 			vid_still_on = 0;
+		} else if (!strcmp(parg,"--bench-crop")) {
+			ethread.benchCrop = 1;
 		} else if (!strcmp(parg,"--bench-heat")) {
 			bnHeat = 1;
 		} else if (!strcmp(parg,"--bench-split")) {

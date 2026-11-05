@@ -303,9 +303,14 @@ void DebugWin::start() {
 	blockEnd = -1;
 	save_mem_map();
 	Computer* comp = conf.zx;
+	// the pause is set, but the emulation's thread may still be inside a step: these
+	// walk the machine's video, so they wait for it to leave
+	emu_lock();
 	fastload_stop(comp);		// the debugger draws the frames it steps through
+	frame_skip_stop(comp);		// ...the one Frame skip left undrawn too
 	if (!comp->vid->tail)
 		vid_dark_tail(comp->vid);
+	emu_unlock();
 
 	this->move(conf.dbg.pos);
 	comp->vid->debug = 1;

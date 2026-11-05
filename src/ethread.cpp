@@ -139,6 +139,7 @@ xThread::xThread() {
 	benchKeys = NULL;
 	benchApplyAt = -1;
 	benchHashEvery = 1;
+	benchCrop = 0;
 	benchDrawEvery = 0;
 	earBlock = -1;
 	conf.emu.fast = 0;
@@ -289,7 +290,7 @@ void xThread::tap_hand_over(Computer* comp, int blk, int base, int dir) {
 	// each. Where it leaves sets PC.
 	CPU* cpu = comp->cpu;
 	int load = cpu->regFa & 1;		// carry in F': LOAD, else VERIFY
-	if (load) vid_still_break(comp->vid);	// written past the machine's own writes
+	if (load) vid_outside_write(comp->vid);	// written past the machine's own writes
 	unsigned char flag = blkData[0];
 	unsigned char h = flag;
 	unsigned char l = flag;
@@ -536,7 +537,7 @@ static int ra_frames(Computer* comp, int* shown) {
 	if (conf.emu.tmode == XTM_FFWD) return *shown = 0;
 	int r = comp->rzx.play ? 0 : conf.emu.runahead;
 	int l = 0;
-	if (!conf.emu.fast && (noflic > 0) && noflicAhead
+	if (!conf.emu.fast && (noflic > 0) && noflicAhead && !frame_skipping()
 			&& ((noflicMode == AF_2C_ADAPTIVE) || (noflicMode == AF_3C_ADAPTIVE))
 			&& (comp->hw->id != HW_ZXNEXT))		// too dear there
 		l = AF_AHEAD;
@@ -932,9 +933,10 @@ void xThread::emuCycle(Computer* comp) {
 			}
 // process noflic/scanlines (if !fast ???)
 // buffers is already switches, bufimg - just painted (greyscale, if flag is set), scrimg - new
-			// fast forward's undrawn frames are not mixed, and its drawn ones follow on
+			// fast forward's undrawn frames are not mixed, and its drawn ones follow on;
+			// while Frame skip leaves frames out the host is short anyway: no mixing
 			int ffwd = fast_ffwd_frame();
-			if (!conf.emu.fast && (noflic > 0) && (ffwd >= 0)) {
+			if (!conf.emu.fast && (noflic > 0) && (ffwd >= 0) && !frame_skipping()) {
 				const uint32_t* ahead = ahead_ok ? af_look_ahead(comp, shown + 1, k - shown) : NULL;
 				scrMix(pscr, (unsigned char*)af_crop(comp->vid),
 					comp->vid->vsze.x * 2, comp->vid->vsze.y, bytesPerLine,
@@ -1209,6 +1211,8 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 	// and it draws the frames fast mode would leave out
 	fastload_hold(1);
 	fast_picture_hold(1);
+	// the whole raster, as the frames hash covers it, unless asked for the crop
+	comp->vid->drawAll = !benchCrop;
 	int rwOn = conf.emu.rewind.on;
 	conf.emu.rewind.on = (rw > 0);
 	rzx_begin(comp);
@@ -1401,8 +1405,13 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 				fl = conf.vid.fcount;
 				if ((split && first) || (done % every)) continue;
 				Video* vid = comp->vid;
-				for (int y = 0; y < vid->full.y; y++)
-					hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine, vid->full.x * 8);
+				if (benchCrop) {
+					for (int y = vid->dlt.y; y < vid->drb.y; y++)
+						hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine + vid->dlt.x * 8, (vid->drb.x - vid->dlt.x) * 8);
+				} else {
+					for (int y = 0; y < vid->full.y; y++)
+						hFrm = bench_mix(hFrm, bufimg + y * bytesPerLine, vid->full.x * 8);
+				}
 			}
 			snd_sync_wait();
 			int epos = snd_ring_fill_pos();
