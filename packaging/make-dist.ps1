@@ -7,6 +7,7 @@
 #   .\make-dist.ps1 -SysNext            # with System/Next beside the program, for tests
 #   .\make-dist.ps1 -Pgo                # profile-guided: built, trained, built again
 #   .\make-dist.ps1 -Pgo -PgoExtra D:\nex   # ...the .nex programs under D:\nex trained on too
+#   .\make-dist.ps1 -Pgo -PgoCard D:\card   # ...on that card, not the System/Next of build\deps
 #
 # What goes into the folder is defined by the install() rules in CMakeLists.txt and
 # cmake/windeploy.cmake.in; this script only picks a toolchain and drives cmake.
@@ -24,8 +25,9 @@ param(
 	[switch]$Full,		# keep everything windeployqt copied, skip the trim step
 	[switch]$Manual,	# build the user manual (tools/manual.py) and put it in the folder
 	[switch]$SysNext,	# put System/Next beside the program: the Next's card with none made
-	[switch]$Pgo,		# profile-guided (pgo-train.ps1): needs System/Next (fetch-deps.ps1 -SysNext)
+	[switch]$Pgo,		# profile-guided (pgo-train.ps1): needs a card, System/Next by default
 	[string[]]$PgoExtra = @(),	# folders whose .nex programs the training runs too
+	[string]$PgoCard,	# the card the training boots the Next from (default: System/Next of build\deps)
 	[int]$Jobs = 16,
 	# a build agent installs Qt and MinGW wherever it likes, and has cmake in
 	# PATH already; locally the table below is right and none of this is needed
@@ -199,7 +201,8 @@ if ($SysNext -and (Test-Path $sysnextDir)) {
 # them there. Code the training never ran is optimized as usual, not for size, where
 # gcc can (10 and later): a machine left out of the training loses nothing.
 if ($Pgo) {
-	if (-not (Test-Path $sysnextDir)) { throw "System/Next $($sn.release) is missing (packaging\fetch-deps.ps1 -SysNext)" }
+	if (-not $PgoCard) { $PgoCard = $sysnextDir }
+	if (-not (Test-Path $PgoCard)) { throw "pgo: no card at $PgoCard (packaging\fetch-deps.ps1 -SysNext)" }
 	$gen = '-fprofile-generate'
 	$use = '-fprofile-use -fprofile-correction -Wno-missing-profile'
 	$gcc = (& (Join-Path $tc.MinGW 'bin\gcc.exe') -dumpversion).Trim()
@@ -215,7 +218,7 @@ if ($Pgo) {
 	& cmake --install $buildDir --prefix $trainDir
 	if ($LASTEXITCODE -ne 0) { throw 'pgo: install failed' }
 	Write-Host '--- pgo: training ---' -ForegroundColor Cyan
-	& (Join-Path $PSScriptRoot 'pgo-train.ps1') -App $trainDir -SysNext $sysnextDir -Extra $PgoExtra
+	& (Join-Path $PSScriptRoot 'pgo-train.ps1') -App $trainDir -SysNext $PgoCard -Extra $PgoExtra
 	Remove-Item $trainDir -Recurse -Force
 	Write-Host '--- pgo: the build by the profile ---' -ForegroundColor Cyan
 	$cmakeArgs += "-DCMAKE_C_FLAGS=$use", "-DCMAKE_CXX_FLAGS=$use"
