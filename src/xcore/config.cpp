@@ -64,6 +64,7 @@ static int rec_id(const char** tab, const std::string& nam, int def) {
 
 static const char* autorun_name[] = {"mount", "run", "ask", NULL};	// AR_* order
 static const char* start_name[] = {"last", "ask", "this", "unset", "resume", NULL};	// MS_* order
+static const char* fdlg_sort_name[] = {"name", "size", "type", "date", NULL};	// conf.fdlg.sort
 static const char* upd_check_name[] = {"day", "week", "never", NULL};	// UPC_* order
 static const char* upd_channel_name[] = {"releases", "development", NULL};	// UP_RELEASES, UP_DEV
 
@@ -174,6 +175,9 @@ void conf_init(char* confdir) {
 	conf.fold.rw = 1;
 	conf.fold.trash = 1;
 	conf.fold.asked = 0;
+	conf.fdlg.sort = 0;
+	conf.fdlg.desc = 0;
+	conf.fdlg.list = 0;
 	conf.vid.skipHint = 1;
 	conf.saves.perGame = 1;
 	conf.saves.carry = 1;
@@ -237,6 +241,8 @@ void saveConfig() {
 	if (conf.macStart != MS_UNSET) fprintf(cfile, "start = %s\n", start_name[conf.macStart]);
 	if (!conf.macStartId.empty()) fprintf(cfile, "start.machine = %s\n", conf.macStartId.c_str());
 	fprintf(cfile, "lastdir = %s\n", conf.lastDir.c_str());
+	fprintf(cfile, "filedialog.sort = %s %s\n", fdlg_sort_name[conf.fdlg.sort], conf.fdlg.desc ? "desc" : "asc");
+	fprintf(cfile, "filedialog.view = %s\n", conf.fdlg.list ? "list" : "detail");
 	fprintf(cfile, "savepaths = %s\n", YESNO(conf.storePaths));
 	fprintf(cfile, "fdcturbo = %s\n", YESNO(fdcFlag & FDC_FAST));
 	fprintf(cfile, "folder.write = %s\n", YESNO(conf.fold.rw));
@@ -1394,6 +1400,12 @@ void loadConfig() {
 					if (pnam == "start") conf.macStart = rec_id(start_name, pval, MS_UNSET);
 					if (pnam == "start.machine") conf.macStartId = pval;
 					if (pnam=="lastdir") conf.lastDir = pval;
+					if (pnam == "filedialog.sort") {
+						size_t sp = pval.find(' ');
+						conf.fdlg.sort = rec_id(fdlg_sort_name, pval.substr(0, sp), 0);
+						conf.fdlg.desc = (sp != std::string::npos) && (pval.substr(sp + 1) == "desc");
+					}
+					if (pnam == "filedialog.view") conf.fdlg.list = (pval == "list");
 					if ((pnam == "recent") && (conf.recentList.size() < RECENT_MAX))
 						conf.recentList.append(QString::fromLocal8Bit(pval.c_str()));
 					if (pnam=="savepaths") conf.storePaths = arg.b;

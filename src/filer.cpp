@@ -85,11 +85,22 @@ static void file_dialog_tune(QFileDialog* dlg) {
 	static xFileTypes* types = new xFileTypes;	// never freed: a dialog may outlive any owner at exit
 	dlg->setIconProvider(types);
 	tree->setUniformRowHeights(true);
+	// The user's sort and view stay between runs, over what Qt restored (Downloads newest first)
+	tree->sortByColumn(conf.fdlg.sort, conf.fdlg.desc ? Qt::DescendingOrder : Qt::AscendingOrder);
+	QObject::connect(tree->header(), &QHeaderView::sortIndicatorChanged, tree, [](int col, Qt::SortOrder ord) {
+		conf.fdlg.sort = qBound(0, col, 3);
+		conf.fdlg.desc = (ord == Qt::DescendingOrder);
+	});
 	QListView* list = dlg->findChild<QListView*>("listView");
 	QStackedWidget* views = dlg->findChild<QStackedWidget*>("stackedWidget");
 	if (!list || !views) return;
 	list->setLayoutMode(QListView::Batched);
-	auto fit = [list, views]() {list->setUniformItemSizes(views->currentWidget() != list->parentWidget());};
+	dlg->setViewMode(conf.fdlg.list ? QFileDialog::List : QFileDialog::Detail);
+	auto fit = [list, views]() {
+		bool shown = (views->currentWidget() == list->parentWidget());
+		list->setUniformItemSizes(!shown);
+		conf.fdlg.list = shown;
+	};
 	QObject::connect(views, &QStackedWidget::currentChanged, list, fit);
 	fit();
 }

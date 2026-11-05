@@ -861,6 +861,11 @@ struct xConfig {
 	std::string jmapNameB;
 	std::string lastDir;
 	struct {
+		int sort;		// the column Qt's file dialog sorts by: 0 name, 1 size, 2 type, 3 date
+		unsigned desc:1;
+		unsigned list:1;	// List View, not Detail
+	} fdlg;
+	struct {
 		std::vector<xBrkPoint> list;
 	} brk;
 	QMap<int, QMap<int, QString> > commap;	// comments: [memtype][addr] = string
