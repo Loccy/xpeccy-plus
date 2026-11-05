@@ -991,6 +991,14 @@ void vid_still_break(Video* vid) {
 	vid->stillBreak = 1;
 }
 
+// The memory about to be written past the machine's own writes (a tape trap, a cheat,
+// the debugger): a still picture ends, and a mode drawing behind the ray (VID_NEXT) draws
+// up to it first - the dots not drawn yet would show the new bytes before they came
+void vid_outside_write(Video* vid) {
+	vid_still_break(vid);
+	if (vid->cb && vid->cb->drawn) vid->cb->drawn(vid);
+}
+
 long long vid_quiet_dots(Video* vid, int lineInt) {
 	long long fx = vid->full.x;
 	long long d = (vid->full.y - vid->ray.y) * fx - vid->ray.x;

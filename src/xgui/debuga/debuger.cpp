@@ -304,6 +304,7 @@ void DebugWin::start() {
 	save_mem_map();
 	Computer* comp = conf.zx;
 	fastload_stop(comp);		// the debugger draws the frames it steps through
+	frame_skip_stop(comp);		// ...the one Frame skip held back too
 	if (!comp->vid->tail)
 		vid_dark_tail(comp->vid);
 

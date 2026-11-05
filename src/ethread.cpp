@@ -290,7 +290,7 @@ void xThread::tap_hand_over(Computer* comp, int blk, int base, int dir) {
 	// each. Where it leaves sets PC.
 	CPU* cpu = comp->cpu;
 	int load = cpu->regFa & 1;		// carry in F': LOAD, else VERIFY
-	if (load) vid_still_break(comp->vid);	// written past the machine's own writes
+	if (load) vid_outside_write(comp->vid);	// written past the machine's own writes
 	unsigned char flag = blkData[0];
 	unsigned char h = flag;
 	unsigned char l = flag;

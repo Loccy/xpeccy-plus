@@ -685,6 +685,14 @@ int frame_skip_ok() {
 	return fs_ok.load(std::memory_order_relaxed);
 }
 
+// the frame now going is drawn from here on after all (the debugger takes the machine
+// mid-frame and steps through it)
+void frame_skip_stop(Computer* comp) {
+	if (!fs_held) return;
+	vid_set_nodraw(comp->vid, 0);
+	fs_held = 0;
+}
+
 // a frame Frame skip held back is drawn after all
 static void fs_release(Video* vid) {
 	if (!fs_held) return;

@@ -452,6 +452,7 @@ void vid_set_nodraw(Video*,int);
 void vid_set_nodraw_next(Video*,int);		// the same from the next frame start on
 void vid_still_end(Video*);			// a still frame drawn on from the ray
 void vid_still_break(Video*);			// ...and the picture touched from outside
+void vid_outside_write(Video*);			// ...before memory is written from outside (drawn up to the ray)
 extern int vid_still_on;			// still frames at all (--bench-nostill: 0)
 void vid_sweep(Video*);				// the memory now as a whole frame, into bufimg
 void vid_set_int_frame(Video*, int);		// dots left of the frame INT pulse, 0: none

@@ -19,7 +19,8 @@ int fast_picture_busy();		// frames are being left undrawn
 // aside (not run ahead, recorded, watched by a breakpoint, loaded or wound back)
 int frame_skip_allowed(Computer*);
 int frame_skip_ok();			// ...as the emulation found it at the last frame end (any thread)
-int frame_skipping();			// in a stretch of frames left undrawn: anti-flicker stands down
+int frame_skipping();
+void frame_skip_stop(Computer*);	// the frame held back is drawn from here (the debugger takes it)			// in a stretch of frames left undrawn: anti-flicker stands down
 void fast_picture_hold(int);		// the bench draws them itself
 // let the machine go now - the debugger is about to take it
 void fastload_stop(Computer*);
