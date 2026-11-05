@@ -1359,18 +1359,6 @@ none - nothing comes back (+2A, +3)</string>
                </item>
                <item row="0" column="2">
                 <widget class="QLabel" name="bszlab">
-                 <property name="minimumSize">
-                  <size>
-                   <width>104</width>
-                   <height>0</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>104</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
                  <property name="text">
                   <string/>
                  </property>

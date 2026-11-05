@@ -432,6 +432,8 @@ void SetupWin::makeDevWidgets() {
 SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	setModal(true);
 	ui.setupUi(this);
+	machColMin = ui.machButtons->maximumWidth();
+	appColMin = ui.appButtons->maximumWidth();
 	makeDevWidgets();
 	// a .ui iconset holds a single pixmap, which the title bar would have
 	// to downscale; the application icon carries every drawn
@@ -533,10 +535,6 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	ui.cbNoflicMode->addItem("2-frames (adaptive)", AF_2C_ADAPTIVE);
 	ui.cbNoflicMode->addItem("3-frames (fullscreen)", AF_3C_FULL);
 	ui.cbNoflicMode->addItem("2-/3-frames (adaptive)", AF_3C_ADAPTIVE);
-	// the check box columns as wide as Recording's buttons, so every group's
-	// fields end at one edge
-	foreach(QWidget* col, QList<QWidget*>() << ui.picRight << ui.afRight << ui.ssRight)
-		col->setFixedWidth(ui.machButtons->maximumWidth());
 // emulation
 	ui.cbRunAhead->addItem("Off", 0);
 	ui.cbRunAhead->addItem("1", 1);
@@ -1073,6 +1071,7 @@ void SetupWin::fillPages() {
 			g->setColumnMinimumWidth(col, wid);
 	}
 	ui.cbStyleSheet->setFixedWidth(ui.gridLayout_look->columnMinimumWidth(1));	// as wide as the names under it
+	fitWidths();
 	// Saves: the numbers alike, as wide as the widest of them asks; the columns
 	// as Emulation's, so the names stand in one place on both pages
 	int savw = 0;
@@ -1283,6 +1282,23 @@ void SetupWin::noteShown() {
 	shown.mem = getRFIData(ui.mszbox);
 }
 
+// widths that follow the font and style: on fill and after a style is applied
+void SetupWin::fitWidths() {
+	int wid = machColMin;
+	for (xSideButton* btn : {ui.pbResetMachine, ui.pbSaveMachine, ui.pbDelMachine, btnRecAdv})
+		wid = qMax(wid, btn->sizeHint().width());
+	for (QWidget* col : {ui.machButtons, ui.picRight, ui.afRight, ui.ssRight, boxRecAdv})
+		col->setFixedWidth(wid);
+	wid = appColMin;
+	for (xSideButton* btn : {ui.pbFavorites, ui.pbCfgExport, ui.pbCfgImport, ui.pbCfgReset})
+		wid = qMax(wid, btn->sizeHint().width());
+	ui.appButtons->setFixedWidth(wid);
+	wid = 0;
+	for (int m = conf.zx->vid->brdmin; m <= VID_BRD_OVERSCAN; m++)
+		wid = qMax(wid, ui.bszlab->fontMetrics().horizontalAdvance(borderText(m)));
+	ui.bszlab->setMinimumWidth(wid);
+}
+
 void SetupWin::apply() {
 	ui.tvHotkeys->commit();
 	x_input_bump();			// the machine changed from outside: frames run ahead go
@@ -1342,6 +1358,7 @@ void SetupWin::apply() {
 
 	fullscreenTip(ui.cbFullscreen);		// the Hotkeys page may have moved it
 	emit s_apply();
+	fitWidths();		// a style just applied pads the buttons its own way
 
 	if (!inBench) {
 		layouts_save();
@@ -2468,6 +2485,7 @@ void SetupWin::cfgExport() {
 void SetupWin::cfgLoaded() {
 	start();
 	emit s_apply();
+	fitWidths();		// the style of the settings just read
 	emit s_prf_changed();
 }
 
@@ -2886,8 +2904,13 @@ void SetupWin::chabsz() {
 	Computer* comp = conf.zx;
 	int mode = ui.bszsld->value();
 	if (mode < comp->vid->brdmin) mode = comp->vid->brdmin;
-	vCoord sze = vid_crop_size(comp->vid, mode);
-	ui.bszlab->setText(QString("%0 (%1×%2)").arg(brd_mode_name(mode)).arg(sze.x).arg(sze.y));
+	ui.bszlab->setText(borderText(mode));
+}
+
+// a border size's name and the frame it gives on this machine
+QString SetupWin::borderText(int mode) {
+	vCoord sz = vid_crop_size(conf.zx->vid, mode);
+	return QString("%0 (%1×%2)").arg(brd_mode_name(mode)).arg(sz.x).arg(sz.y);
 }
 
 // the label beside the overclock slider says what the cpu ends up on - the board's
@@ -3542,10 +3565,11 @@ void SetupWin::buildRecording() {
 		// the command is wrapped to its box only once shown, and may take a line more
 		QTimer::singleShot(0, win, [win]() {win->adjustSize();});
 	});
-	// as wide as the Machine page's buttons: a box of their width, which the
-	// style sheet's min-width on a push button cannot override
+	// as wide as the Machine page's buttons: a box of their width (fitWidths), which
+	// the style sheet's min-width on a push button cannot override
 	QWidget* adbox = new QWidget;
-	adbox->setFixedWidth(ui.machButtons->maximumWidth());
+	btnRecAdv = adb;
+	boxRecAdv = adbox;
 	QVBoxLayout* adlay = new QVBoxLayout(adbox);
 	adlay->setContentsMargins(0, 0, 0, 0);
 	adlay->addWidget(adb);

@@ -190,6 +190,12 @@ class SetupWin : public QDialog {
 		QLabel *labRecSrc, *labRecOut, *labRecFfm, *labRecSize, *labRecFmt;
 		QToolButton* btnRecGet;
 		xElideLabel* labRecName;
+		xSideButton* btnRecAdv;
+		QWidget* boxRecAdv;
+		int machColMin;		// the button columns as the .ui has them, the least they get
+		int appColMin;
+		void fitWidths();
+		QString borderText(int);
 		int recBoxKeep = 0;	// the container picked for a codec that has a choice
 		bool recFilling = false;	// the controls are being set, not changed
 		bool recProbing = false;	// FFmpeg is being asked what it can do

@@ -1,6 +1,7 @@
 #include "opt_hotkeytab.h"
 #include "../../xcore/xcore.h"
 
+#include <QApplication>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -148,6 +149,19 @@ QVariant xHotkeyModel::headerData(int sec, Qt::Orientation ori, int role) const 
 	return ((sec >= 0) && (sec < 3)) ? QString(names[sec]) : QVariant();
 }
 
+// built-in header colors are for a light ground; dark System takes the palette's
+static QColor headingColor(bool ground) {
+	const char* name = ground ? "dbg.header.bg" : "dbg.header.txt";
+	QColor col = conf.pal.value(name);
+	if (!conf.style.empty() || (col != QColor(dbgPaletteDefault(name)))) return col;
+	QPalette pal = QApplication::palette();
+	if (pal.color(QPalette::Window).lightness() >= 128) return col;
+	if (!ground) return pal.color(QPalette::Text);
+	QColor base = pal.color(QPalette::Base);
+	QColor acc = pal.color(QPalette::Highlight);
+	return QColor((acc.red() + 2 * base.red()) / 3, (acc.green() + 2 * base.green()) / 3, (acc.blue() + 2 * base.blue()) / 3);
+}
+
 QVariant xHotkeyModel::data(const QModelIndex& idx, int role) const {
 	QVariant var;
 	if (!idx.isValid()) return var;
@@ -183,12 +197,10 @@ QVariant xHotkeyModel::data(const QModelIndex& idx, int role) const {
 					.arg(base[col - 1].isEmpty() ? QString("none") : shortcutText(base[col - 1]));
 			}
 			break;
-		// a heading in the colors of the debugger's panel titles, which every style sets
+		// a heading: headingColor()
 		case Qt::BackgroundRole:
-			if (t < 0) var = QColor(conf.pal.value("dbg.header.bg"));
-			break;
 		case Qt::ForegroundRole:
-			if (t < 0) var = QColor(conf.pal.value("dbg.header.txt"));
+			if (t < 0) var = headingColor(role == Qt::BackgroundRole);
 			break;
 	}
 	return var;
