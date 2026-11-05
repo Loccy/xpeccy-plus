@@ -147,6 +147,31 @@ static void markMenuHeader(QWidget* wid, int gap = 0) {
 	new xMenuDot(wid, MENU_DOT_TOP + gap);
 }
 
+// The debugger's numbers: hex in the form Options picked, or decimal. The
+// button reads as a byte is written now; every window shown is redrawn.
+void DebugWin::toggleNumFmt() {
+	conf.dbg.numfmt = (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : CPU_NUM_DEC;
+	showNumFmt();
+}
+
+void DebugWin::showNumFmt() {
+	ui_asm.tbNumbers->setText(dbg_byte(0xff));
+	QString key = shortcut_key(XCUT_DBG_NUMBERS);
+	ui_asm.tbNumbers->setToolTip(QString("Hex or decimal addresses and values%0")
+		.arg(key.isEmpty() ? QString() : QString(" (%0)").arg(key)));
+	// the address fields of the dialogs, shown or not
+	foreach(QWidget* wid, QApplication::allWidgets()) {
+		if (xHexSpin* fld = qobject_cast<xHexSpin*>(wid)) fld->numFmt();
+	}
+	if (!isVisible()) return;
+	fillNotCPU();		// not fillCPU: it would take the registers' changed marks away
+	fillDisasm();
+	wid_brk->draw();
+	for (QWidget* wid : QApplication::topLevelWidgets()) {
+		if (wid->isVisible()) wid->update();
+	}
+}
+
 void DebugWin::updateStyle() {
 	QString str;
 #if 0
@@ -786,6 +811,8 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	connect(ui_asm.actSaveMap, SIGNAL(triggered(bool)),this,SLOT(saveMap()));
 	connect(ui_asm.actDisasm, SIGNAL(triggered(bool)),this,SLOT(saveDasm()));
 	connect(ui_asm.tbRefresh, SIGNAL(released()), this, SLOT(reload()));
+	connect(ui_asm.tbNumbers, &QToolButton::clicked, this, &DebugWin::toggleNumFmt);
+	showNumFmt();
 
 	connect(wid_heat, &xHeatWidget::s_adr, ui_asm.dasmTable, &xDisasmTable::setAdrX);
 	connect(wid_heat, &xHeatWidget::s_detach, this, &DebugWin::heatSetDetached);
@@ -804,6 +831,9 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	dui.tbSave->addAction(dui.aSaveToB);
 	dui.tbSave->addAction(dui.aSaveToC);
 	dui.tbSave->addAction(dui.aSaveToD);
+	// the addresses and lengths of both dump dialogs are in the debugger's numbers
+	foreach(xHexSpin* fld, QList<xHexSpin*>() << dui.leStart << dui.leEnd << dui.leLen)
+		fld->setXFlag(XHS_DEC | XHS_ADDR);
 	dui.leStart->setMin(0);
 	dui.leStart->setMax(0xffffff);
 	dui.leEnd->setMin(0);
@@ -825,6 +855,8 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 
 	openDumpDialog = new QDialog(this);
 	oui.setupUi(openDumpDialog);
+	foreach(xHexSpin* fld, QList<xHexSpin*>() << oui.leStart << oui.leEnd << oui.leLen)
+		fld->setXFlag(XHS_DEC | XHS_ADDR);
 	connect(oui.tbFile,SIGNAL(clicked()),this,SLOT(chDumpFile()));
 	connect(oui.leStart,SIGNAL(textChanged(QString)),this,SLOT(dmpStartOpen()));
 	connect(oui.cbSource,SIGNAL(currentIndexChanged(int)),this,SLOT(odmpSourceChanged()));
@@ -1159,6 +1191,9 @@ void DebugWin::keyPressEvent(QKeyEvent* ev) {
 			break;
 		case XCUT_LABLIST:
 			labswin->show();
+			break;
+		case XCUT_DBG_NUMBERS:
+			toggleNumFmt();
 			break;
 		case XCUT_DBG_RELOAD:
 			reload();
@@ -2439,15 +2474,16 @@ void DebugWin::mapAuto() {
 
 // stack
 
-// the offset column: signed hex padded to two digits so the labels are all one width
+// the offset column: signed, in the debugger's base without a sign, two digits
+// so the labels are all one width
 static QString stack_offset_label(int ofs) {
 	return QString("%0%1:").arg(QLatin1Char(ofs < 0 ? '-' : '+'))
-		.arg(qAbs(ofs), 2, 16, QLatin1Char('0')).toUpper();
+		.arg(qAbs(ofs), 2, (conf.dbg.numfmt == CPU_NUM_DEC) ? 10 : 16, QLatin1Char('0')).toUpper();
 }
 
 // the +0 row names itself by its own address rather than a zero offset
 static QString stack_anchor_label(int sp) {
-	return QString("%0:").arg(gethexword(sp));
+	return QString("%0:").arg(dbg_adr(sp));
 }
 
 void DebugWin::fillStack() {
@@ -2464,8 +2500,8 @@ void DebugWin::fillStack() {
 	for (int i = 0; i < cnt; i++) {
 		row.anchor = !ofs;
 		row.name = ofs ? stack_offset_label(ofs) : stack_anchor_label(sp);
-		row.value = gethexbyte(rdbyte(adr + ofs + 1, comp));
-		row.value.append(gethexbyte(rdbyte(adr + ofs, comp)));
+		// mostly return addresses: written as the addresses are
+		row.value = dbg_adr(rdbyte(adr + ofs, comp) | (rdbyte(adr + ofs + 1, comp) << 8));
 		rows << row;
 		ofs += 2;
 	}
@@ -2867,7 +2903,7 @@ void DebugWin::dmpFileName(QString* name, int* start) {
 	int area = getRFIData(dui.cbSource);
 	int ofs = dui.leStart->getValue();
 	if (area == CELL_NONE) {
-		*name = dui.leStart->text();
+		*name = QString::number(ofs, 16).toUpper().rightJustified(4, '0');	// hex, whatever the field shows
 		*start = ofs;
 		return;
 	}

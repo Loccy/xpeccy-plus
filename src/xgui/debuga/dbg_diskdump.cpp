@@ -50,10 +50,10 @@ void xDiskDump::layoutColumns() {
 	int tw;
 // horizontalAdvance() since 5.11, before - width()
 #if (QT_VERSION >= QT_VERSION_CHECK(5,11,0))
-	w0 = fm.horizontalAdvance("00:0000") + 12;	// see the DisplayRole format
+	w0 = fm.horizontalAdvance("00:00000") + 12;	// see the DisplayRole format: 02:#0040
 	tw = fm.horizontalAdvance("0");
 #else
-	w0 = fm.width("00:0000") + 12;
+	w0 = fm.width("00:00000") + 12;
 	tw = fm.width("0");
 #endif
 	// the form asks for a wide minimum section, which would override the cell
@@ -210,7 +210,9 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 			break;
 		case Qt::DisplayRole:
 			if (col == 0) {
-				snprintf(buf, sizeof(buf), "%.2X:%.4X", trk, adr);
+				// the track stays hex, as a page does; the place follows the debugger's numbers
+				snprintf(buf, sizeof(buf), "%.2X:", trk);
+				strcat(buf, dbg_adr(adr).toLatin1().constData());
 			} else if (col == DUMP_TEXTCOL) {
 				pos = 0;
 				while (pos < rowBytes) {

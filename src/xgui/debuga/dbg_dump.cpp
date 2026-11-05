@@ -207,7 +207,7 @@ QVariant xDumpModel::data(const QModelIndex& idx, int role) const {
 			if (col == 0) {
 				if (mode != XVIEW_CPU)
 					adr = dump_page_ofs(conf.zx, dump_view_area(mode), adr);
-				res = QString::number(adr, 16).toUpper();
+				res = dbg_adr(adr);
 			} else if (col == 17) {
 				// no edit
 			} else {
@@ -221,7 +221,7 @@ QVariant xDumpModel::data(const QModelIndex& idx, int role) const {
 					adr += pgbase;
 					str = gethexbyte(page).append(":");
 				}
-				str.append(gethexword(adr));
+				str.append(dbg_adr(adr));
 				res = str;
 			} else if (col == 17) {
 				for(int i = 0; i < dmpsize; i++)
@@ -720,7 +720,7 @@ void xDumpWidget::draw() {	ui.dumpTable->update();
 }
 
 void xDumpWidget::adr_changed(int adr) {
-	titleWidget->setText(QString("DUMP | %0").arg(QString::number(adr, 16).right(6).toUpper().rightJustified(6,'0')));
+	titleWidget->setText(QString("DUMP | %0").arg(dbg_abs(adr & 0xffffff)));
 //	setWindowTitle(QString::number(adr, 16).right(6).toUpper().rightJustified(6,'0'));
 }
 

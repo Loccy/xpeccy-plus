@@ -108,6 +108,90 @@ QString gethexbyte(int num) {
 	return res.rightJustified(2, '0');
 }
 
+// The debugger's numbers. An address keeps five characters in every form
+// (#8000, $8000, 8000h, 32768), so a column holds either; a value is not
+// padded in decimal, as an assembler writes it.
+
+static QString num_text(int val, int hexDigits, int decDigits, int fmt) {
+	if (fmt == CPU_NUM_DEC)
+		return QString::number(val).rightJustified(decDigits, '0');
+	QString res = formbufword(val).rightJustified(hexDigits, '0');
+	switch (fmt) {
+		case CPU_NUM_DOLLAR: return res.prepend('$');
+		case CPU_NUM_H: return res.append('h');
+	}
+	return res.prepend('#');
+}
+
+QString dbg_num(int val, int hexDigits, int decDigits) {
+	return num_text(val, hexDigits, decDigits, conf.dbg.numfmt);
+}
+
+QString dbg_hex(int val, int digits) {
+	return num_text(val, digits, 0, (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : conf.dbg.numfmt);
+}
+
+QString dbg_adr(int adr) {
+	return dbg_num(adr & 0xffff, 4, 5);
+}
+
+QString dbg_word(int val) {
+	return dbg_num(val & 0xffff, 4);
+}
+
+QString dbg_byte(int val) {
+	return dbg_num(val & 0xff, 2);
+}
+
+QString dbg_abs(int adr) {
+	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr(adr);
+}
+
+// One rule for a number typed into the debugger: a hex sign - #, $ or 0x in
+// front, h behind - makes it hex, none decimal; a leading zero is not octal
+int dbg_num_parse(QString str, bool* ok) {
+	str = str.trimmed();
+	bool hex = true;
+	if (str.startsWith('#') || str.startsWith('$')) {
+		str.remove(0, 1);
+	} else if (str.startsWith("0x", Qt::CaseInsensitive)) {
+		str.remove(0, 2);
+	} else if ((str.size() > 1) && str.endsWith('h', Qt::CaseInsensitive)) {
+		str.chop(1);
+	} else {
+		hex = false;
+	}
+	bool good = !str.isEmpty();
+	for (QChar chr : str) {
+		int c = chr.toLower().unicode();
+		if (!(((c >= '0') && (c <= '9')) || (hex && (c >= 'a') && (c <= 'f')))) good = false;
+	}
+	int val = good ? str.toInt(&good, hex ? 16 : 10) : 0;
+	if (ok) *ok = good;
+	return good ? val : 0;
+}
+
+// what a typed text is once its hex sign is taken off: "#START" -> "START"
+QString dbg_num_unsign(QString str) {
+	str = str.trimmed();
+	if (str.startsWith('#') || str.startsWith('$')) return str.mid(1);
+	if (str.startsWith("0x", Qt::CaseInsensitive)) return str.mid(2);
+	return str;
+}
+
+static const char* numFmtNames[] = {"hash", "dollar", "suffix", "decimal"};
+
+const char* dbg_numfmt_name(int fmt) {
+	return ((fmt >= CPU_NUM_HASH) && (fmt <= CPU_NUM_DEC)) ? numFmtNames[fmt] : numFmtNames[0];
+}
+
+int dbg_numfmt_parse(const std::string& name) {
+	for (int i = CPU_NUM_HASH; i <= CPU_NUM_DEC; i++) {
+		if (name == numFmtNames[i]) return i;
+	}
+	return -1;
+}
+
 // A watched port written with four digits is the address on the bus as it is;
 // two digits mean a byte port, compared by its low byte alone. It is the number
 // of digits that says which, so the width travels in the mask and the two

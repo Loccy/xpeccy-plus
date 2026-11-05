@@ -26,7 +26,7 @@ int xStackView::rowsFit() const {
 // is always wider than an offset label like "+00:", so it sets the width
 QSize xStackView::minimumSizeHint() const {
 	QFontMetrics fm = fontMetrics();
-	return QSize(fm.horizontalAdvance("0000:") + STACK_GAP + fm.horizontalAdvance("0000") + 2 * STACK_PAD,
+	return QSize(fm.horizontalAdvance("00000:") + STACK_GAP + fm.horizontalAdvance("00000") + 2 * STACK_PAD,
 		fm.height() + 2 * STACK_PAD);
 }
 

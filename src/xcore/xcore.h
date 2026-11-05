@@ -186,6 +186,18 @@ bool parsePort(const QString&, int*, int*);
 QString gethex6(int);
 QString gethexint(int);
 
+// numbers as the debugger shows them, in conf.dbg.numfmt (CPU_NUM_*)
+QString dbg_num(int val, int hexDigits, int decDigits = 0);	// decDigits 0: not padded
+QString dbg_adr(int);		// a 16-bit address: five characters in every form
+QString dbg_word(int);
+QString dbg_byte(int);
+QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
+QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
+int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal
+QString dbg_num_unsign(QString);	// the text with a leading hex sign taken off
+const char* dbg_numfmt_name(int);	// the form as it is written in the config file
+int dbg_numfmt_parse(const std::string&);	// -1 for nothing known
+
 // text in the zx spectrum's own character set, for showing only
 QString zx_text(const unsigned char*, int);
 
@@ -346,7 +358,8 @@ int brk_mem_type(int type);		// the memory a cell breakpoint type watches, MEM_*
 // a cell as page:offset - the page in hex when it is of the memory the type names,
 // else its area's token (ROM0, DIV3...), as comp_cell() has the machine's pages
 QString cell_page_text(int memType, int abs, int* ofs);
-QString cell_text(int memType, int abs, bool withType);	// "11:0123", withType "RAM:11:0123"
+QString cell_text(int memType, int abs, bool withType);
+QString cell_view_text(int memType, int abs, bool withType = false);	// "11:#0123", the offset in the debugger's numbers	// "11:0123", withType "RAM:11:0123"
 bool cell_from_text(int memType, QString page, int ofs, int* abs, bool wrap = false);	// a page so written and an offset
 int brk_save_list(const char*);
 
@@ -556,6 +569,7 @@ enum {
 	XCUT_LABLIST,
 	XCUT_DBG_RELOAD,
 	XCUT_DBG_CLOSE,
+	XCUT_DBG_NUMBERS,
 
 	XCUT_TOPC,
 	XCUT_SETPC,
@@ -1111,6 +1125,8 @@ struct xConfig {
 		unsigned nxdetach:1;	// ZX Next panel: shown in a window of its own
 		unsigned imglabels:1;	// an image's .labels comes with it
 		QFont font;
+		int numfmt;		// how addresses and the listing's values are written, CPU_NUM_*
+		int hexfmt;		// the hex form the decimal switch goes back to
 		int dbsize;
 		int dwsize;
 		int dmsize;

@@ -42,7 +42,7 @@ void xRDumpTable::resizeEvent(QResizeEvent* e) {
 	// the name column carries "BC' (0000):", and the default section size above
 	// is far too narrow for that
 #if (QT_VERSION >= QT_VERSION_CHECK(5,11,0))
-	int w0 = fm.horizontalAdvance("BC' (0000):") + 12;
+	int w0 = fm.horizontalAdvance("BC' (00000):") + 12;	// five for the address in any form
 #else
 	int w0 = fm.width("BC' (0000):") + 12;
 #endif
@@ -108,7 +108,7 @@ QVariant xRDumpModel::data(const QModelIndex& idx, int role) const {
 				// the colon keeps the name from running into the bytes
 				res = QString("%0 (%1):")
 					.arg(QString(regs.at(row).name).leftJustified(nameWidth))
-					.arg(gethexword(regs.at(row).value & 0xffff));
+					.arg(dbg_adr(regs.at(row).value));
 			} else {
 				adr = regs.at(row).value + col - 1;
 				res = gethexbyte(comp_peek(conf.zx, adr, MEM_VIEW_READ, NULL));

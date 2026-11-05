@@ -33,9 +33,9 @@ QString brkGetString(xBrkPoint brk) {
 	QString res;
 	switch(brk.type) {
 		case BRK_CPUADR:
-			res = QString("CPU:%0").arg(gethexword(brk.adr));
+			res = QString("CPU:%0").arg(dbg_adr(brk.adr));
 			if (brk.eadr > brk.adr) {
-				res.append(QString("-%0").arg(gethexword(brk.eadr)));
+				res.append(QString("-%0").arg(dbg_adr(brk.eadr)));
 			}
 			break;
 		case BRK_IOPORT:
@@ -50,15 +50,15 @@ QString brkGetString(xBrkPoint brk) {
 				: (brk.type == BRK_MEMDIV) ? "DIV" : "SLT";
 			int mt = brk_mem_type(brk.type);
 			if (brk.eadr > brk.adr) {
-				res = QString("%0:%1-%2 [%3-%4]").arg(nm).arg(gethex6(brk.adr)).arg(gethex6(brk.eadr))
-					.arg(cell_text(mt, brk.adr, false)).arg(cell_text(mt, brk.eadr, false));
+				res = QString("%0:%1-%2 [%3-%4]").arg(nm).arg(dbg_num(brk.adr, 6)).arg(dbg_num(brk.eadr, 6))
+					.arg(cell_view_text(mt, brk.adr)).arg(cell_view_text(mt, brk.eadr));
 			} else {
-				res = QString("%0:%1 [%2]").arg(nm).arg(gethex6(brk.adr)).arg(cell_text(mt, brk.adr, false));
+				res = QString("%0:%1 [%2]").arg(nm).arg(dbg_num(brk.adr, 6)).arg(cell_view_text(mt, brk.adr));
 			}
 			break;
 		}
 		case BRK_MEMEXT:
-			res = QString("EXT:%0 [%1:%2]").arg(gethex6(brk.adr)).arg(gethexbyte(brk.adr >> 14)).arg(gethexword(brk.adr & 0x3fff));
+			res = QString("EXT:%0 [%1:%2]").arg(dbg_num(brk.adr, 6)).arg(gethexbyte(brk.adr >> 14)).arg(dbg_adr(brk.adr & 0x3fff));
 			break;
 		case BRK_IRQ:
 			res = QString("IRQ");
@@ -320,6 +320,8 @@ xBrkManager::xBrkManager(QWidget* p):QDialog(p) {
 
 	label_complete(ui.leStart);
 	label_complete(ui.leEnd);
+	dbg_num_field(ui.leStart);
+	dbg_num_field(ui.leEnd);
 	label_complete(ui.leCond);
 	label_complete(ui.leLogExp);
 	connect(ui.leStart, &QLineEdit::textEdited, this, &xBrkManager::chaStart);
@@ -361,6 +363,29 @@ static int brk_base_area(int type) {
 	}
 }
 
+static bool is_dec_only(const QString& str) {
+	if (str.isEmpty()) return false;
+	for (QChar chr : str)
+		if (!chr.isDigit()) return false;
+	return true;
+}
+
+// An address typed in the editor: a label, a number by the debugger's one rule
+// (dbg_num_parse), or a label behind the sign the typing kept. The list files
+// keep their own rule, brk_list_adr. lab gets the label's cell, type -1 for a number
+static bool brk_field_adr(const QString& txt, int* adr, xAdr* lab) {
+	bool ok = false;
+	*lab = find_label(txt);
+	if (lab->type < 0) {
+		*adr = dbg_num_parse(txt, &ok);
+		if (ok) return true;
+		*lab = find_label(dbg_num_unsign(txt));
+	}
+	if (lab->type < 0) return false;
+	*adr = lab->adr;
+	return true;
+}
+
 // One address field as the type reads it. A cpu address or a port is a number
 // or a label. A cell is an offset in the page of the page field, page:offset (the
 // page in hex, or an area's token: ROM0, DIV3), a label, or a cpu address - which
@@ -375,14 +400,19 @@ bool xBrkManager::readAdr(QString txt, int* adr, int* cell) {
 	if (txt.isEmpty()) return false;
 	int colon = txt.indexOf(':');
 	if (colon > 0) {
+		// the page is hex, as it is shown; the offset by the one rule - and a
+		// sign in front of the page, the one the typing keeps, counts for it
 		bool oko;
-		int off = txt.mid(colon + 1).toInt(&oko, 16);
+		QString page = txt.left(colon);
+		QString ofs = txt.mid(colon + 1).trimmed();
+		if ((page.startsWith('#') || page.startsWith('$')) && is_dec_only(ofs)) ofs.prepend('#');
+		int off = dbg_num_parse(ofs, &oko);
 		if (!brk_is_cell(type) || !oko) return false;
-		if (!cell_from_text(brk_mem_type(type), txt.left(colon), off, cell)) return false;
+		if (!cell_from_text(brk_mem_type(type), dbg_num_unsign(page), off, cell)) return false;
 		*adr = off;
 		return true;
 	}
-	if (!brk_list_adr(txt, &val, brk_is_cell(type) ? &lab : NULL)) return false;
+	if (!brk_field_adr(txt, &val, &lab)) return false;
 	if (!brk_is_cell(type)) {
 		*adr = val;
 		return (val >= 0) && (val <= 0xffff);
@@ -508,17 +538,17 @@ void xBrkManager::chaAdr() {
 		res = err;
 	} else {
 		if (brk.type == BRK_CPUADR) {
-			res = gethexword(brk.adr);
-			if (brk.eadr > brk.adr) res.append("-").append(gethexword(brk.eadr));
+			res = dbg_adr(brk.adr);
+			if (brk.eadr > brk.adr) res.append("-").append(dbg_adr(brk.eadr));
 		} else {
 			int ofs;
-			res = QString("%0 %1").arg(brk_cell_name(brk.type)).arg(cell_text(brk_mem_type(brk.type), brk.adr, false));
+			res = QString("%0 %1").arg(brk_cell_name(brk.type)).arg(cell_view_text(brk_mem_type(brk.type), brk.adr));
 			if (brk.eadr > brk.adr) {
 				cell_page_text(brk_mem_type(brk.type), brk.eadr, &ofs);
-				res.append("-").append(gethexword(ofs));
+				res.append("-").append(dbg_adr(ofs));
 			}
 			int cpu = comp_find_xadr(conf.zx, brk_mem_type(brk.type), brk.adr, MEM_VIEW_READ);
-			res.append((cpu < 0) ? QString(", not mapped now") : QString(", at %0 now").arg(gethexword(cpu)));
+			res.append((cpu < 0) ? QString(", not mapped now") : QString(", at %0 now").arg(dbg_adr(cpu)));
 		}
 		QString lab = brk_label(brk.type, brk.adr);
 		if (!lab.isEmpty()) res.append(QString(", %0").arg(lab));
@@ -566,6 +596,8 @@ void xBrkManager::chaType(int i) {
 	setLimits(t);
 	chaCond(ui.leCond->text());		// the note about HITS depends on the type
 	bool port = (t == BRK_IOPORT);
+	ui.leStart->setProperty(DBG_NUM_OFF, port);		// a port stays hex, as it always was
+	ui.leEnd->setProperty(DBG_NUM_OFF, port);
 	ui.labStart->setText(port ? "Port" : "Address");
 	ui.labTo->setText(port ? "mask" : "to");
 	ui.leStart->setToolTip(port ? "The port number" : brk_is_cell(t) ? "Offset, CPU address, page:offset or label" : "An address or a label");
@@ -629,10 +661,10 @@ void xBrkManager::condHelp() {
 static QString brk_adr_text(int type, int abs) {
 	QString lab = brk_label(type, abs);
 	if (!lab.isEmpty()) return lab;
-	if (!brk_is_cell(type)) return gethexword(abs & 0xffff);
+	if (!brk_is_cell(type)) return dbg_adr(abs);
 	// an offset in the page field's page, or page:offset for any other area
 	xCell c = comp_cell(conf.zx, brk_mem_type(type), abs);
-	return (c.area == brk_base_area(type)) ? gethexword(c.ofs) : cell_text(brk_mem_type(type), abs, false);
+	return (c.area == brk_base_area(type)) ? dbg_adr(c.ofs) : cell_view_text(brk_mem_type(type), abs);
 }
 
 void xBrkManager::edit(xBrkPoint* sbrk) {

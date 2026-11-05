@@ -525,6 +525,7 @@ static xShortcut short_tab[] = {
 	{SCG_DEBUGA, XCUT_LABLIST, "key.dbg.lablist", "Debugger: Show labels list", {}},
 	{SCG_DEBUGA, XCUT_DBG_RELOAD, "key.dbg.reload", "Debugger: Reload file", {}},
 	{SCG_DEBUGA, XCUT_DBG_CLOSE, "key.dbg.close", "Debugger: Close", {}},
+	{SCG_DEBUGA, XCUT_DBG_NUMBERS, "key.dbg.numbers", "Debugger: Decimal numbers", {}},
 
 	{SCG_DISASM, XCUT_TOPC, "key.disasm.topc", "Disasm: Jump to PC", {}},
 	{SCG_DISASM, XCUT_SETPC, "key.disasm.setpc", "Disasm: Set PC", {}},
@@ -651,6 +652,7 @@ static const xCutDef cutClassic[] = {
 	{XCUT_SAVE_DUMP, {QKeySequence(Qt::CTRL | Qt::Key_S)}},
 	{XCUT_FINDER, {QKeySequence(Qt::CTRL | Qt::Key_F)}},
 	{XCUT_LABELS, {QKeySequence(Qt::CTRL | Qt::Key_L)}},
+	{XCUT_DBG_NUMBERS, {QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H)}},	// Ctrl+H is the DUMP's (HL)
 
 	{XCUT_TOPC, {QKeySequence(Qt::Key_Home)}},
 	{XCUT_SETPC, {QKeySequence(Qt::Key_End)}},
@@ -733,6 +735,7 @@ static const xCutDef cutModern[] = {
 	{XCUT_SAVE_DUMP, {QKeySequence(HK_APP | Qt::SHIFT | Qt::Key_S)}},
 	{XCUT_FINDER, {QKeySequence(HK_APP | Qt::Key_F)}},
 	{XCUT_LABELS, {QKeySequence(HK_APP | Qt::Key_L)}},
+	{XCUT_DBG_NUMBERS, {QKeySequence(HK_APP | Qt::SHIFT | Qt::Key_H)}},
 
 	{XCUT_TOPC, {QKeySequence(Qt::Key_Home)}},
 	{XCUT_SETPC, {QKeySequence(Qt::Key_End)}},

@@ -792,6 +792,10 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	portwid = new xPortWatch;		// the same editor the debugger opens itself
 	ui.layDbgPorts->addWidget(portwid);
 	connect(ui.tbDbgFont,SIGNAL(released()),this,SLOT(selectDbgFont()));
+	ui.cbDbgNumbers->addItem("#FFFF", CPU_NUM_HASH);
+	ui.cbDbgNumbers->addItem("$FFFF", CPU_NUM_DOLLAR);
+	ui.cbDbgNumbers->addItem("FFFFh", CPU_NUM_H);
+	ui.cbDbgNumbers->addItem("65535", CPU_NUM_DEC);
 	// the arrows step by 2, a typed-in odd value snaps once the field is left
 	connect(ui.sbDbgStackOfs, &QAbstractSpinBox::editingFinished, this, [this](){
 		ui.sbDbgStackOfs->setValue(ui.sbDbgStackOfs->value() & ~1);
@@ -1265,6 +1269,7 @@ void SetupWin::fillPages() {
 	ui.sbDwSize->setValue(conf.dbg.dwsize);
 	ui.sbTextSize->setValue(conf.dbg.dmsize);
 	ui.sbDbgStackOfs->setValue(conf.dbg.stackofs);
+	ui.cbDbgNumbers->setCurrentIndex(ui.cbDbgNumbers->findData(conf.dbg.numfmt));
 	ui.cbDbgMemmap->setChecked(conf.dbg.showmmap);
 	ui.cbDbgPorts->setChecked(conf.dbg.showports);
 	ui.cbDbgSignals->setChecked(conf.dbg.showsig);
@@ -1673,6 +1678,9 @@ void SetupWin::applyGlobal() {
 	conf.dbg.dmsize = ui.sbTextSize->value();
 	// the step is 2, but a typed-in value can still land odd
 	conf.dbg.stackofs = ui.sbDbgStackOfs->value() & ~1;
+	conf.dbg.numfmt = ui.cbDbgNumbers->currentData().toInt();
+	if (conf.dbg.numfmt != CPU_NUM_DEC)
+		conf.dbg.hexfmt = conf.dbg.numfmt;
 	conf.dbg.font = dbgfnt;
 	conf.dbg.showports = ui.cbDbgPorts->isChecked() ? 1 : 0;
 	conf.dbg.showsig = ui.cbDbgSignals->isChecked() ? 1 : 0;

@@ -278,7 +278,7 @@ QVariant xWatchModel::data(const QModelIndex& idx, int role) const {
 				if (xr.err) {
 					res = "????";
 				} else {
-					res = (itm.type == WUT_CPU) ? gethexword(xr.value) : gethexint(xr.value);
+					res = (itm.type == WUT_CPU) ? dbg_adr(xr.value) : dbg_abs(xr.value);
 				}
 			}
 	}

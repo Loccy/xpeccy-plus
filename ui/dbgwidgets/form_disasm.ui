@@ -144,6 +144,13 @@
       </spacer>
      </item>
      <item>
+      <widget class="QToolButton" name="tbNumbers">
+       <property name="text">
+        <string>#FF</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QToolButton" name="tbRefresh">
        <property name="toolTip">
         <string>Reload snapshot &amp; labels</string>

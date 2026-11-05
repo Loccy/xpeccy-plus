@@ -126,6 +126,7 @@ class xDasmSyntax : public QStyledItemDelegate {
 	public:
 		xDasmSyntax(QObject* = NULL);
 		QWidget* createEditor(QWidget*, const QStyleOptionViewItem&, const QModelIndex&) const;
+		bool helpEvent(QHelpEvent*, QAbstractItemView*, const QStyleOptionViewItem&, const QModelIndex&) override;
 	protected:
 		void paint(QPainter*, const QStyleOptionViewItem&, const QModelIndex&) const;
 };

@@ -715,7 +715,7 @@ static int nx_dasm_read(int adr, int access, void* ptr) {
 	return value;
 }
 
-static xMnem nx_disasm(Computer* comp, int adr, char* buf, unsigned char* bytes, int size) {
+static xMnem nx_disasm(Computer* comp, int adr, char* buf, unsigned char* bytes, int size, int fmt) {
 	nxMemViewState state = nx_view_save(comp);
 	nxDasmView view;
 	view.comp = comp;
@@ -723,7 +723,7 @@ static xMnem nx_disasm(Computer* comp, int adr, char* buf, unsigned char* bytes,
 	view.bytes = view.local;
 	view.count = 0;
 	view.capacity = sizeof(view.local);
-	xMnem mn = cpuDisasmView(comp->cpu, adr, buf, nx_dasm_read, &view);
+	xMnem mn = cpuDisasmViewFmt(comp->cpu, adr, buf, nx_dasm_read, &view, fmt);
 	if (bytes) {
 		for (int i = 0; (i < size) && (i < mn.len); i++) bytes[i] = nx_dasm_read(adr + i, CPU_DASM_CODE, &view);
 	}

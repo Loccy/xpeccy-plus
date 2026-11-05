@@ -570,6 +570,14 @@ QString cell_text(int memType, int abs, bool withType) {
 	return res;
 }
 
+QString cell_view_text(int memType, int abs, bool withType) {
+	int ofs;
+	QString page = cell_page_text(memType, abs, &ofs);
+	QString res = QString("%0:%1").arg(page).arg(dbg_adr(ofs));
+	if (withType && page.at(0).isDigit()) res.prepend(QString("%0:").arg(cell_type_name(memType)));
+	return res;
+}
+
 bool cell_from_text(int memType, QString page, int ofs, int* abs, bool wrap) {
 	int area;
 	int pg;

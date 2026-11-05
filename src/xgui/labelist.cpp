@@ -67,15 +67,15 @@ QVariant xLabelistModel::data(const QModelIndex& idx, int role) const {
 				zadr = comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
 				if (zadr < 0) {
 					if ((conf.zx->hw->id == HW_ZXNEXT) && (xadr.type == MEM_RAM) && (xadr.abs >= 0x40000))
-						adrstr = QString("%0:%1").arg(gethexbyte((xadr.abs - 0x40000) >> 13), gethexword(xadr.abs & 0x1fff));
+						adrstr = QString("%0:%1").arg(gethexbyte((xadr.abs - 0x40000) >> 13), dbg_adr(xadr.abs & 0x1fff));
 					else
-						adrstr = QString("%0:%1").arg(gethexbyte(xadr.abs >> 14), gethexword(xadr.abs & 0x3fff));
+						adrstr = QString("%0:%1").arg(gethexbyte(xadr.abs >> 14), dbg_adr(xadr.abs & 0x3fff));
 					pref = true;
 				} else {
-					adrstr = QString("CPU:%0").arg(gethexword(zadr));
+					adrstr = QString("CPU:%0").arg(dbg_adr(zadr));
 				}
 			} else {
-				adrstr = gethexint(xadr.abs);
+				adrstr = dbg_abs(xadr.abs);
 				pref = true;
 			}
 			if (pref) {
@@ -85,7 +85,7 @@ QVariant xLabelistModel::data(const QModelIndex& idx, int role) const {
 					case MEM_SLOT: adrstr.prepend("SLT:"); break;
 					case MEM_DIV: adrstr.prepend("DIV:"); break;
 					case MEM_EXT: adrstr.prepend("EXT:"); break;
-					case MEM_IO: adrstr = QString("CPU:%0").arg(gethexword(xadr.adr));
+					case MEM_IO: adrstr = QString("CPU:%0").arg(dbg_adr(xadr.adr));
 				}
 			}
 			str.prepend(" | ").prepend(adrstr);

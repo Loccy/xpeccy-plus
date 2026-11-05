@@ -56,7 +56,7 @@ typedef sndPair(*cbHwVol)(Computer*, sndVolume*);
 // side-effect-free memory for the debugger: value is output on reads and input
 // on writes; NULL asks only which physical cell the access reaches
 typedef void(*cbHwMemView)(Computer*, int, int, int*, xAdr*);
-typedef xMnem(*cbHwDisasm)(Computer*, int, char*, unsigned char*, int);
+typedef xMnem(*cbHwDisasm)(Computer*, int, char*, unsigned char*, int, int fmt);
 
 // a port the machine keeps by itself: where in Computer, or a function when
 // it is not a field there (offset 0 then)
