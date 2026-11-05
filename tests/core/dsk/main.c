@@ -412,6 +412,50 @@ static void weak_made(void) {
 	printf("  second halves all differ: %s\n", differ ? "yes" : "no");
 }
 
+// Format Track of sc sectors R 1.. on a track; how many IDs the FDC asked for,
+// its result, and what the track then holds: Read ID, and a read of the last
+// sector that fits and of the one after
+static void format(const char* name, int cyl, int n, int sc, int fill, int fits) {
+	unsigned char b[6] = {0x4d, 0x00, n, sc, 0x2a, fill};
+	unsigned char res[16];
+	seek(cyl);
+	printf("== format/%s\n", name);
+	send(b, 6);
+	int ids = 0, k = 0;
+	for (long t = 0; t < 4000000000L; t += 10000) {
+		int m = msr();
+		if (!(m & 0x20)) break;
+		if ((m & 0xc0) == 0x80) {
+			unsigned char id[4] = {cyl, 0, ids + 1, n};
+			difOut(dif, 0x3ffd, id[k], 0);
+			if (++k == 4) {
+				k = 0;
+				ids++;
+			}
+		}
+		run(10000);
+	}
+	int nr = result(res);
+	printf("  IDs taken %d of %d, result", ids, sc);
+	for (int i = 0; i < nr && i < 3; i++) printf(" %.2X", res[i]);
+	printf("\n");
+	unsigned char ri[2] = {0x4a, 0x00};
+	send(ri, 2);
+	nr = result(res);
+	printf("  Read ID: %.2X %.2X %.2X - %.2X %.2X %.2X %.2X", res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
+	putchar(10);
+	for (int r = fits; r <= fits + 1; r++) {
+		int len = 128 << n;
+		unsigned char c[9] = {0x46, 0x00, cyl, 0, r, n, r, 0x2a, n ? 0xff : 0x80};
+		send(c, 9);
+		int got = take(data, len, 10000);
+		nr = result(res);
+		int same = 0;
+		while ((same < got) && (data[same] == fill)) same++;
+		printf("  R%d: result %.2X %.2X %.2X, %d bytes, %d of them %.2X\n", r, res[0], res[1], res[2], got, same, fill);
+	}
+}
+
 // A +3 game's own loader reads in real time; the machine then turns into a Beta
 // disk one with fast access on: its WD1793 seeks fast, not as the +3 left it
 static void beta_after_p3(void) {
@@ -438,7 +482,13 @@ static void beta_after_p3(void) {
 	}
 	printf("  seek to 40: %ld ms, fast: %s\n", ns / 1000000, (ns < 50000000L) ? "yes" : "no");
 	fdcFlag = 0;
-	difSetHW(dif, DIF_P3DOS);
+	difSetHW(dif, DIF_P3DOS);	// back to the +3, reset as a machine switch resets it
+	difReset(dif);
+	unsigned char spec[] = {0x03, 0xaf, 0x03};
+	unsigned char cal[] = {0x07, 0x00};
+	send(spec, 3);
+	send(cal, 2);
+	run(200000000);
 }
 
 static void start(const char* path, const char* path_b) {
@@ -499,6 +549,8 @@ static int cases(const char* tmp) {
 	cmd("turbo-overrun", 0x46, 0, 0, 0, 1, 2, 9, 0xff, 100);
 	fdcFlag = 0;
 	beta_after_p3();
+	format("sc11", 3, 2, 11, 0x5a, 10);
+	format("sc255", 3, 0, 255, 0xa5, 29);
 	difDestroy(dif);
 	roundtrip(tmp, "bench");
 	remove(tmp);
