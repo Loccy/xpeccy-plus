@@ -2886,8 +2886,16 @@ void SetupWin::chabsz() {
 	Computer* comp = conf.zx;
 	int mode = ui.bszsld->value();
 	if (mode < comp->vid->brdmin) mode = comp->vid->brdmin;
-	vCoord sze = vid_crop_size(comp->vid, mode);
-	ui.bszlab->setText(QString("%0 (%1×%2)").arg(brd_mode_name(mode)).arg(sze.x).arg(sze.y));
+	auto text = [comp](int m) {
+		vCoord sz = vid_crop_size(comp->vid, m);
+		return QString("%0 (%1×%2)").arg(brd_mode_name(m)).arg(sz.x).arg(sz.y);
+	};
+	// as wide as the widest it can say in this font, so the row does not jump while dragging
+	int wid = 0;
+	for (int m = comp->vid->brdmin; m <= VID_BRD_OVERSCAN; m++)
+		wid = std::max(wid, ui.bszlab->fontMetrics().horizontalAdvance(text(m)));
+	ui.bszlab->setMinimumWidth(wid);
+	ui.bszlab->setText(text(mode));
 }
 
 // the label beside the overclock slider says what the cpu ends up on - the board's
