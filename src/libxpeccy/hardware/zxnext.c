@@ -1847,6 +1847,8 @@ static void nx_nr_land(Computer* comp, int reg, int val, int late, long long w, 
 
 // The copper's edges up to t. A MOVE goes out on its edge and is latched two edges
 // later; on every edge the copper sees the nextreg writes latched before it.
+int nx_cop_hold = 0;
+
 void nx_cop_run(Computer* comp, long long t) {
 	if (NX.copT >= t) return;
 	int mode = NX.nr[0x62] >> 6;
@@ -1938,8 +1940,15 @@ void nx_cop_run(Computer* comp, long long t) {
 			nx_nr_land(comp, reg, val, 0, e, 1);
 			cDot = -1;
 		}
+		if (nx_cop_hold) {
+			// the picture's queues are full: it is drawn up to here before the copper
+			// runs on (nxv_fetch_to)
+			nx_cop_hold = 0;
+			return;
+		}
 	}
 	NX.copT = t;
+	nx_cop_hold = 0;
 }
 
 // the nextreg write path for the cpu: NEXTREG, port 253B

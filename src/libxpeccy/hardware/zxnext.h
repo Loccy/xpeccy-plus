@@ -47,6 +47,9 @@ static inline long long nx_fdiv(long long a, long long b) {
 }
 
 void nx_cop_run(Computer*, long long);
+// set by a copper write landing that fills the picture's queues (nxv_room): nx_cop_run
+// stops at that edge, its copT there
+extern int nx_cop_hold;
 // the copper runs (or has a write still to make)
 static inline int nx_cop_on(Computer* comp) {
 	return (NX.nr[0x62] & 0xc0) || NX.copLast || NX.copN;

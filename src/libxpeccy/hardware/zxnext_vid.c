@@ -25,9 +25,6 @@
 #define V (NX.v)
 #define NXV_SHADOW	0x200000	// a memory key past the 2 MB: NX.shadow[]
 #define NXV_LAG		4		// dots the mixer keeps behind the fetch
-// dots the copper is run ahead of the drawing (nxv_flush): at two MOVEs a dot, what it
-// writes of one sampled register over them and the 20 dots read back fits NXV_HIST
-#define NXV_COPRUN	32
 #define NXV_RAM		0x040000	// SRAM of RAM page 0
 
 // an SZX keeps nxVideo as one field, its length in 16 bits
@@ -340,8 +337,9 @@ static long long nxv_fall(Computer* comp, long long w) {
 // == room for a line of changes ==
 // The mixer draws a line behind the ray, so the changes of a whole line wait in the
 // queue and the histories. Before one more could overflow them, the picture is drawn up
-// to the ray, as when it was drawn a few dots behind it - not from inside the drawing
-// (the copper's writes): nxv_flush runs the copper in pieces short enough for them.
+// to the write, as when it was drawn a few dots behind the ray. From inside the drawing
+// (the copper run there, nxv_fetch_to) the copper is stopped at the write instead
+// (nx_cop_hold), and the drawing goes on to there before it runs on.
 
 static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
 
@@ -391,7 +389,10 @@ static void nxv_room(Computer* comp, long long w) {
 	if (V.live && !comp->vid->nodraw && !comp->vid->still) {
 		long long end = w >> 2;
 		if (end > ray) end = ray;
-		if (!nxv_flushing) nxv_flush(comp, end);
+		if (nxv_flushing)
+			nx_cop_hold = 1;
+		else
+			nxv_flush(comp, end);
 		from = V.cur;
 	}
 	// what reads back past it: the tilemap's latch 15 dots, a take-up and the
@@ -1760,10 +1761,14 @@ static void nxv_fetch_to(Computer* comp, long long end) {
 	if (d >= end) return;
 	// a copper running may stop itself on the way (nx_cop_run then counts its edges as
 	// the stopped one does); a stopped one is not started by anything here
-	if (nx_cop_on(comp))
+	if (nx_cop_on(comp)) {
 		nx_cop_run(comp, (end - 1) * 4 + 4);
-	else
+		// stopped for room at edge copT (nx_cop_hold): the dots it has ended go first
+		long long e = NX.copT >> 2;
+		if ((e < end) && (e > d)) end = e;
+	} else {
 		nxv_cop_idle(comp, end - 1);
+	}
 	nxs_run_to(comp, (end - 1) * 8 + 8);
 	const nxTiming* t = nx_tim(comp);
 	int L = t->L;
@@ -1825,15 +1830,14 @@ static void nxv_flush(Computer* comp, long long end) {
 	}
 	if (!V.live) nxv_take_up(comp);
 	nxv_flushing = 1;
-	// a copper running writes up to two changes a dot: run in pieces of NXV_COPRUN
-	// dots, each drawn before the next, so its changes never pile up a line
+	// the fetch stops short where the copper was stopped for room (nxv_room): drawn to
+	// there, then on
 	do {
-		long long e = end;
-		if (nx_cop_on(comp) && (e - V.lastDot - 1 > NXV_COPRUN)) e = V.lastDot + 1 + NXV_COPRUN;
-		nxv_fetch_to(comp, e);
+		nxv_fetch_to(comp, end);
 		nxv_render(comp, V.lastDot - NXV_LAG + 1);
 	} while (V.lastDot + 1 < end);
 	nxv_flushing = 0;
+	nx_cop_hold = 0;
 }
 
 void nxv_line(Computer* comp) {
