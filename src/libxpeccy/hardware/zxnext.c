@@ -2890,7 +2890,7 @@ static const hwQuiet nx_quiet = {HWQ_ACK_NEXT, NULL, NULL, zx_devs_sync, NULL, 0
 // what is worked out of the state, again. The clock comes back after this.
 void next_snap_loaded(Computer* comp, int vmode) {
 	if (NX.vmode != vmode) comp_update_timings(comp);	// the board's CLK_28 (NR 11)
-	if (NX.v.live == 0xff) nxv_reset(comp);		// the picture's state, from the registers loaded
+	if (NX.v.live == NXV_LIVE_ANEW) nxv_reset(comp);		// the picture's state, from the registers loaded
 	long long idle = NX.spr.idleTo;
 	nx_layout(comp);		// the raster of the timing the state runs
 	NX.spr.idleTo = idle;		// worked out for that same raster

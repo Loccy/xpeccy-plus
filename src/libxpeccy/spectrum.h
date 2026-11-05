@@ -154,6 +154,7 @@ typedef struct {
 #define NXV_EVQ		1024		// register changes waiting for their pixel
 #define NXV_WRQ		1024		// memory writes kept, for a read the core made before them
 #define NXV_WRT		1024		// the last write to each key & (NXV_WRT - 1) (a power of 2)
+#define NXV_LIVE_ANEW	0xff		// nxVideo.live of a snapshot whose nxVideo did not fit: made anew from the registers
 #define NXV_HIST	128		// changes kept of each value the ULA fetch samples (a power of 2)
 #define NXV_FIELDS	56
 
@@ -225,7 +226,7 @@ typedef struct {
 	long long lastDot;	// the dot the fetch did last
 	long long cur;		// the next dot to draw
 	int rx, ry;		// its raw counters
-	unsigned char live;	// set once the state is in step with the machine
+	unsigned char live;	// set once the state is in step with the machine (NXV_LIVE_ANEW: see szx_ext.c)
 	unsigned char dirty;	// f[] moved since dv was worked out
 	nxvDerived dv;
 } nxVideo;
