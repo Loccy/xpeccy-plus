@@ -21,6 +21,7 @@
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileIconProvider>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QIcon>
@@ -28,6 +29,7 @@
 #include <QListView>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QMutex>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
@@ -51,9 +53,7 @@
 static QFileDialog* fileDlg = nullptr;
 static QWidget* fileDlgParent = nullptr;
 
-// The Type column by the suffix alone. Qt 6 names a file by its MIME type and,
-// for a suffix it does not know (.tap, .tzx...), reads the file to find it - on
-// the GUI thread, file by file: a folder of 37k images held the window for minutes
+// Type by suffix: Qt 6 reads a file of an unknown suffix on the GUI thread to name its MIME type
 class xFileTypes : public QFileIconProvider {
 public:
 	QString type(const QFileInfo& fi) const override {
@@ -61,16 +61,23 @@ public:
 		QString ext = fi.suffix().toUpper();
 		return ext.isEmpty() ? QString("File") : ext + " File";
 	}
+	// With an icon theme Qt picks a file's icon by its MIME type, read from the file: once per suffix
+	QIcon icon(const QFileInfo& fi) const override {
+		if (!fi.isFile() || QIcon::themeName().isEmpty()) return QFileIconProvider::icon(fi);
+		QString ext = fi.suffix().toLower();
+		QMutexLocker lock(&mutex);
+		auto it = icons.constFind(ext);
+		if (it == icons.constEnd()) it = icons.insert(ext, QFileIconProvider::icon(fi));
+		return *it;
+	}
+	QIcon icon(IconType type) const override {return QFileIconProvider::icon(type);}
+private:
+	mutable QMutex mutex;
+	mutable QHash<QString, QIcon> icons;
 };
 
-// What a Qt file dialog needs in a folder of tens of thousands of files; every
-// one of ours gets it once, after its views are built (with no model yet the
-// provider is dropped) and before the event loop takes the first files listed.
-// Every row is one line high; told so, the views stop measuring each one.
-// Detail View measured rows one by one to find where one is (End in 37k files
-// held the window for 7 s), and List View, hidden behind it, laid out every
-// name at the first click. Shown, List View measures again, as one width for
-// all would cut the names, and lays them out a batch at a time.
+// Must run after the views exist (a provider set before the model is dropped) and before the first listing.
+// Uniform rows stop the views measuring every row; List View gets them only while hidden, as one width would cut names when shown.
 static void file_dialog_tune(QFileDialog* dlg) {
 	QTreeView* tree = dlg->findChild<QTreeView*>("treeView");
 	if (!tree || dlg->property("xTuned").toBool()) return;	// native, or done
@@ -872,22 +879,20 @@ void disk_boot(Computer* comp, int drv, int id) {
 // The dialog is shared with the saves: the name a save left in it goes, and the
 // mode is set before the filter, which in save mode puts its own suffix on that
 // name - an RZX just recorded came back offered as an .szx.
-static QFileDialog* file_dialog_open_mode() {
+static QFileDialog* file_dialog_open_mode(const QString& title, const QString& flt) {
 	QFileDialog* filer = file_dialog();
+	filer->setWindowTitle(title);
 	filer->setAcceptMode(QFileDialog::AcceptOpen);
 	filer->selectFile(QString());
-	return filer;
-}
-
-// The filters set again only when they are not already there with the first one
-// picked, as setting them leaves it: Qt 5 checks every file of the folder against
-// every pattern on each set - 6.9 s at every Open in 37k files (Linux)
-static void file_dialog_open_filter(QFileDialog* dlg, const QString& flt) {
+	// Set only when changed: Qt 5 matches every file against every pattern on each set, and a set picks the first filter
 	QStringList want;
 	for (const QString& f : flt.split(flt.contains(";;") ? QString(";;") : QString("\n")))
 		want << f.simplified();
-	if ((dlg->nameFilters() == want) && (dlg->selectedNameFilter() == want.value(0))) return;
-	dlg->setNameFilter(flt);
+	if ((filer->nameFilters() != want) || (filer->selectedNameFilter() != want.value(0)))
+		filer->setNameFilter(flt);
+	filer->setDirectory(conf.lastDir.c_str());
+	filer->setHistory(QStringList());
+	return filer;
 }
 
 // The open dialog, for the kind of file id asks for. What was picked in it
@@ -907,11 +912,7 @@ QString file_ask_open(Computer* comp, int* id, int* drv) {
 			flt = file_get_type_filter(fid, 0);
 	}
 	if (flt.isEmpty()) return path;
-	QFileDialog* filer = file_dialog_open_mode();
-	filer->setWindowTitle("Open File");
-	file_dialog_open_filter(filer, flt);
-	filer->setDirectory(conf.lastDir.c_str());
-	filer->setHistory(QStringList());
+	QFileDialog* filer = file_dialog_open_mode("Open File", flt);
 	if (filer->exec()) {
 		path = filer->selectedFiles().first();
 		xFileGroupInfo* grp = file_detect_grp(filer->selectedNameFilter());
@@ -2181,11 +2182,7 @@ QString file_ask_save(const char* title, const char* filter, const char* ext, co
 
 // one file of one kind, to open
 QString file_ask_load(const char* title, const char* filter) {
-	QFileDialog* filer = file_dialog_open_mode();
-	filer->setWindowTitle(title);
-	file_dialog_open_filter(filer, filter);
-	filer->setDirectory(conf.lastDir.c_str());
-	filer->setHistory(QStringList());
+	QFileDialog* filer = file_dialog_open_mode(title, filter);
 	if (!filer->exec()) return QString();
 	QString path = filer->selectedFiles().first();
 	conf.lastDir = std::string(QFileInfo(path).dir().absolutePath().toLocal8Bit().data());
@@ -2202,8 +2199,7 @@ void initFileDialog(QWidget* par) {
 // the shared QtProject settings, and a long image name gets cut in them. Give
 // the name all the room the other columns do not need, whatever was stored.
 // Called on Show, after that restore; a native dialog has no tree and is skipped.
-// The dialogs of QFileDialog::get*() get their tuning here too: they may start
-// in the big folder the shared one was left in, as Qt remembers it for them
+// Also tunes the QFileDialog::get*() dialogs, which may open in a big folder.
 void fitFileDialog(QWidget* w) {
 	QFileDialog* dlg = qobject_cast<QFileDialog*>(w);
 	QTreeView* tree = dlg ? dlg->findChild<QTreeView*>("treeView") : nullptr;
