@@ -46,23 +46,22 @@ void flp_track_written(Floppy* flp, int tr) {
 	t->rawlen = 0;
 }
 
-int flp_keep_raw(Floppy* flp, int tr, const unsigned char* data, int len) {
+void flp_keep_raw(Floppy* flp, int tr, const unsigned char* data, int len) {
 	flpTrack* t = &flp->data[tr & 0xff];
 	free(t->raw);
 	t->raw = (len > 0) ? (unsigned char*)malloc(len) : NULL;
 	t->rawlen = t->raw ? len : 0;
 	if (t->raw) memcpy(t->raw, data, len);
-	return t->rawlen;
 }
 
-int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsigned char* data, int made) {
+void flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsigned char* data, int made) {
 	flpTrack* t = &flp->data[tr & 0xff];
-	if ((len < 1) || (copies < 2)) return 0;
+	if ((len < 1) || (copies < 2)) return;
 	flpWeak* lst = (flpWeak*)realloc(t->weak, (t->nweak + 1) * sizeof(flpWeak));
-	if (!lst) return 0;
+	if (!lst) return;
 	t->weak = lst;
 	unsigned char* buf = (unsigned char*)malloc((size_t)len * copies);
-	if (!buf) return 0;
+	if (!buf) return;
 	memcpy(buf, data, (size_t)len * copies);
 	lst[t->nweak].pos = pos;
 	lst[t->nweak].len = len;
@@ -70,7 +69,6 @@ int flp_add_weak(Floppy* flp, int tr, int pos, int len, int copies, const unsign
 	lst[t->nweak].made = made;
 	lst[t->nweak].data = buf;
 	t->nweak++;
-	return 1;
 }
 
 // the read of a weak sector this revolution gives, or the track's own byte

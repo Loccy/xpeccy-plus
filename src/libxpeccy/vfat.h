@@ -100,6 +100,7 @@ typedef struct {
 
 	int writable;			// the guest's writes are taken
 	int hold;			// and kept in memory: the folder waits for the user's word before it changes
+	int frozen;			// the folder takes no more of them: they stay in memory (vfat_read_only)
 	vfWr* wr;			// what they did, from the first one on
 } vFat;
 
@@ -145,6 +146,9 @@ char* vfat_tmp_restore(vFat*, const char* name);
 int vfat_waiting(vFat*);
 // the user's word on a volume on hold: allow lets the folder follow, else it never will
 void vfat_release(vFat*, int allow);
+// read-only from now on, the volume in use: the folder stays as it is, and what the guest
+// writes stays in memory as with a Read-only answer, so its DOS goes on as it was
+void vfat_read_only(vFat*);
 
 #ifdef __cplusplus
 }

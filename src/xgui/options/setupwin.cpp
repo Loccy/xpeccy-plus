@@ -1273,13 +1273,14 @@ void SetupWin::fillPages() {
 	ui.leDbgFont->setFont(dbgfnt);
 // palette
 	fillDbgPalette();
+	noteShown();
+}
+
 // what Apply sets only if it moves, as the page shows it now
-	shown.cpu = xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq);
+void SetupWin::noteShown() {
+	shown.cpu = xcpu_frq_parse(ui.cbCpuFrq->currentText(), conf.zx->cpuFrq);
 	shown.psg = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;
 	shown.mem = getRFIData(ui.mszbox);
-	shown.lay = getRFText(ui.geombox);
-	xLayout* lay = findLayout(shown.lay);
-	if (lay) shown.geom = lay->lay;
 }
 
 void SetupWin::apply() {
@@ -1290,13 +1291,19 @@ void SetupWin::apply() {
 	std::string macWas = xm_signature();
 	int rwStep = conf.emu.rewind.step;
 	int rwSecs = conf.emu.rewind.secs;
-	// unset shows as Last, and stays unset - the first start still asks - until changed
-	// a folder's mode is taken when it is mounted or read again, with the power off
-	conf.fold.rw = getRFIData(cbFolderWrite) ? 1 : 0;
+	// R/O stops the folders in use from changing at once; R/W is taken at the next read
+	int foldRw = getRFIData(cbFolderWrite) ? 1 : 0;
+	if (conf.fold.rw && !foldRw) {
+		emu_lock();
+		fold_read_only(conf.zx);
+		emu_unlock();
+	}
+	conf.fold.rw = foldRw;
 	conf.fold.trash = getRFIData(cbFolderTrash) ? 1 : 0;
 	applySaves();
 	int row = cbStart->currentIndex();
 	int ms = (row == 0) ? MS_LAST : (row == 1) ? MS_ASK : (row == 2) ? MS_RESUME : MS_THIS;
+	// unset shows as Last, and stays unset - the first start still asks - until changed
 	if ((conf.macStart != MS_UNSET) || (ms != MS_LAST)) conf.macStart = ms;
 	if (ms == MS_THIS) conf.macStartId = getRFSData(cbStart).toLocal8Bit().data();
 	// another machine is not this page with different values in it: it has its
@@ -1311,7 +1318,7 @@ void SetupWin::apply() {
 	}
 	applyGlobal();
 	if (another) {
-		start();		// the new machine's own values on the pages
+		fillPages();		// the new machine's own values on the pages
 		emit s_prf_changed();
 	} else {
 		// the machine carries what the page put in it: into its own file, so it is
@@ -1342,12 +1349,8 @@ void SetupWin::apply() {
 	}
 }
 
-// What the pages hold for the machine itself. Another machine has its own, so
-// none of this goes onto it. The machine runs on under Apply, and what it has set
-// itself stays: the clocks, the layout and the sound chips are set only when the
-// page shows them otherwise than when it was opened - setting them again runs the
-// board's init (comp_update_timings), puts the frame INT where the layout has it
-// and starts the chips' tick over.
+// What the pages hold for this machine. What it set itself stays: the clocks, the
+// layout and the sound chips are set only when the page has them otherwise.
 void SetupWin::applyMachine() {
 	Computer* comp = conf.zx;
 // machine
@@ -1389,10 +1392,11 @@ void SetupWin::applyMachine() {
 		zx_set_vmode(comp);
 	comp->vid->ula->enabled = ui.ulaPlus->isChecked() ? 1 : 0;
 	comp->flgDDP = ui.cbDDp->isChecked() ? 1 : 0;
-	// another layout, or this one edited (the border size goes on top of it in applyGlobal())
+	// another layout than the machine has, or this one edited - in the editor at
+	// any time, Cancel or not (the border size goes on top of it in applyGlobal())
 	std::string lay = getRFText(ui.geombox);
 	xLayout* nlay = findLayout(lay);
-	if ((lay != shown.lay) || !nlay || memcmp(&nlay->lay, &shown.geom, sizeof(vLayout)))
+	if (nlay && ((lay != conf.layName) || memcmp(&nlay->lay, &conf.layGeom, sizeof(vLayout))))
 		xm_set_layout(lay);
 // sound
 	int psg = getRFIData(cbPsgCount);
@@ -1403,6 +1407,7 @@ void SetupWin::applyMachine() {
 	double psgFrq = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;	// 0: Auto
 	int tsType = (chips > 2) ? TS_ZXNEXT : (chips > 1) ? TS_NEDOPC : TS_NONE;
 	bool chipsNew = (comp->ts->type != tsType);
+	bool stereoNew = false;		// the chips' tick goes on: only the sound thread's copy is told
 	aymChip* chip[3] = {comp->ts->chipA, comp->ts->chipB, comp->ts->chipC};
 	for (int i = 0; i < 3; i++) {			// one setting for all the chips
 		int type = (i < chips) ? chtype : SND_NONE;
@@ -1412,7 +1417,7 @@ void SetupWin::applyMachine() {
 		}
 		if (chip[i]->stereo != chstereo) {
 			chip[i]->stereo = chstereo;
-			chipsNew = true;
+			stereoNew = true;
 		}
 	}
 	// a chip of another type takes its clock here too (a YM2203 runs at twice the AY's)
@@ -1420,6 +1425,8 @@ void SetupWin::applyMachine() {
 		ts_set_frq(comp->ts, psgFrq, comp->cpuFrq);
 		comp->ts->type = tsType;
 		comp->sndSeed = 1;		// the chips the sound thread mixes take all of it
+	} else if (stereoNew) {
+		comp->sndSeed = 1;
 	}
 	comp->gs->enable = gsBox->currentIndex();
 	comp->sdrv->type = getRFIData(sdrvBox);
@@ -1444,12 +1451,8 @@ void SetupWin::applyMachine() {
 	difSetDrives(comp->dif, fit);
 // hdd
 	ide_set_type(comp->ide, getRFIData(hiface));
-	// What is mounted is the Drives menu's. A folder is not read again here: the DOS
-	// running keeps what it read of it, and a program's own folder put on the card
-	// would be gone from it. It is read again with the power off (xm_power_cycle).
-// divmmc: a board is put on, taken off or given other RAM with the power off, so
-// the machine comes up from its power-on with it. Left running, the machine would
-// meet a firmware that never started at its first error report or NMI.
+	// what is mounted is the Drives menu's, a folder read again only with the power off
+// divmmc: a board put on, off or given other RAM powers the machine off and on
 	int divModel = (divBox->currentIndex() && hw_takes_divmmc(comp->hw)) ? DIV_MMC : DIV_NONE;
 	int divPages = divRamBox->currentIndex() ? DIV_PAGES_MAX : 16;
 	bool divPower = (divModel != comp->div->model) || (divModel && (divPages != comp->div->pages));
@@ -1468,12 +1471,7 @@ void SetupWin::applyMachine() {
 		xm_power_cycle();
 		emu_unlock();
 	}
-	// what the machine has now, for the next Apply with the window still open
-	shown.cpu = frq;
-	shown.psg = psgFrq;
-	shown.mem = msz;
-	shown.lay = lay;
-	if (nlay) shown.geom = nlay->lay;
+	noteShown();		// for the next Apply with the window still open
 }
 
 // The emulator's own settings, and the user's that live on the machine (mouse,
@@ -3085,9 +3083,9 @@ void SetupWin::buildFolders() {
 	gridFolders->setColumnStretch(2, 1);
 	cbFolderWrite = new QComboBox;
 	cbFolderWrite->addItem(tr("R/O"), 0);
-	cbFolderWrite->setItemData(0, tr("Read-only: the folder stays as it is"), Qt::ToolTipRole);
+	cbFolderWrite->setItemData(0, tr("Read-only: the folder stays as it is, from Apply on"), Qt::ToolTipRole);
 	cbFolderWrite->addItem(tr("R/W"), 1);
-	cbFolderWrite->setItemData(1, tr("Read/write: the folder's files follow\nwhat the machine writes"), Qt::ToolTipRole);
+	cbFolderWrite->setItemData(1, tr("Read/write: the folder's files follow what\nthe machine writes, from the next Hard Reset"), Qt::ToolTipRole);
 	cbFolderTrash = new QComboBox;
 	cbFolderTrash->addItem(tr("Move to trash"), 1);
 	cbFolderTrash->addItem(tr("Delete permanently"), 0);
@@ -3104,7 +3102,7 @@ void SetupWin::buildFolders() {
 	note->setFont(font);
 	gridFolders->addWidget(cbFolderWrite, 0, 0);
 	gridFolders->addWidget(label(cbFolderWrite, tr("Folders"),
-		tr("R/O: read-only, the folder stays as it is\nR/W: read/write, the folder's files follow\nwhat the machine writes")), 0, 1);
+		tr("R/O: read-only, the folder stays as it is,\nfrom Apply on\nR/W: read/write, the folder's files follow\nwhat the machine writes, from the next Hard Reset")), 0, 1);
 	gridFolders->addWidget(note, 0, 2);
 	gridFolders->addWidget(label(cbFolderTrash, tr("Deleted files"),
 		tr("Where a file the machine deletes in such\na folder goes. A file the trash will not\ntake stays in the folder")), 1, 1);

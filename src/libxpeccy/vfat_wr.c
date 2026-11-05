@@ -256,6 +256,7 @@ int vfat_write(vFat* vf, unsigned int lba, const unsigned char* src) {
 	unsigned int rel, copy, s, k;
 	if (!vf || !src || !vf->writable || (lba >= vf->volume)) return 0;
 	if (!vf->wr && !vfw_live(vf)) return 0;
+	if (vf->frozen) vfw_detach(vf, "made read-only in Options", 1);
 	w = vf->wr;
 	w->wgen++;
 	rel = lba - vf->partStart;
@@ -340,6 +341,14 @@ void vfat_release(vFat* vf, int allow) {
 	if (!vf || !vf->hold) return;
 	vf->hold = 0;
 	if (!allow && vf->wr) vfw_detach(vf, "writing to it was not allowed", 1);
+}
+
+void vfat_read_only(vFat* vf) {
+	if (!vf || !vf->writable) return;
+	vfat_flush(vf);		// what was written under R/W reaches the folder first
+	vf->hold = 0;
+	vf->frozen = 1;
+	if (vf->wr) vfw_detach(vf, "made read-only in Options", 1);
 }
 
 void vfw_free(vFat* vf) {

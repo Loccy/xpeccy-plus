@@ -33,8 +33,7 @@ void p3Out7FFD(Computer* comp, int port, int val) {
 // A command from +3DOS may go fast; one from a program's own loader in RAM keeps the
 // drive's time, which copy-protection loaders count on
 void p3_dos_wr(Computer* comp, int port, int val) {
-	int rom = (cpu_get_pc(comp->cpu) < 0x4000) && !(comp->p1FFD & 1);
-	difOut(comp->dif, port, val, rom ? 0 : DIF_FROM_RAM);
+	difOut(comp->dif, port, val, zx_rom_code(comp, cpu_get_pc(comp->cpu)) ? 0 : DIF_FROM_RAM);
 }
 
 static xPort p3PortMap[] = {

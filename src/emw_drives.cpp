@@ -394,7 +394,8 @@ void MainWin::folderAsk() {
 		"in the folder itself, and a deleted file %1. Keep a copy of anything you cannot "
 		"afford to lose.\n\n"
 		"Read-only keeps what the machine writes in memory until the folder is mounted "
-		"again. Both can be changed in Options (Emulation, Folder as a disk).")
+		"again. Both can be changed in Options (Emulation, Folder as a disk): Read-only "
+		"takes effect at once, Read/write at the next Hard Reset.")
 		.arg(QDir::toNativeSeparators(QString::fromUtf8(vf->root ? vf->root : "")))
 		.arg(conf.fold.trash ? "goes to the trash" : "is deleted permanently"), QMessageBox::NoButton, this);
 	QPushButton* allow = box.addButton("Allow writing", QMessageBox::AcceptRole);

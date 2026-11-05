@@ -218,7 +218,7 @@ static const szxField fld_sdrv[] = {
 };
 
 static const szxField fld_fdc[] = {
-	FLDRAW("bits", 4, 4),		// irq, drq, dir, mr, block, side, step, mfm, idle, crchi
+	FLDRAW("bits", 4, 4),		// irq, drq, dir, mr, block, side, step, mfm, idle, crchi, slow
 	FLD(FDC, trk),
 	FLD(FDC, sec),
 	FLD(FDC, data),
@@ -248,10 +248,12 @@ static const szxField fld_fdc[] = {
 	FLD(FDC, resBuf),
 	FLD(FDC, resCnt),
 	FLD(FDC, resPos),
+	FLD(FDC, xfer),
 	FLD(FDC, sr0),
 	FLD(FDC, sr1),
 	FLD(FDC, sr2),
 	FLD(FDC, sr3),
+	FLD(FDC, scnt),
 	FLDEND
 };
 
@@ -270,6 +272,7 @@ static const szxField fld_flp[] = {
 	FLD(Floppy, trk),
 	FLD(Floppy, field),
 	FLD(Floppy, pos),
+	FLD(Floppy, revs),
 	FLDEND
 };
 
@@ -561,6 +564,7 @@ static const szxField fld_rtc[] = {
 #define XR_DIF	BID('D','I','F',' ')
 #define XR_FDC	BID('F','D','C',' ')
 #define XR_FDCP	BID('F','D','C','P')	// the command in progress: its plan, and where in it
+#define XR_FDCI	BID('F','D','C','I')	// a Format's IDs taken so far: C H R N each
 #define XR_FLP	BID('F','L','P','0')	// ..3
 #define XR_IDE	BID('I','D','E',' ')
 #define XR_ATA	BID('A','T','A','0')	// master, 1 slave
@@ -826,7 +830,20 @@ void szx_ext_save(szxBuf* b, Computer* comp) {
 		int sel = 0;
 		while ((sel < 3) && (comp->dif->fdc->flp != comp->dif->fdc->flop[sel])) sel++;
 		sb_byte(b, sel);			// the drive selected, by the controller's numbering
+		sb_byte(b, UPD_PLANS);
 		rec_end(b, mark);
+		FDC* fdc = comp->dif->fdc;
+		int nid = (comp->dif->type == DIF_P3DOS) ? upd_format_ids(fdc) : 0;
+		if (nid > 0) {
+			rec_begin(b, XR_FDCI, &mark);
+			for (i = 0; i < nid; i++) {
+				sb_byte(b, fdc->slst[i].trk);
+				sb_byte(b, fdc->slst[i].head);
+				sb_byte(b, fdc->slst[i].sec);
+				sb_byte(b, fdc->slst[i].sz);
+			}
+			rec_end(b, mark);
+		}
 		for (i = 0; i < 4; i++)
 			if (comp->dif->flp[i]->fitted)
 				rec_fields(b, XR_FLP + ((unsigned)i << 24), comp->dif->flp[i], fld_flp);
@@ -1096,7 +1113,10 @@ static void ext_fm_load(Computer* comp, int n, const unsigned char* p, size_t le
 
 static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	FDC* fdc = comp->dif->fdc;
+	int xfer = fdc->xfer;
+	fdc->xfer = -1;			// stays so in the copy if the file has none
 	FDC* t = (FDC*)ext_take_head(fdc, offsetof(FDC, slst), fld_fdc, p, n);
+	fdc->xfer = xfer;
 	if (!t) return;
 	fdc->irq = t->irq;
 	fdc->drq = t->drq;
@@ -1107,6 +1127,7 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	fdc->step = t->step;
 	fdc->mfm = t->mfm;
 	fdc->crchi = t->crchi;
+	fdc->slow = t->slow;
 	fdc->intr = t->intr;
 	fdc->trk = t->trk;
 	fdc->sec = t->sec;
@@ -1136,6 +1157,9 @@ static void ext_fdc(Computer* comp, const unsigned char* p, size_t n) {
 	memcpy(fdc->resBuf, t->resBuf, sizeof(fdc->resBuf));
 	fdc->resCnt = t->resCnt;
 	fdc->resPos = t->resPos;
+	// an older file's read hands the CPU the whole field
+	fdc->xfer = (t->xfer >= 0) ? t->xfer : t->cnt;
+	fdc->scnt = (t->scnt < 0) ? 0 : t->scnt;	// an index into the Format's list
 	fdc->sr0 = t->sr0;
 	fdc->sr1 = t->sr1;
 	fdc->sr2 = t->sr2;
@@ -1160,6 +1184,7 @@ static void ext_flp(Floppy* flp, const unsigned char* p, size_t n, int carried) 
 	flp->trk = t->trk;
 	flp->field = t->field;
 	flp->pos = t->pos;
+	flp->revs = t->revs;
 	free(t);
 }
 
@@ -1303,6 +1328,8 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 					comp->dif->fdc->idle = p[4] & 1;
 					comp->dif->fdc->seekend = (p[4] >> 1) & 1;
 					if (n >= 6) comp->dif->fdc->flp = comp->dif->fdc->flop[p[5] & 3];
+					if ((comp->dif->type == DIF_P3DOS) && ((n < 7) || !p[6]))
+						upd_plan_v0(comp->dif->fdc);
 				}
 				break;
 			case XR_IDE:
@@ -1323,6 +1350,13 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 				break;
 			case XR_GSRAM:
 				if (comp->gs && comp->gs->enable) ext_gs_ram(comp->gs, p, n);
+				break;
+			case XR_FDCI:
+				if (comp->dif && (comp->dif->type == DIF_P3DOS)) {
+					FDC* fdc = comp->dif->fdc;
+					for (size_t k = 0; (k + 4 <= n) && (k / 4 < sizeof(fdc->slst) / sizeof(fdc->slst[0])); k += 4)
+						upd_form_id(fdc, (int)(k / 4), p + k);
+				}
 				break;
 			case XR_FLP + (0u << 24): case XR_FLP + (1u << 24):
 			case XR_FLP + (2u << 24): case XR_FLP + (3u << 24):

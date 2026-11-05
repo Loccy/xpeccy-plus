@@ -51,7 +51,7 @@ class xThread : public QThread {
 		// tickTotal: a cycle can end between the hit and that step
 		long long skipTick = -1;
 		long long haltRoom(Computer*);
-		void benchApplyStep(int frame, int rw);
+		void benchApplyStep(int frame);
 		long long lateNoTick = -(1LL << 62);	// where haltRoom last found the mix may not sample late
 		void tap_catch_load(Computer*, int, int base = LD_ROM_BASE, int dir = 1);
 		void tap_hand_over(Computer*, int blk, int base, int dir);

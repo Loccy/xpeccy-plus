@@ -400,8 +400,17 @@ void fold_release(Computer* comp, bool allow) {
 		vfat_release(vf[i], allow ? 1 : 0);
 }
 
+void fold_read_only(Computer* comp) {
+	vFat* vf[5];
+	fold_volumes(comp, vf);
+	for (int i = 0; i < 5; i++) {
+		if (vf[i] && !vfs_own(QString::fromUtf8(vf[i]->root ? vf[i]->root : "")))
+			vfat_read_only(vf[i]);
+	}
+}
+
 // What the guest wrote to the volume going goes to its folder before the folder is read
-// again: Options holds the machine, so the quiet spell that would carry it never comes.
+// again: the machine is held for it, so the quiet spell that would carry it never comes.
 void sdc_mount(SDCard* sdc, const QString& path) {
 	if (!sdc) return;
 	vfat_flush(sdc->vfat);
@@ -429,6 +438,7 @@ bool sdc_mount_over(SDCard* sdc, const QString& sub, const QString& subName) {
 	vFat* vf = vfat_scan(path, sdc->vfat->writable, sub, subName);
 	if (!vf) return false;
 	vf->hold = sdc->vfat->hold;		// read again, not mounted anew: asked or not, as it was
+	vf->frozen = sdc->vfat->frozen;		// and made read-only or not
 	sdcSetFolder(sdc, path.toLocal8Bit().constData(), vf);
 	return true;
 }

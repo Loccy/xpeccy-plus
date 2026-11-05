@@ -1184,13 +1184,14 @@ static void bench_keys_step(Computer* comp, int frame) {
 	}
 }
 
-// --bench-apply: Options' Ok, once, at its frame. It takes the machine itself, and
-// sets the rewind as the page has it: the bench's own goes back on
-void xThread::benchApplyStep(int frame, int rw) {
-	if ((benchApplyAt < 0) || (frame < benchApplyAt) || !benchApply) return;
+// --bench-apply: Options' Ok, once, at its frame; the rewind the page sets is put
+// back to the bench's own
+void xThread::benchApplyStep(int frame) {
+	if ((benchApplyAt < 0) || (frame < benchApplyAt)) return;
 	benchApplyAt = -1;
+	int on = conf.emu.rewind.on;
 	benchApply();
-	conf.emu.rewind.on = (rw > 0);
+	conf.emu.rewind.on = on;
 }
 
 // Runs the timed part: fast mode as run() does it, or full sound mixing with
@@ -1327,7 +1328,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 		emuCycle(comp);
 		bench_keys_step(comp, conf.vid.fcount - fk);
 		emu_unlock();
-		benchApplyStep(conf.vid.fcount - fk, rw);
+		benchApplyStep(conf.vid.fcount - fk);
 	}
 	// and on to an instruction anywhere in the frame, where a snapshot is
 	// harder to take than at a frame boundary. A frame ended on the way is not
@@ -1392,7 +1393,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 			vid_set_nodraw_next(comp->vid, (fd - f0 + 1) % every != 0);
 		}
 		emu_unlock();
-		benchApplyStep(conf.vid.fcount - fk, rw);
+		benchApplyStep(conf.vid.fcount - fk);
 		if (hash) {
 			if (conf.vid.fcount != fl) {
 				int first = (fl == f0);

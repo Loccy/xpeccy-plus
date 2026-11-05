@@ -16,7 +16,7 @@ typedef struct {
 	unsigned char secCount;
 	unsigned char gap3Size;
 	unsigned char filler;
-	char sectorInfo[0x100 - 0x18];	// max 29 (x 8 bytes)
+	char sectorInfo[0x100 - 0x18];	// DSK_MAXSEC x 8 bytes
 } TrackInfBlock;
 
 typedef struct {
@@ -37,6 +37,8 @@ typedef struct {
 static const char edsksgn[] =	"EXTENDED";
 static const char dsksgn[] =	"MV - CPC";
 
+#define DSK_MAXSEC	29	// the sectors a Track-Info block has room for
+
 // A sector as the image gives it
 typedef struct {
 	unsigned char c, h, r, n;
@@ -56,11 +58,6 @@ typedef struct {
 #define DSK_GAP3_P3	0x52	// gap 3 +3DOS formats with: its format spec, +3 ROM 2 at 1C5C
 #define DSK_LEAD	(DSK_GAP4A + DSK_SYNC + 4 + DSK_GAP1)
 #define DSK_SEC_FIX	(DSK_SYNC + 4 + 4 + 2 + DSK_GAP2 + DSK_SYNC + 4 + 2)	// a sector but its data and gap 3
-
-// what a size code means to the controller
-static int dsk_nominal(int n) {
-	return (n > 7) ? 0x4000 : (0x80 << n);
-}
 
 typedef struct {
 	flpTrack* t;
@@ -102,6 +99,16 @@ static void pen_crc(dskPen* p, int st, int bad) {
 	pen_put(p, crc & 0xff, 4);
 }
 
+// a sector's ID field and its CRC
+static void pen_id(dskPen* p, const dskSec* x) {
+	int st = pen_mark(p, 0xfe);
+	pen_put(p, x->c, 1);
+	pen_put(p, x->h, 1);
+	pen_put(p, x->r, 1);
+	pen_put(p, x->n, 1);
+	pen_crc(p, st, (x->st1 & F_SR1_DE) && !(x->st2 & F_SR2_DD));	// a CRC error in the ID
+}
+
 // Lay a track out from its sectors. What does not fit takes gap 3 first, then the
 // lead-in; a data field longer than the room left (N 6 and up) runs to the index
 // with no CRC after it, as the Format command leaves one.
@@ -129,16 +136,11 @@ static void dsk_form(Floppy* flp, int tr, dskSec* s, int n, int gap3) {
 	}
 	for (int i = 0; (i < n) && (p.pos < p.len); i++) {
 		dskSec* x = &s[i];
-		int st = pen_mark(&p, 0xfe);
-		pen_put(&p, x->c, 1);
-		pen_put(&p, x->h, 1);
-		pen_put(&p, x->r, 1);
-		pen_put(&p, x->n, 1);
-		pen_crc(&p, st, (x->st1 & 0x20) && !(x->st2 & 0x20));	// a CRC error in the ID
+		pen_id(&p, x);
 		pen_run(&p, 0x4e, DSK_GAP2);
-		if (!(x->st2 & 0x01)) {				// no MD: there is a data field
-			int del = (x->st2 & 0x40) ? 1 : 0;
-			st = pen_mark(&p, del ? 0xf8 : 0xfb);
+		if (!(x->st2 & F_SR2_MD)) {			// there is a data field
+			int del = (x->st2 & F_SR2_CM) ? 1 : 0;
+			int st = pen_mark(&p, del ? 0xf8 : 0xfb);
 			int dpos = p.pos;
 			if ((dpos < p.len) && !p.t->map[x->r])
 				p.t->map[x->r] = dpos;
@@ -146,8 +148,8 @@ static void dsk_form(Floppy* flp, int tr, dskSec* s, int n, int gap3) {
 				pen_put(&p, x->data[k], del ? 3 : 2);
 			if ((x->copies > 1) && (dpos + x->len <= p.len))
 				flp_add_weak(flp, tr, dpos, x->len, x->copies, x->data, x->made);
-			if (x->len >= dsk_nominal(x->n))
-				pen_crc(&p, st, x->st2 & 0x20);		// a CRC error in the data
+			if (x->len >= flp_seclen(x->n))
+				pen_crc(&p, st, x->st2 & F_SR2_DD);	// a CRC error in the data
 		}
 		pen_run(&p, 0x4e, gap3);
 	}
@@ -155,7 +157,7 @@ static void dsk_form(Floppy* flp, int tr, dskSec* s, int n, int gap3) {
 
 static int dsk_is_mark(const unsigned char* p, int fe) {
 	return (p[0] == 0xa1) && (p[1] == 0xa1) && (p[2] == 0xa1)
-		&& (fe ? (p[3] == 0xfe) : (((p[3] & 0xfe) == 0xf8) || ((p[3] & 0xfe) == 0xfa)));
+		&& (fe ? (p[3] == 0xfe) : ((p[3] & 0xfc) == 0xf8));	// F8..FB: a data mark
 }
 
 // How many of the track's other IDs a sector's dumped data holds: read with a
@@ -211,31 +213,17 @@ static void dsk_mark_fields(flpTrack* t, int len) {
 static void dsk_form_stream(Floppy* flp, int tr, dskSec* x) {
 	dskPen p = {&flp->data[tr], 0, flp->trklen};
 	memset(p.t->byte, 0x4e, TRKLEN_HD);
-	int st = pen_mark(&p, 0xfe);
-	pen_put(&p, x->c, 0);
-	pen_put(&p, x->h, 0);
-	pen_put(&p, x->r, 0);
-	pen_put(&p, x->n, 0);
-	pen_crc(&p, st, (x->st1 & 0x20) && !(x->st2 & 0x20));
+	pen_id(&p, x);
 	pen_run(&p, 0x4e, DSK_GAP2);
-	pen_mark(&p, (x->st2 & 0x40) ? 0xf8 : 0xfb);
+	pen_mark(&p, (x->st2 & F_SR2_CM) ? 0xf8 : 0xfb);
 	for (int k = 0; k < x->len; k++)
 		pen_put(&p, x->data[k], 0);
 	dsk_mark_fields(p.t, p.len);
 }
 
-// Speedlock +3's weak sector: track 0, sector 2 of 512, a normal data mark and a CRC
-// error in the data, which most dumps keep as one read. Other sectors with a CRC
-// error are left as the image has them: loaders checksum those (Buggy Boy's sector 9,
-// deleted). The dumps that keep several reads of one
-// (SamDisk's of Salamander) read the filler it starts with the same, and the rest as
-// if the bits had slipped: shifted by a bit or more, a run of one byte value staying
-// a run (40 40 40 one time, 20 20 20 the next) - and loaders check such runs. Reads
-// of it are made up here that way: the first the image's, the k-th shifted by k bits
-// after its opening run of one value (from the start if it has none), served in turn
-// as stored ones are; fixed, so a rewind reads the same.
+// Speedlock +3's weak sector (T0 R2 N2, data CRC error) kept as one read: the k-th read
+// made up is it shifted by k bits after its opening run, as dumps of several reads show
 #define DSK_WEAK_READS	8
-#define DSK_WEAK_MAX	29
 #define DSK_WEAK_RUN	16	// an opening run shorter than this is part of the weak bits
 
 static const unsigned char* dsk_weak_reads(unsigned char* dst, const unsigned char* src) {
@@ -255,15 +243,13 @@ static unsigned char* dsk_file(const char* name, long* len) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return NULL;
 	unsigned char* buf = NULL;
-	if (!fseek(file, 0, SEEK_END)) {
-		long sz = ftell(file);
-		if ((sz > 0) && (sz < 0x4000000) && !fseek(file, 0, SEEK_SET)) {
-			buf = (unsigned char*)malloc(sz);
-			if (buf && (fread(buf, 1, sz, file) != (size_t)sz)) {
-				free(buf);
-				buf = NULL;
-			}
-			*len = sz;
+	size_t sz = fgetSize(file);
+	if ((sz > 0) && (sz < 0x4000000) && (buf = (unsigned char*)malloc(sz))) {
+		if (fread(buf, 1, sz, file) == sz) {
+			*len = (long)sz;
+		} else {
+			free(buf);
+			buf = NULL;
 		}
 	}
 	fclose(file);
@@ -296,8 +282,8 @@ int dsk_read(Floppy* flp, const char* name) {
 	long pos = 0x100;
 	int tr = 0;
 	int cut = 0;
-	dskSec secs[29];
-	unsigned char (*wbuf)[DSK_WEAK_READS * 0x200] = malloc(DSK_WEAK_MAX * DSK_WEAK_READS * 0x200);
+	dskSec secs[DSK_MAXSEC];
+	unsigned char (*wbuf)[DSK_WEAK_READS * 0x200] = NULL;	// made-up weak reads, once one is met
 	for (int i = 0; (i < tracks) && !cut; i++) {
 		long rtlen = ext ? (buf[0x34 + i] << 8) : tlen;
 		if (rtlen > 0) {
@@ -309,10 +295,10 @@ int dsk_read(Floppy* flp, const char* name) {
 			TrackInfBlock* tib = (TrackInfBlock*)(buf + pos + 12);
 			SectorInfBlock* sib = (SectorInfBlock*)tib->sectorInfo;
 			int nsec = tib->secCount;
-			if (nsec > 29) nsec = 29;			// all the sector info there is
+			if (nsec > DSK_MAXSEC) nsec = DSK_MAXSEC;	// all the sector info there is
 			long dp = pos + 0x100;
 			int sc;
-			int wn = wbuf ? 0 : DSK_WEAK_MAX;		// made-up weak reads on this track
+			int wn = 0;					// made-up weak reads on this track
 			for (sc = 0; (sc < nsec) && !cut; sc++) {
 				dskSec* x = &secs[sc];
 				x->c = sib[sc].track;
@@ -321,7 +307,7 @@ int dsk_read(Floppy* flp, const char* name) {
 				x->n = sib[sc].size;
 				x->st1 = sib[sc].sr1;
 				x->st2 = sib[sc].sr2;
-				int nom = dsk_nominal(x->n);
+				int nom = flp_seclen(x->n);
 				long slen;
 				if (ext) {
 					slen = sib[sc].bslo | (sib[sc].bshi << 8);
@@ -341,8 +327,9 @@ int dsk_read(Floppy* flp, const char* name) {
 					x->len = nom;
 				} else if (slen > nom) {
 					x->len = nom;
-				} else if ((i == 0) && (x->r == 2) && (x->n == 2) && (slen == nom) && (x->st1 & 0x20)
-						&& ((x->st2 & 0x60) == 0x20) && (wn < DSK_WEAK_MAX)) {
+				} else if ((i == 0) && (x->r == 2) && (x->n == 2) && (slen == nom) && (x->st1 & F_SR1_DE)
+						&& ((x->st2 & (F_SR2_CM | F_SR2_DD)) == F_SR2_DD) && (wn < DSK_MAXSEC)
+						&& (wbuf || (wbuf = malloc(DSK_MAXSEC * sizeof(*wbuf))))) {
 					x->data = dsk_weak_reads(wbuf[wn++], x->data);	// one read of a weak sector
 					x->copies = DSK_WEAK_READS;
 					x->made = 1;
@@ -436,40 +423,40 @@ static size_t dsk_save_track(Floppy* flp, int trk, int side, dskBuf* b) {
 	}
 	TrackInfBlock tinf;
 	SectorInfBlock* si = (SectorInfBlock*)tinf.sectorInfo;
-	const unsigned char* src[29];
-	int slen[29];
+	const unsigned char* src[DSK_MAXSEC];
+	int slen[DSK_MAXSEC];
 	int tlen = flp->trklen;
 	int sec = 0;
 	int maxn = 0;
 	memset(&tinf, 0, sizeof(TrackInfBlock));
-	for (int pos = 4; (pos + 4 <= tlen) && (sec < 29); pos++) {
+	for (int pos = 4; (pos + 4 <= tlen) && (sec < DSK_MAXSEC); pos++) {
 		if ((t->field[pos] != 1) || (t->field[pos - 1] == 1)) continue;
 		SectorInfBlock* s = &si[sec];
 		s->track = t->byte[pos];
 		s->side = t->byte[pos + 1];
 		s->sector = t->byte[pos + 2];
 		s->size = t->byte[pos + 3];
-		if (dsk_crc_bad(t, pos - 4, 8, tlen)) s->sr1 |= 0x20;	// CRC error in the ID
+		if (dsk_crc_bad(t, pos - 4, 8, tlen)) s->sr1 |= F_SR1_DE;	// CRC error in the ID
 		if (s->size > maxn) maxn = s->size;
 		int dp = dsk_data_after(t, pos + 6, tlen);
 		int len = 0;
 		src[sec] = t->byte + dp;
 		if (!dp) {					// no data mark
-			s->sr1 |= 0x01;
-			s->sr2 |= 0x01;
+			s->sr1 |= F_SR1_MA;
+			s->sr2 |= F_SR2_MD;
 		} else {
-			if (t->field[dp] == 3) s->sr2 |= 0x40;	// deleted
-			int nom = dsk_nominal(s->size);
+			if (t->field[dp] == 3) s->sr2 |= F_SR2_CM;	// deleted
+			int nom = flp_seclen(s->size);
 			if (dp + nom + 2 > tlen) {		// the index cuts it: its CRC is never read
 				len = tlen - dp;
 				if (len > 0x1800) len = 0x1800;
-				s->sr1 |= 0x20;
-				s->sr2 |= 0x20;
+				s->sr1 |= F_SR1_DE;
+				s->sr2 |= F_SR2_DD;
 			} else {
 				len = nom;
 				if (dsk_crc_bad(t, dp - 4, nom + 4, tlen)) {
-					s->sr1 |= 0x20;
-					s->sr2 |= 0x20;
+					s->sr1 |= F_SR1_DE;
+					s->sr2 |= F_SR2_DD;
 				}
 			}
 			for (int i = 0; i < t->nweak; i++) {

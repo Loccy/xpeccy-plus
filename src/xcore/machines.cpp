@@ -1017,6 +1017,7 @@ bool xm_set_layout(std::string nm) {
 	xLayout* lay = findLayout(nm);
 	if (lay == NULL) return false;
 	conf.layName = nm;
+	conf.layGeom = lay->lay;
 	comp_set_layout(conf.zx, &lay->lay);
 	vid_set_border(conf.zx->vid, conf.vid.border);
 	if ((conf.zx->vid->res.x > 0) && (conf.zx->vid->res.y > 0))

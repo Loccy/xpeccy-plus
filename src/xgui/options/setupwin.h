@@ -44,10 +44,9 @@ class SetupWin : public QDialog {
 		struct {			// the machine's page as filled: applyMachine() sets only what moved
 			double cpu = 0, psg = 0;
 			int mem = 0;
-			std::string lay;
-			vLayout geom = {};
 		} shown;
 		void fillPages();
+		void noteShown();
 		QDialog* popOut(QWidget*, const char*);
 		void cfgLoaded();
 		void fillRomSlots();

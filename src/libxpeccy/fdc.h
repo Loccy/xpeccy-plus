@@ -18,9 +18,27 @@ enum {
 #define FDC_SEC		0x5f
 #define FDC_DATA	0x7f
 
-#define TURBOBYTE 500		// same for turbo
+// uPD765 command bits, and its status bits that a DSK image stores too
+#define F_COM_MT	0x80
+#define F_COM_MF	0x40
+#define F_COM_SK	0x20
+
+#define F_SR0_AT	0x40	// abnormal termination
+#define F_SR0_NR	0x08	// not ready
+#define F_SR1_EN	0x80	// end of cylinder
+#define F_SR1_DE	0x20	// CRC error
+#define F_SR1_OR	0x10	// data lost
+#define F_SR1_ND	0x04	// no data
+#define F_SR1_NW	0x02	// write protect
+#define F_SR1_MA	0x01	// missing address mark
+#define F_SR2_CM	0x40	// the other data mark than the command reads
+#define F_SR2_DD	0x20	// CRC error in the data field
+#define F_SR2_WC	0x10	// wrong cylinder
+#define F_SR2_BC	0x02	// bad cylinder (C = FF)
+#define F_SR2_MD	0x01	// no data mark
+
 // fast disk access, unless the command in progress is to keep real time
-#define turbo ((fdcFlag & FDC_FAST) && !fdc->slow)
+#define fdc_turbo(f) ((fdcFlag & FDC_FAST) && !(f)->slow)
 
 // difOut's last argument on the +3: the command comes from a program in RAM, not
 // from +3DOS in ROM - a loader of its own, which may count on the drive's timing
@@ -104,9 +122,9 @@ struct FDC {
 	int resPos;
 	int xfer;		// uPD765: bytes of the field still to hand to the CPU
 	unsigned char sr0,sr1,sr2,sr3;	// status registers
+	int scnt;		// uPD765: sectors of a Read Track or a Format so far
 
 	Sector slst[64];
-	int scnt;
 };
 
 void fdc_set_hd(FDC*, int);
@@ -150,7 +168,18 @@ void difSetDrives(DiskIF*, int);	// how many drives are on the cable, from A
 // the plan in progress as a number a snapshot can keep, -1: one not known
 int dif_plan_id(DiskIF*);
 void dif_plan_set(DiskIF*, int);
+// The uPD765 plans' layout a snapshot keeps with the step: 1 since Read Data and
+// Read Track check the data CRC in a step of their own. upd_plan_v0() moves a step
+// of layout 0 (2026.9) to where it is now.
+#define UPD_PLANS	1
+void upd_plan_v0(FDC*);
+// A Format in progress as a snapshot keeps it: the IDs it has taken (0 for any other
+// command), and one of them put back as the chip holds it
+int upd_format_ids(FDC*);
+void upd_form_id(FDC*, int i, const unsigned char* chrn);
 int dif_quiet(DiskIF*);		// its time may come in any pieces
 void dif_align_flps(DiskIF*, FDC*, int, int, int, int);
 
 void add_crc_16(FDC*, unsigned char);
+int seekADR(FDC*);	// wd1793.c: wait for an ID mark and read the ID into buf; 2: the index came
+void rdFCRC(FDC*);	// wd1793.c: the two CRC bytes off the track into fcrc

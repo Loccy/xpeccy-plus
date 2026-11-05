@@ -154,6 +154,8 @@ static int rd(void) {
 	return r;
 }
 
+static int send_dos = 0;		// difOut's last argument: DIF_FROM_RAM for a game's own loader
+
 static int send(const unsigned char* b, int n) {
 	for (int i = 0; i < n; i++) {
 		int t = 0;
@@ -161,7 +163,7 @@ static int send(const unsigned char* b, int n) {
 			run(2000);
 			if (++t > 500000) return 0;
 		}
-		difOut(dif, 0x3ffd, b[i], 0);
+		difOut(dif, 0x3ffd, b[i], send_dos);
 		run(2000);
 	}
 	return 1;
@@ -350,6 +352,18 @@ static void compare(Floppy* flp, const unsigned char* file, long flen, int deriv
 	free(img);
 }
 
+// A disk read into a drive that held one with more tracks: nothing of the old one
+// stays past the new one's tracks
+static void cleared(const char* path) {
+	Floppy* flp = flpCreate(0, dummy_irq, NULL);
+	unsigned char raw[16] = {0};
+	memset(flp->data[200].byte, 0x55, flp->trklen);
+	flp_keep_raw(flp, 200, raw, sizeof(raw));
+	dsk_read(flp, path);
+	printf("== cleared\n  track 200 after a 5-track disk: byte %.2X, raw %d\n", flp->data[200].byte[0], flp->data[200].rawlen);
+	flpDestroy(flp);
+}
+
 static void roundtrip(const char* path, const char* name) {
 	long flen = 0;
 	unsigned char* file = read_all(path, &flen);
@@ -410,6 +424,84 @@ static void weak_made(void) {
 	printf("  second halves all differ: %s\n", differ ? "yes" : "no");
 }
 
+// Format Track of sc sectors R 1.. on a track; how many IDs the FDC asked for,
+// its result, and what the track then holds: Read ID, and a read of the last
+// sector that fits and of the one after
+static void format(const char* name, int cyl, int n, int sc, int fill, int fits) {
+	unsigned char b[6] = {0x4d, 0x00, n, sc, 0x2a, fill};
+	unsigned char res[16];
+	seek(cyl);
+	printf("== format/%s\n", name);
+	send(b, 6);
+	int ids = 0, k = 0;
+	for (int t = 0; t < 400000; t++) {		// 4 s at most
+		int m = msr();
+		if (!(m & 0x20)) break;
+		if ((m & 0xc0) == 0x80) {
+			unsigned char id[4] = {cyl, 0, ids + 1, n};
+			difOut(dif, 0x3ffd, id[k], 0);
+			if (++k == 4) {
+				k = 0;
+				ids++;
+			}
+		}
+		run(10000);
+	}
+	int nr = result(res);
+	printf("  IDs taken %d of %d, result", ids, sc);
+	for (int i = 0; i < nr && i < 3; i++) printf(" %.2X", res[i]);
+	printf("\n");
+	unsigned char ri[2] = {0x4a, 0x00};
+	send(ri, 2);
+	nr = result(res);
+	printf("  Read ID: %.2X %.2X %.2X - %.2X %.2X %.2X %.2X\n", res[0], res[1], res[2], res[3], res[4], res[5], res[6]);
+	for (int r = fits; fits && (r <= fits + 1); r++) {		// fits 0: no reads
+		int len = flp_seclen(n);
+		unsigned char c[9] = {0x46, 0x00, cyl, 0, r, n, r, 0x2a, n ? 0xff : 0x80};
+		send(c, 9);
+		int got = take(data, len, 10000);
+		nr = result(res);
+		int same = 0;
+		while ((same < got) && (data[same] == fill)) same++;
+		printf("  R%d: result %.2X %.2X %.2X, %d bytes, %d of them %.2X\n", r, res[0], res[1], res[2], got, same, fill);
+	}
+}
+
+// A +3 game's own loader reads in real time; the machine then turns into a Beta
+// disk one with fast access on: its WD1793 seeks fast, not as the +3 left it
+static void beta_after_p3(void) {
+	unsigned char b[9] = {0x46, 0x00, 0, 0, 1, 2, 1, 0x2a, 0xff};
+	unsigned char res[16];
+	printf("== beta-after-p3\n");
+	seek(0);
+	send_dos = DIF_FROM_RAM;
+	send(b, 9);
+	send_dos = 0;
+	take(data, 512, 10000);
+	result(res);
+	difSetHW(dif, DIF_BDI);
+	fdcFlag = FDC_FAST;
+	difOut(dif, 0xff, 0x3c, 1);		// drive A, out of reset, side 0
+	difOut(dif, 0x7f, 40, 1);		// the track to seek to
+	difOut(dif, 0x1f, 0x10, 1);		// seek, 6 ms a step
+	long ns = 0;
+	int st = 0x01;
+	while ((st & 0x01) && (ns < 2000000000L)) {
+		run(9999);
+		ns += 9999;
+		difIn(dif, 0x1f, &st, 1);
+	}
+	printf("  seek to 40: %ld ms, fast: %s\n", ns / 1000000, (ns < 50000000L) ? "yes" : "no");
+	fdcFlag = 0;
+	difSetHW(dif, DIF_P3DOS);	// back to the +3, reset as a machine switch resets it
+	difReset(dif);
+	unsigned char spec[] = {0x03, 0xaf, 0x03};
+	unsigned char cal[] = {0x07, 0x00};
+	send(spec, 3);
+	send(cal, 2);
+	run(200000000);
+}
+
 static void start(const char* path, const char* path_b) {
 	fdcFlag = 0;
 	dif = difCreate(DIF_P3DOS, dummy_irq, NULL);
@@ -467,7 +559,12 @@ static int cases(const char* tmp) {
 	cmd("turbo-multi", 0x46, 0, 0, 0, 1, 2, 3, 0xff, 0x10000);
 	cmd("turbo-overrun", 0x46, 0, 0, 0, 1, 2, 9, 0xff, 100);
 	fdcFlag = 0;
+	beta_after_p3();
+	format("sc11", 3, 2, 11, 0x5a, 10);
+	format("sc255", 3, 0, 255, 0xa5, 29);
+	format("n-ff", 3, 0xff, 64, 0x33, 0);	// N past 23 counts as 0 bytes, yet 1K each is written
 	difDestroy(dif);
+	cleared(tmp);
 	roundtrip(tmp, "bench");
 	remove(tmp);
 	remove(tmp_b);
