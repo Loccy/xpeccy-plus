@@ -394,6 +394,8 @@ static xFileTypeInfo ft_dum = {FL_NONE, 0, NULL, NULL, NULL, NULL, "Dummy entry"
 static xFileGroupInfo fg_tab[] = {
 	{FG_SNAPSHOT, ".szx", -1, "Snapshot", NULL, {FL_SZX, FL_SNA, FL_Z80, FL_SPG, FL_NEX, FL_SNX, 0}},
 	{FG_TAPE, ".tap", 4, "Tape", NULL, {FL_TAP, FL_TZX, FL_WAV, 0}},
+	// before the drives: a filter's group is the last name it starts with
+	{FG_DISKS, ".trd", 0, "Disk", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
 	{FG_DISK_A, ".trd", 0,"Disk A", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
 	{FG_DISK_B, ".trd", 1, "Disk B", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
 	{FG_DISK_C, ".trd", 2, "Disk C", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
@@ -413,7 +415,7 @@ static bool ft_export(xFileTypeInfo* inf) {
 }
 
 static xFileHWInfo fh_tab[] = {
-	{FH_SPECTRUM, {FG_SNAPSHOT, FG_TAPE, FG_DISK_A, FG_DISK_B, FG_DISK_C, FG_DISK_D, FG_RAW, FG_RZX, FG_IF2_ROM, FG_POK, 0}},
+	{FH_SPECTRUM, {FG_SNAPSHOT, FG_TAPE, FG_DISKS, FG_DISK_A, FG_DISK_B, FG_DISK_C, FG_DISK_D, FG_RAW, FG_RZX, FG_IF2_ROM, FG_POK, 0}},
 	{FH_ALF, {FG_IF2_ROM, FG_SNAPSHOT, 0}},
 	{FH_SLOTS, {FG_IF2_ROM, 0}},
 	{FH_DRIVE_A, {FG_DISK_A, FG_RAW, 0}},
@@ -581,9 +583,18 @@ QString file_get_hw_filter(Computer* comp, int id, int sv) {
 	int i;
 	xFileHWInfo* inf = file_find_hw(id);
 	if (inf->id > 0) {
+		// Open has one Disk group (each drive's own menu opens into that drive), Save one per drive
+		bool disks = false;
+		for (i = 0; inf->child[i] > 0; i++)
+			disks |= (inf->child[i] == FG_DISKS);
 		i = 0;
 		while (inf->child[i] > 0) {
-			gfl = file_get_group_filter(comp, inf->child[i], sv);
+			int g = inf->child[i];
+			if (disks && (sv ? (g == FG_DISKS) : ((g >= FG_DISK_A) && (g <= FG_DISK_D)))) {
+				i++;
+				continue;
+			}
+			gfl = file_get_group_filter(comp, g, sv);
 			if (!gfl.isEmpty())
 				flt.append(gfl);
 			i++;
@@ -927,7 +938,7 @@ QString file_ask_open(Computer* comp, int* id, int* drv) {
 	if (filer->exec()) {
 		path = filer->selectedFiles().first();
 		xFileGroupInfo* grp = file_detect_grp(filer->selectedNameFilter());
-		if (grp->id > 0) *id = grp->id;
+		if (grp->id > 0) *id = (grp->id == FG_DISKS) ? FG_DISK_A : grp->id;
 		if (*drv < 0) *drv = grp->drv;
 		conf.lastDir = std::string(QFileInfo(path).dir().absolutePath().toLocal8Bit().data());
 	}
