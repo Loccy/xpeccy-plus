@@ -30,7 +30,7 @@ before that point is upstream's history and is not repeated here.
   *(reported by theretroman82)*
 
 - **Formatting a +3 disk track with more sectors than it holds** lays down the ones that fit
-  and ends there, as the disk controller does.
+  and ends there.
 
 - **Breakpoints follow the CPU's bus cycles**: Read no longer stops on an opcode fetch;
   Fetch also stops on the opcode after a prefix, on a HALT once, and not where an interrupt
