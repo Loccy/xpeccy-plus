@@ -345,6 +345,7 @@ void vfat_release(vFat* vf, int allow) {
 
 void vfat_read_only(vFat* vf) {
 	if (!vf || !vf->writable) return;
+	vfat_flush(vf);		// what was written under R/W reaches the folder first
 	vf->hold = 0;
 	vf->frozen = 1;
 	if (vf->wr) vfw_detach(vf, "made read-only in Options", 1);
