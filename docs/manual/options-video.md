@@ -95,9 +95,9 @@ off by default.
 - At most one frame in three is left undrawn, so a sprite that flickers on every other frame
   still shows both of its pictures.
 - While the computer keeps up, every frame is drawn.
-- Every frame is drawn while a video is recorded, with run-ahead (see
-  [Input lag](options-emulation.md#input-lag)), in the debugger, and while a breakpoint may
-  stop the machine.
+- Every frame is drawn at a speed other than normal, while a video is recorded, with
+  run-ahead (see [Input lag](options-emulation.md#input-lag)), in the debugger, and while a
+  breakpoint may stop the machine.
 - While frames are being left undrawn, [Anti-flicker](#anti-flicker) is off: the computer is
   short of time already. It comes back a few seconds after the last frame left out.
 
