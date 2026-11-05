@@ -369,9 +369,8 @@ class MainWin : public QWidget {
 		QString tapeSparePlace;
 		quint64 spareGen = 0;
 		quint64 mountGen = 0;		// the last mount started (mountMedia)
-		quint64 mountEnded = 0;		// ...and the last one that ended
-		QString sideFrom, sideWant;	// the last side key's image out and in, while it is read
-		int sideWantSrc = -1;
+		QString mountPath;		// ...the image it reads while it does, empty after
+		int mountSrc = -1;		// ...and where it goes: a drive, or MEDIA_TAPE
 		double hwMulSeen = 1.0;	// the board's turbo as last reported
 		std::string macSeen;	// ...on this machine
 		void watchClock();

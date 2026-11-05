@@ -1494,8 +1494,6 @@ static bool path_in(const QStringList& list, const QString& path) {
 	return false;
 }
 
-// Of the files at place next in the set (cur the image's own), the one to put in; empty
-// when every one is in skip
 // a place as the OSD shows it: a side's letter in capitals, "side B", "tape 1 side A"
 static QString place_text(const QString& place) {
 	static const QRegularExpression rx("\\b[a-d]\\b");
@@ -1508,6 +1506,8 @@ static QString place_text(const QString& place) {
 	return res;
 }
 
+// Of the files at place next in the set (cur the image's own), the one to put in; empty
+// when every one is in skip
 static QString side_pick(Computer* comp, const QList<xSibling>& set, int cur, const QString& next, int id, int drv,
 		const QString& path, const QStringList& seen, const QStringList& skip) {
 	// An image that was in and has this one in its set: the user's own side A[a], which

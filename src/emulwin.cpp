@@ -2205,8 +2205,10 @@ void MainWin::mountMedia(const QString& path, int id, int drv, bool pinned, cons
 		return;
 	}
 	quint64 gen = ++mountGen;
+	mountPath = path;
+	mountSrc = media_to_drive(comp, path, id) ? qMax(drv, 0) : MEDIA_TAPE;
 	auto done = [this, job, gen, path, id, drv, pinned, from, note]() {
-		if (gen == mountGen) mountEnded = gen;
+		if (gen == mountGen) mountPath.clear();
 		int err = job->err;
 		if (gen != mountGen) {
 			err = ERR_CANCEL;
@@ -4170,7 +4172,7 @@ void MainWin::tapeNext() {
 	Computer* comp = conf.zx;
 	Tape* tap = comp->tape;
 	const QString now = QString::fromLocal8Bit(tap->path ? tap->path : "");
-	std::shared_ptr<xMount> spare = (tapeSpareReady && tap->wantNext && !comp->rzx.play
+	std::shared_ptr<xMount> spare = (tapeSpareReady && tap->wantNext && !comp->rzx.play && conf.tape.setNext
 		&& media_mount_fits(tapeSpare.get())) ? tapeSpare : nullptr;
 	QString place = spare ? tapeSparePlace : QString();
 	const QString next = spare ? tapeSpareNext

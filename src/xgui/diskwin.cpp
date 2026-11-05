@@ -237,6 +237,7 @@ void xDiskWin::watchDrives() {
 		tabs->setTabText(i, driveName(i));
 		if (i == drive()) fill();
 	}
+	fillSides();
 	showHead();
 }
 
@@ -296,12 +297,28 @@ void xDiskWin::fillDrive(Floppy* flp) {
 	btnSave->setEnabled(file);
 	btnSaveAs->setEnabled(in);
 	btnEject->setEnabled(in);
-	// a folder is read for it, so only when what the drive holds has changed
-	const bool sides = file && hasSides && (drive() >= 0) && hasSides(drive());
-	btnPrev->setEnabled(sides);
-	btnNext->setEnabled(sides);
+	fillSides();
 	protect->setEnabled(fit);
 	protect->setChecked(flp && flp->protect);
+}
+
+// Whether the shown drive's disk has other sides: a folder is read for it, so only when
+// the drive shown or what any drive holds has changed - a disk in another drive is not
+// stepped to
+void xDiskWin::fillSides() {
+	int drv = drive();
+	QByteArray key = QByteArray::number(drv);
+	for (int i = 0; i < 4; i++) {
+		Floppy* flp = conf.zx->dif->flp[i];
+		key += '|';
+		if (flp->insert && flp->path) key += flp->path;
+	}
+	if (key == sidesKey) return;
+	sidesKey = key;
+	Floppy* flp = (drv < 0) ? NULL : conf.zx->dif->flp[drv];
+	const bool sides = flp && flp->insert && flp->path && *flp->path && hasSides && hasSides(drv);
+	btnPrev->setEnabled(sides);
+	btnNext->setEnabled(sides);
 }
 
 static const QStringList trdHeads = {"Name", "Ext", "Start", "Length", "SecLen", "Trk", "Sec"};
