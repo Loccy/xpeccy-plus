@@ -132,7 +132,8 @@ the drives and on the disks. In the picture drive A holds Fire 'n Ice (n-Discove
   its set, then buttons to {icon}`fileopen` open
   a disk image, {icon}`doc-new` insert a new disk, {icon}`floppy` save the changes to the
   disk's own file, {icon}`save-as` save the disk to a new file, and {icon}`tape-eject` eject,
-  and the **Write protect** box.
+  {icon}`tape-prev` the previous and {icon}`tape-next` the next disk of the set (gray when
+  the disk has none), and the **Write protect** box.
   They do what the **Floppy Drives** menu does.
 - **The catalog** - the files on a TR-DOS disk: **Name**, **Ext**, **Start**, **Length**,
   **SecLen** (length in sectors), **Trk** and **Sec** (where the file begins). A +3DOS disk

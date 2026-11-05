@@ -142,8 +142,10 @@ has no key at first (see [Hotkeys](hotkeys.md)). It works on the tape or the dri
 program used last, the one the window title names, and keeps to it while you press it again;
 before the program has used either, on the tape if it is one of a set, else on drive A. A
 playing tape is stopped first. A disk that is in another drive is passed over. The screen
-shows what went in, as `drive A: side b`, or `no other side`. Of the files of one side, as
-`Side A` and `Side A [a]`, the one with the same notes in brackets goes in.
+shows what went in, as `drive A: side B`, or `no other side`. Of the files of one side, as
+`Side A` and `Side A [a]`, the one with the same notes in brackets goes in. The
+{icon}`tape-prev` {icon}`tape-next` buttons of the **Tape Player** and of each drive in the
+**Disk Manager** do the same for the tape or that drive.
 
 The set is found by the names: files named the same but for the side or the part, as
 `Game (Side A).tzx` and `Game (Side B).tzx`, `Game - Side 1.tzx`, `game_a.tap` and
