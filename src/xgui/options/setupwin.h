@@ -46,6 +46,7 @@ class SetupWin : public QDialog {
 			int mem = 0;
 		} shown;
 		void fillPages();
+		void noteShown();
 		QDialog* popOut(QWidget*, const char*);
 		void cfgLoaded();
 		void fillRomSlots();

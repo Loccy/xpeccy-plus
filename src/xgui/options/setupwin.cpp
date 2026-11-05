@@ -1273,8 +1273,12 @@ void SetupWin::fillPages() {
 	ui.leDbgFont->setFont(dbgfnt);
 // palette
 	fillDbgPalette();
+	noteShown();
+}
+
 // what Apply sets only if it moves, as the page shows it now
-	shown.cpu = xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq);
+void SetupWin::noteShown() {
+	shown.cpu = xcpu_frq_parse(ui.cbCpuFrq->currentText(), conf.zx->cpuFrq);
 	shown.psg = opt_get_psg_frq(cbPsgFrq) / psgFrqMul;
 	shown.mem = getRFIData(ui.mszbox);
 }
@@ -1287,9 +1291,7 @@ void SetupWin::apply() {
 	std::string macWas = xm_signature();
 	int rwStep = conf.emu.rewind.step;
 	int rwSecs = conf.emu.rewind.secs;
-	// unset shows as Last, and stays unset - the first start still asks - until changed
-	// R/O stops the folders in use from changing at once; R/W is taken when a folder
-	// is mounted or read again, with the power off
+	// R/O stops the folders in use from changing at once; R/W is taken at the next read
 	int foldRw = getRFIData(cbFolderWrite) ? 1 : 0;
 	if (conf.fold.rw && !foldRw) {
 		emu_lock();
@@ -1301,6 +1303,7 @@ void SetupWin::apply() {
 	applySaves();
 	int row = cbStart->currentIndex();
 	int ms = (row == 0) ? MS_LAST : (row == 1) ? MS_ASK : (row == 2) ? MS_RESUME : MS_THIS;
+	// unset shows as Last, and stays unset - the first start still asks - until changed
 	if ((conf.macStart != MS_UNSET) || (ms != MS_LAST)) conf.macStart = ms;
 	if (ms == MS_THIS) conf.macStartId = getRFSData(cbStart).toLocal8Bit().data();
 	// another machine is not this page with different values in it: it has its
@@ -1315,7 +1318,7 @@ void SetupWin::apply() {
 	}
 	applyGlobal();
 	if (another) {
-		start();		// the new machine's own values on the pages
+		fillPages();		// the new machine's own values on the pages
 		emit s_prf_changed();
 	} else {
 		// the machine carries what the page put in it: into its own file, so it is
@@ -1346,12 +1349,8 @@ void SetupWin::apply() {
 	}
 }
 
-// What the pages hold for the machine itself. Another machine has its own, so
-// none of this goes onto it. The machine runs on under Apply, and what it has set
-// itself stays: the clocks, the layout and the sound chips are set only when the
-// page shows them otherwise than when it was opened - setting them again runs the
-// board's init (comp_update_timings), puts the frame INT where the layout has it
-// and starts the chips' tick over.
+// What the pages hold for this machine. What it set itself stays: the clocks, the
+// layout and the sound chips are set only when the page has them otherwise.
 void SetupWin::applyMachine() {
 	Computer* comp = conf.zx;
 // machine
@@ -1452,12 +1451,8 @@ void SetupWin::applyMachine() {
 	difSetDrives(comp->dif, fit);
 // hdd
 	ide_set_type(comp->ide, getRFIData(hiface));
-	// What is mounted is the Drives menu's. A folder is not read again here: the DOS
-	// running keeps what it read of it, and a program's own folder put on the card
-	// would be gone from it. It is read again with the power off (xm_power_cycle).
-// divmmc: a board is put on, taken off or given other RAM with the power off, so
-// the machine comes up from its power-on with it. Left running, the machine would
-// meet a firmware that never started at its first error report or NMI.
+	// what is mounted is the Drives menu's, a folder read again only with the power off
+// divmmc: a board put on, off or given other RAM powers the machine off and on
 	int divModel = (divBox->currentIndex() && hw_takes_divmmc(comp->hw)) ? DIV_MMC : DIV_NONE;
 	int divPages = divRamBox->currentIndex() ? DIV_PAGES_MAX : 16;
 	bool divPower = (divModel != comp->div->model) || (divModel && (divPages != comp->div->pages));
@@ -1476,10 +1471,7 @@ void SetupWin::applyMachine() {
 		xm_power_cycle();
 		emu_unlock();
 	}
-	// what the machine has now, for the next Apply with the window still open
-	shown.cpu = frq;
-	shown.psg = psgFrq;
-	shown.mem = msz;
+	noteShown();		// for the next Apply with the window still open
 }
 
 // The emulator's own settings, and the user's that live on the machine (mouse,
