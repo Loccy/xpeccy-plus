@@ -694,7 +694,9 @@ static void fs_release(Video* vid) {
 
 static void fs_frame(Computer* comp) {
 	Video* vid = comp->vid;
-	int on = conf.vid.frameSkip && !conf.emu.pause && frame_skip_allowed(comp);
+	// at normal speed only: slowed down, every frame is wanted
+	int on = conf.vid.frameSkip && !conf.emu.pause && (conf.emu.tmode == XTM_NONE) && (conf.emu.speed == 1.0)
+		&& frame_skip_allowed(comp);
 	long long frame = (long long)conf.snd.rate * vid->nsPerFrame / 1000000000LL;
 	int skip = on && (fs_run >= 2) && (conf.snd.need > frame);
 	if (skip) {

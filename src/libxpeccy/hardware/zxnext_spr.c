@@ -322,12 +322,11 @@ void nxs_run(Computer* comp, long long t2) {
 		SP.passBuf ^= 1;
 		SP.dispSwap = (sw - 2) >> 2;
 		// the picture is drawn after the ray (zxnext_vid.c): the line shown up to here
-		// is kept for it, then cleared as the display cleared it reading it
-		if (!comp->vid->nodraw && !comp->vid->still) {
-			NX.v.sprKeepNew ^= 1;
-			memcpy(NX.v.sprKeep[NX.v.sprKeepNew], SP.buf[SP.passBuf], sizeof(SP.buf[0]));
-			NX.v.sprKeepTo[NX.v.sprKeepNew] = SP.dispSwap;
-		}
+		// is kept for it, then cleared as the display cleared it reading it. Undrawn
+		// too: the drawing may be taken up a few dots back of a swap (nxv_wake)
+		NX.v.sprKeepNew ^= 1;
+		memcpy(NX.v.sprKeep[NX.v.sprKeepNew], SP.buf[SP.passBuf], sizeof(SP.buf[0]));
+		NX.v.sprKeepTo[NX.v.sprKeepNew] = SP.dispSwap;
 		memset(SP.buf[SP.passBuf], 0, sizeof(SP.buf[0]));
 		SP.vcount = (nxs_wvc(comp, (sw - 2) >> 2) + 1) & 0x1ff;
 	}

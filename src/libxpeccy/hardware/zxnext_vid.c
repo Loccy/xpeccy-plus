@@ -1225,8 +1225,8 @@ static __attribute__((noinline)) void nxv_gen_one(Computer* comp, long long D, i
 }
 
 // One dot drawn on its own where no field moves between its two half-pixels (the dot of
-// an event that lands past it, a Pentagon dot off the border): the plain path or the
-// general one, as a run of such dots would take (nxv_span_draw)
+// an event that lands past it): the plain path or the general one, as a run of such
+// dots would take (nxv_span_draw)
 static void nxv_draw_dot(Computer* comp, unsigned int* ptr, long long D, int phc, int vc, int wvc, int whc, int bad) {
 	if (V.dirty) nxv_derive(comp);
 	if (V.dv.plain)
@@ -1463,6 +1463,13 @@ static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, c
 	}
 }
 
+// the dot of raw rx is border (border_active), as nxv_draw has it
+static inline int nxv_bad_at(const nxTiming* t, int L, const nxvLine* ln, int rx) {
+	int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
+	int vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
+	return (phc & 0x100) || nxv_vbord(vc);
+}
+
 static void nxv_span_draw(Computer* comp, const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
 	nxvSpan sp;
 	nxv_span_set(comp, &sp, D);
@@ -1576,19 +1583,23 @@ static void nxv_render(Computer* comp, long long end) {
 				rx = rxe;
 			}
 			// the Pentagon takes its border colour again on every CLK_14 edge (nxv_draw):
-			// dot by dot
-			for (; rx < rxe; rx++, D++, ptr += 2) {
-				int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
-				int vc = (rx >= t->hact - 11) ? ln.vcA : ln.vcB;
-				int wvc = (rx >= t->hact - 47) ? ln.wvcA : ln.wvcB;
-				int bad = (phc & 0x100) || nxv_vbord(vc);
-				if (bad) {
+			// the border dot by dot, the paper between as a run
+			while (rx < rxe) {
+				if (nxv_bad_at(t, L, &ln, rx)) {
 					V.cur = D;
 					V.rx = rx;
 					nxv_draw(comp, t, L, F, vact, &ln);
+					rx++;
+					D++;
+					ptr += 2;
 					continue;
 				}
-				nxv_draw_dot(comp, ptr, D, phc, vc, wvc, (phc + 32) & 0x1ff, bad);
+				int r2 = rx + 1;
+				while ((r2 < rxe) && !nxv_bad_at(t, L, &ln, r2)) r2++;
+				nxv_span_draw(comp, t, L, &ln, rx, r2, D, ptr);
+				D += r2 - rx;
+				ptr += 2 * (r2 - rx);
+				rx = r2;
 			}
 			// the run's dots past the drawn part are passed over
 			if (rx < rxa) {
@@ -1748,6 +1759,7 @@ static void nxv_fetch_to(Computer* comp, long long end) {
 	// the stopped one does); a stopped one is not started by anything here
 	if (nx_cop_on(comp)) {
 		nx_cop_run(comp, (end - 1) * 4 + 4);
+		if (!V.live) return;		// it wrote a reset (NR 02): nothing more here
 		// stopped for room at edge copT (nx_cop_hold): the dots it has ended go first
 		long long e = NX.copT >> 2;
 		if ((e < end) && (e > d)) end = e;
@@ -1826,6 +1838,7 @@ static void nxv_flush(Computer* comp, long long end) {
 	// there, then on
 	do {
 		nxv_fetch_to(comp, end);
+		if (!V.live) break;		// a reset the copper wrote (NR 02): taken up afresh
 		nxv_render(comp, V.lastDot - NXV_LAG + 1);
 	} while (V.lastDot + 1 < end);
 	nxv_flushing = 0;
@@ -1839,7 +1852,9 @@ void nxv_line(Computer* comp) {
 // A soft reset, before the registers go: the picture up to the ray as they stood, and
 // the dot to take the drawing up at after it (-1: at the ray when it is drawn again)
 long long nxv_before_reset(Computer* comp) {
-	if (!V.live || comp->vid->nodraw || comp->vid->still) return -1;
+	// a reset the copper writes inside the drawing (nxv_fetch_to): no drawing from in
+	// there; the drawing stops there and is taken up at the ray (nxv_flush)
+	if (!V.live || comp->vid->nodraw || comp->vid->still || nxv_flushing) return -1;
 	int h, v;
 	nx_raw(comp, &h, &v);
 	long long d = NX.frameBase + h;
