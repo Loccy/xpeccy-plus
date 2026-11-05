@@ -63,7 +63,8 @@ void nxv_memw(Computer*, int, int, long long);
 int nxv_float(Computer*, long long);
 void nxv_retime(Computer*, long long, int);
 void nxv_line(Computer*);		// a raw line starts: the one before is drawn
-long long nxv_before_reset(Computer*);
+long long nxv_before_reset(Computer*, long long);	// a soft reset at clk28 w (-1: now)
+void nxv_after_reset(Computer*, long long);
 void nxv_touch(Computer*);		// something the picture reads moved: a still frame ends
 
 // the board's CLK_28 against 28 MHz, as a period: 1 at VGA 0 (zxnext.c, NR 11)

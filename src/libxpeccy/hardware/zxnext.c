@@ -2559,12 +2559,13 @@ static void nx_power(Computer* comp) {
 static void nx_soft_reset(Computer* comp) {
 	NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
 	if (next_reset_open) return;
-	long long up = nxv_before_reset(comp);
+	// NR 02 b0: the write's own edge (nx_nr_land), the copper's or the CPU's
+	long long up = nxv_before_reset(comp, NX.nrLastW);
 	nx_regs_reset(comp);
 	if (NX.speed) compSetHwTurbo(comp, 1.0);
 	nx_map_mem(comp);
 	nxv_reset(comp);
-	NX.v.upAt = up;			// drawn on from there, as the dot after the reset did
+	nxv_after_reset(comp, up);	// drawn on from there, as the dot after the reset did
 	cpu_reset(comp->cpu);
 }
 
@@ -2742,7 +2743,7 @@ static void nx_reset(Computer* comp) {
 	} else {
 		// the reset button: a soft reset (zxnext.vhd 1733-1738, 6370)
 		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
-		up = nxv_before_reset(comp);	// the raster stays: it changes at a frame start only
+		up = nxv_before_reset(comp, -1);	// the raster stays: it changes at a frame start only
 		nx_regs_reset(comp);
 		nx_layout(comp);
 	}
@@ -2756,7 +2757,7 @@ static void nx_reset(Computer* comp) {
 	comp_set_cont(comp, 0);		// the machine contends by itself (nx_cont)
 	nx_map_mem(comp);
 	nxv_reset(comp);
-	NX.v.upAt = up;			// the button: drawn on from where the reset found the ray
+	nxv_after_reset(comp, up);	// the button: drawn on from where the reset found the ray
 	nx_snd_reset(comp);
 	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
 }

@@ -17,6 +17,7 @@
 // that picture, and the first change takes the drawing up at the ray, the state
 // there worked out as after any undrawn stretch (nxv_resync).
 
+#include <stddef.h>
 #include <string.h>
 #include <limits.h>
 
@@ -30,6 +31,18 @@
 static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
 static int nxv_sweeping = 0;		// in nxv_sweep: no copper, no sprite pass
 static void nxv_flush(Computer* comp, long long end);
+
+// the dot under the ray (the video walked to the cpu first)
+static inline long long nxv_ray_dot(Computer* comp) {
+	int h, v;
+	nx_raw(comp, &h, &v);
+	return NX.frameBase + h;
+}
+
+// the picture is being drawn: in step with the machine, the frame drawn and not still
+static inline int nxv_drawing(Computer* comp) {
+	return V.live && !comp->vid->nodraw && !comp->vid->still;
+}
 
 // an SZX keeps nxVideo as one field, its length in 16 bits
 _Static_assert(sizeof(nxVideo) < 65536, "nxVideo does not fit an SZX field");
@@ -182,11 +195,9 @@ void nxv_memw(Computer* comp, int key, int old, long long w) {
 	// the next write takes the oldest one's place: if a read may still have to undo it
 	// (the mixer draws a line behind the ray, and reads up to 32 dots back), the picture
 	// is drawn up to this write first
-	if ((V.wr[V.wrHead].w > (V.cur - 32) * 4) && V.live && !comp->vid->nodraw && !comp->vid->still && !nxv_flushing) {
-		int h, v;
-		nx_raw(comp, &h, &v);
+	if ((V.wr[V.wrHead].w > (V.cur - 32) * 4) && nxv_drawing(comp) && !nxv_flushing) {
 		long long end = w >> 2;
-		long long ray = NX.frameBase + h;
+		long long ray = nxv_ray_dot(comp);
 		nxv_flush(comp, (end < ray) ? end : ray);
 	}
 }
@@ -258,7 +269,7 @@ static inline void nxv_apply_to(Computer* comp, long long a) {
 }
 
 static void nxv_push(Computer* comp, long long t, int f, int x, int v) {
-	if (comp->vid->nodraw || comp->vid->still || !V.live) {
+	if (!nxv_drawing(comp)) {
 		// nothing is drawn: the change is in effect at once
 		nxv_apply(comp, LLONG_MAX);
 		if (f == NXF_PAL) {
@@ -386,17 +397,27 @@ static void nxv_hprune(nxvHist* h, long long from) {
 
 #define NXV_HFULL	(NXV_HIST - 2)
 
+// every history of nxVideo, for what walks them all (one added goes here too)
+static const size_t nxv_hists[] = {
+	offsetof(nxVideo, hBrd), offsetof(nxVideo, hPff), offsetof(nxVideo, hShadow),
+	offsetof(nxVideo, hSx), offsetof(nxVideo, hSy), offsetof(nxVideo, hFine),
+	offsetof(nxVideo, hTmSx), offsetof(nxVideo, hTmSy), offsetof(nxVideo, hTmMap),
+	offsetof(nxVideo, hTmTile), offsetof(nxVideo, hTmCtl), offsetof(nxVideo, hTmAttr)
+};
+#define NXV_NHISTS	(sizeof(nxv_hists) / sizeof(nxv_hists[0]))
+
+static inline nxvHist* nxv_hist(Computer* comp, unsigned i) {
+	return (nxvHist*)((char*)&V + nxv_hists[i]);
+}
+
 static int nxv_hroom(Computer* comp) {
-	return (V.hBrd.n < NXV_HFULL) && (V.hPff.n < NXV_HFULL) && (V.hShadow.n < NXV_HFULL)
-		&& (V.hSx.n < NXV_HFULL) && (V.hSy.n < NXV_HFULL) && (V.hFine.n < NXV_HFULL)
-		&& (V.hTmSx.n < NXV_HFULL) && (V.hTmSy.n < NXV_HFULL) && (V.hTmMap.n < NXV_HFULL)
-		&& (V.hTmTile.n < NXV_HFULL) && (V.hTmCtl.n < NXV_HFULL) && (V.hTmAttr.n < NXV_HFULL);
+	for (unsigned i = 0; i < NXV_NHISTS; i++)
+		if (nxv_hist(comp, i)->n >= NXV_HFULL) return 0;
+	return 1;
 }
 
 static void nxv_hprune_all(Computer* comp, long long from) {
-	nxvHist* all[] = {&V.hBrd, &V.hPff, &V.hShadow, &V.hSx, &V.hSy, &V.hFine,
-		&V.hTmSx, &V.hTmSy, &V.hTmMap, &V.hTmTile, &V.hTmCtl, &V.hTmAttr};
-	for (unsigned i = 0; i < sizeof(all) / sizeof(all[0]); i++) nxv_hprune(all[i], from);
+	for (unsigned i = 0; i < NXV_NHISTS; i++) nxv_hprune(nxv_hist(comp, i), from);
 }
 
 // the queue has room for the changes of one more write (NXF_CMP at most)
@@ -408,13 +429,11 @@ static inline int nxv_qroom(Computer* comp) {
 // before w has landed (the copper's writes too: it stands at w when its own lands,
 // nx_cop_run), so the picture is drawn up to w and what no read reaches goes
 static void nxv_room(Computer* comp, long long w) {
-	int h, v;
-	nx_raw(comp, &h, &v);
-	long long ray = NX.frameBase + h;
+	long long ray = nxv_ray_dot(comp);
 	// the dot the reads start from: the mixer's when it draws, else the one the drawing
 	// is taken up at (the ray, or the dot of a reset)
 	long long from = ((V.upAt >= 0) && (V.upAt < ray)) ? V.upAt : ray;
-	if (V.live && !comp->vid->nodraw && !comp->vid->still) {
+	if (nxv_drawing(comp)) {
 		long long end = w >> 2;
 		if (end > ray) end = ray;
 		if (!nxv_flushing)
@@ -614,7 +633,7 @@ int nxv_float(Computer* comp, long long lt) {
 	long long g = (lt - 1) >> 2;		// the period the latch falls in
 	// the fetch, a line behind the ray, drawn up to the latch first: its registers are
 	// the ones read, with no dots run again here
-	if (V.live && !comp->vid->nodraw && !comp->vid->still && !nxv_flushing && (V.lastDot < p))
+	if (nxv_drawing(comp) && !nxv_flushing && (V.lastDot < p))
 		nxv_flush(comp, (p + 1 < dr) ? p + 1 : dr);
 	nxvFetch fe;
 	long long from;
@@ -846,12 +865,7 @@ static inline __attribute__((always_inline)) int nxv_mixo(int order, int blend, 
 	return out;
 }
 
-static inline int nxv_mix(const unsigned short* f, int l2, int l2_t, int l2p, int s, int s_t, int fin, int fin_t,
-		int umix, int umix_t, int u, int u_t, int tm, int tm_t, int below, int bad, int fb9) {
-	return nxv_mixo(f[NXF_ORDER], f[NXF_BLEND], l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9);
-}
-
-// nxv_mix in orders 0-5 with the tilemap off: fin = u, fin_t = u_t, bx = bad && !s_t
+// nxv_mixo in orders 0-5 with the tilemap off: fin = u, fin_t = u_t, bx = bad && !s_t
 static inline int nxv_mix6(int order, int l2, int l2_t, int l2p, int s, int s_t, int u, int u_t, int bx, int fb9) {
 	switch (order) {
 		case 0:		// SLU
@@ -1255,6 +1269,14 @@ static void nxv_line_set(nxvLine* ln, int ry, int F, int vact) {
 	ln->wvcB = (prev >= vact - 34) ? prev - vact + 32 : 0x1ff;
 }
 
+// the counters of the pixel period of the dot at raw rx on the line: phc, vc_ula, wvc
+// (zxula_timing.vhd 423-520)
+NXV_INL void nxv_rx_ctr(const nxTiming* t, int L, const nxvLine* ln, int rx, int* phc, int* vc, int* wvc) {
+	*phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
+	*vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
+	*wvc = (rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
+}
+
 static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, const nxvLine* ln) {
 	long long D = V.cur;
 	long long A = D * 2;
@@ -1272,9 +1294,8 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 	}
 	unsigned int* ptr = (unsigned int*)(scrimg + (iy - t->vblank) * bytesPerLine + (ix - t->hblank) * 8);
 	// the counters of this pixel's period: phc, vc_ula, wvc (zxula_timing.vhd 423-520)
-	int phc = ((V.rx >= t->hact - 47) ? V.rx - t->hact - 1 : V.rx + L - t->hact - 1) & 0x1ff;
-	int vc = (V.rx >= t->hact - 11) ? ln->vcA : ln->vcB;
-	int wvc = (V.rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
+	int phc, vc, wvc;
+	nxv_rx_ctr(t, L, ln, V.rx, &phc, &vc, &wvc);
 	int bad = (phc & 0x100) || nxv_vbord(vc);	// border_active
 	int whc = (phc + 32) & 0x1ff;
 	int sb = 0;					// the sprite line buffer's entry for whc
@@ -1441,7 +1462,7 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 				}
 			}
 		}
-		int out = nxv_mix(f, l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9);
+		int out = nxv_mixo(f[NXF_ORDER], f[NXF_BLEND], l2, l2_t, l2p, s, s_t, fin, fin_t, umix, umix_t, u, u_t, tm, tm_t, below, bad, fb9);
 		ptr[h] = nxv_col[out & 0x1ff];
 	}
 }
@@ -1452,10 +1473,8 @@ static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, 
 static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, const nxvSpan* sp, const int gen, const int order,
 		const nxTiming* t, int L, const nxvLine* ln, int rx, int rxe, long long D, unsigned int* ptr) {
 	for (; rx < rxe; rx++, D++, ptr += 2) {
-		// as nxv_draw has them
-		int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
-		int vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
-		int wvc = (rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
+		int phc, vc, wvc;
+		nxv_rx_ctr(t, L, ln, rx, &phc, &vc, &wvc);
 		int bad = (phc & 0x100) || nxv_vbord(vc);
 		if (gen)
 			nxv_gen_dot(comp, sp, order, D, phc, vc, wvc, bad, (phc + 32) & 0x1ff, ptr);
@@ -1466,8 +1485,8 @@ static inline __attribute__((always_inline)) void nxv_span_run(Computer* comp, c
 
 // the dot of raw rx is border (border_active), as nxv_draw has it
 static inline int nxv_bad_at(const nxTiming* t, int L, const nxvLine* ln, int rx) {
-	int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
-	int vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
+	int phc, vc, wvc;
+	nxv_rx_ctr(t, L, ln, rx, &phc, &vc, &wvc);
 	return (phc & 0x100) || nxv_vbord(vc);
 }
 
@@ -1558,8 +1577,8 @@ static void nxv_render(Computer* comp, long long end) {
 				int off = !V.f[NXF_ULAEN];
 				int fl = g->flashOn;
 				for (; rx < rxe; rx++, D++, ptr += 2) {
-					int phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
-					int vc = (rx >= t->hact - 11) ? ln.vcA : ln.vcB;
+					int phc, vc, wvc;
+					nxv_rx_ctr(t, L, &ln, rx, &phc, &vc, &wvc);
 					int bad = (phc & 0x100) || nxv_vbord(vc);
 					int inwin = (phc >= g->ucx1) && (phc <= g->ucx2) && (vc >= g->ucy1) && (vc <= g->ucy2);
 					int clip = !(inwin || bad) || off;
@@ -1661,9 +1680,7 @@ static void nxv_flash_to(Computer* comp, long long d) {
 
 void nxv_settle(Computer* comp) {
 	if (!comp->vid->still) return;
-	int h, v;
-	nx_raw(comp, &h, &v);
-	nxv_flash_to(comp, NX.frameBase + h);
+	nxv_flash_to(comp, nxv_ray_dot(comp));
 }
 
 void nxv_touch(Computer* comp) {
@@ -1836,16 +1853,23 @@ static void nxv_flush(Computer* comp, long long end) {
 		return;
 	}
 	if (!V.live) nxv_take_up(comp);
+	// from inside one (a reset the copper writes, nxv_before_reset): this one draws only
+	// up to where the copper stands, the outer one goes on
+	int outer = nxv_flushing;
 	nxv_flushing = 1;
-	// the fetch stops short where the copper was stopped for room (nxv_room): drawn to
-	// there, then on
-	do {
-		nxv_fetch_to(comp, end);
-		if (!V.live) break;		// a reset the copper wrote (NR 02): taken up afresh
-		nxv_render(comp, V.lastDot - NXV_LAG + 1);
-	} while (V.lastDot + 1 < end);
-	nxv_flushing = 0;
-	nx_cop_hold = 0;
+	for (;;) {
+		// the fetch stops short where the copper was stopped for room (nxv_room): drawn
+		// to there, then on
+		do {
+			nxv_fetch_to(comp, end);
+			if (!V.live) break;		// a reset the copper wrote (NR 02)
+			nxv_render(comp, V.lastDot - NXV_LAG + 1);
+		} while (V.lastDot + 1 < end);
+		if (V.live || outer || (V.upAt < 0)) break;
+		nxv_take_up(comp);			// ...on from the reset's dot
+	}
+	nxv_flushing = outer;
+	if (!outer) nx_cop_hold = 0;
 }
 
 void nxv_line(Computer* comp) {
@@ -1887,19 +1911,26 @@ void nxv_sweep(Video* vid) {
 	V = keep;
 }
 
-// A soft reset, before the registers go: the picture up to the ray as they stood, and
-// the dot to take the drawing up at after it (-1: at the ray when it is drawn again)
-long long nxv_before_reset(Computer* comp) {
-	// a reset the copper writes inside the drawing (nxv_fetch_to): no drawing from in
-	// there; the drawing stops there and is taken up at the ray (nxv_flush)
-	if (!V.live || comp->vid->nodraw || comp->vid->still || nxv_flushing) return -1;
-	int h, v;
-	nx_raw(comp, &h, &v);
-	long long d = NX.frameBase + h;
+// A soft reset written at CLK_28 w (-1: the button, at the ray), before the registers
+// go: the picture up to it as they stood, and the dot to take the drawing up at after it
+// (-1: at the ray when it is drawn again). A copper writing it stands at w, inside the
+// drawing (nxv_fetch_to) or not, so drawing up to w runs it no further.
+long long nxv_before_reset(Computer* comp, long long w) {
+	if (comp->vid->nodraw || comp->vid->still) return -1;
+	if (!V.live) return V.upAt;		// one not taken up yet (in this line): from its dot
+	long long d = nxv_ray_dot(comp);
+	if ((w >= 0) && ((w >> 2) < d)) d = w >> 2;
 	nxv_flush(comp, d);
 	// the mixer one dot on, to where the take-up at d starts it (nxv_resync)
 	nxv_render(comp, d - NXV_LAG + 1);
 	return d;
+}
+
+// ...and after it (nxv_reset done): taken up at that dot at once, so what lands next
+// goes in the queue at its own time. From inside the drawing the outer nxv_flush does it.
+void nxv_after_reset(Computer* comp, long long up) {
+	V.upAt = up;
+	if ((up >= 0) && !nxv_flushing && !comp->vid->nodraw && !comp->vid->still) nxv_take_up(comp);
 }
 
 // the raw counters of the dot under the ray
@@ -1938,9 +1969,7 @@ int nxv_run(Video* vid, int k) {
 // places it (raw line V.ry, dot V.rx at column V.rx - 1 - hblank), drawn up to the ray
 unsigned char* nxv_drawn(Video* vid) {
 	Computer* comp = (Computer*)vid->xptr;
-	int h, v;
-	nx_raw(comp, &h, &v);
-	nxv_flush(comp, NX.frameBase + h);
+	nxv_flush(comp, nxv_ray_dot(comp));
 	if (!V.live) return vid->ray.ptr;
 	const nxTiming* t = nx_tim(comp);
 	int row = V.ry - t->vblank;
