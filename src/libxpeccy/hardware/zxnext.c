@@ -1927,6 +1927,9 @@ void nx_cop_run(Computer* comp, long long t) {
 		} else {
 			NX.copDout = 0;
 		}
+		// the copper stands at e: a write landing may have the picture drawn up to it
+		// (nxv_room), which runs the copper to there - nothing to run again
+		NX.copT = e;
 		while (NX.copN && (NX.copQ[0].w <= e)) {
 			int reg = NX.copQ[0].reg;
 			int val = NX.copQ[0].val;

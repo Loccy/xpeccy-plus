@@ -25,6 +25,9 @@
 #define V (NX.v)
 #define NXV_SHADOW	0x200000	// a memory key past the 2 MB: NX.shadow[]
 #define NXV_LAG		4		// dots the mixer keeps behind the fetch
+// dots the copper is run ahead of the drawing (nxv_flush): at two MOVEs a dot, what it
+// writes of one sampled register over them and the 20 dots read back fits NXV_HIST
+#define NXV_COPRUN	32
 #define NXV_RAM		0x040000	// SRAM of RAM page 0
 
 // an SZX keeps nxVideo as one field, its length in 16 bits
@@ -334,9 +337,72 @@ static long long nxv_fall(Computer* comp, long long w) {
 	return t + r;
 }
 
+// == room for a line of changes ==
+// The mixer draws a line behind the ray, so the changes of a whole line wait in the
+// queue and the histories. Before one more could overflow them, the picture is drawn up
+// to the ray, as when it was drawn a few dots behind it - not from inside the drawing
+// (the copper's writes): nxv_flush runs the copper in pieces short enough for them.
+
+static int nxv_flushing = 0;		// in nxv_flush: no drawing from here
+
+// the changes no read can reach any more go: those older than the next one before
+// dot from (whatever reads a value reads it at a dot past from)
+static void nxv_hprune(nxvHist* h, long long from) {
+	long long t = from * 4;
+	while ((h->n > 1) && (h->t[(h->head + 1) & (NXV_HIST - 1)] < t)) {
+		h->v0 = h->v[h->head];
+		h->head = (h->head + 1) & (NXV_HIST - 1);
+		h->n--;
+	}
+	if ((h->n == 1) && (h->t[h->head] < t)) {
+		h->v0 = h->v[h->head];
+		h->n = 0;
+		h->head = 0;
+	}
+}
+
+#define NXV_HFULL	(NXV_HIST - 2)
+
+static int nxv_hroom(Computer* comp) {
+	return (V.hBrd.n < NXV_HFULL) && (V.hPff.n < NXV_HFULL) && (V.hShadow.n < NXV_HFULL)
+		&& (V.hSx.n < NXV_HFULL) && (V.hSy.n < NXV_HFULL) && (V.hFine.n < NXV_HFULL)
+		&& (V.hTmSx.n < NXV_HFULL) && (V.hTmSy.n < NXV_HFULL) && (V.hTmMap.n < NXV_HFULL)
+		&& (V.hTmTile.n < NXV_HFULL) && (V.hTmCtl.n < NXV_HFULL) && (V.hTmAttr.n < NXV_HFULL);
+}
+
+static void nxv_hprune_all(Computer* comp, long long from) {
+	nxvHist* all[] = {&V.hBrd, &V.hPff, &V.hShadow, &V.hSx, &V.hSy, &V.hFine,
+		&V.hTmSx, &V.hTmSy, &V.hTmMap, &V.hTmTile, &V.hTmCtl, &V.hTmAttr};
+	for (unsigned i = 0; i < sizeof(all) / sizeof(all[0]); i++) nxv_hprune(all[i], from);
+}
+
+static void nxv_flush(Computer* comp, long long end);
+
+// w: the CLK_28 edge of the write coming - all before it has landed (the copper's
+// writes too: it stands at w when its own lands, nx_cop_run)
+static void nxv_room(Computer* comp, long long w) {
+	if ((V.evN - V.evHead < NXV_EVQ - NXF_CMP - 2) && nxv_hroom(comp)) return;
+	int h, v;
+	nx_raw(comp, &h, &v);
+	long long ray = NX.frameBase + h;
+	// the dot the reads start from: the mixer's when it draws, else the ray's, where
+	// the drawing is taken up
+	long long from = ray;
+	if (V.live && !comp->vid->nodraw && !comp->vid->still) {
+		long long end = w >> 2;
+		if (end > ray) end = ray;
+		if (!nxv_flushing) nxv_flush(comp, end);
+		from = V.cur;
+	}
+	// what reads back past it: the tilemap's latch 15 dots, a take-up and the
+	// floating bus 24 before the ray (which is at or past the mixer)
+	nxv_hprune_all(comp, from - 24);
+}
+
 // a register write landed at CLK_28 w: queue whatever the picture reads that moved
 void nxv_regs(Computer* comp, long long w) {
 	unsigned short q[NXF_CMP];
+	nxv_room(comp, w);
 	nxv_fields(comp, q);
 	// a still frame ends before the first change goes in
 	if (memcmp(q, V.q, sizeof(q)) || nx_cop_on(comp)) nxv_touch(comp);
@@ -368,6 +434,7 @@ void nxv_pal(Computer* comp, int p, int idx, long long w) {
 	// sprites and the tilemap look up on the other CLK_28 (sc(0) = 1, zxnext.vhd 6981, 7033)
 	long long a = ((p & 3) >= 2) ? ((w >> 1) - 2) : nxv_at(NXC_PAL, w);
 	if (!comp->vid->still || (V.pal[p][idx & 0xff] != NX.pal[p][idx & 0xff])) nxv_touch(comp);
+	nxv_room(comp, w);
 	nxv_push(comp, a, NXF_PAL, (p << 8) | (idx & 0xff), NX.pal[p][idx & 0xff]);
 }
 
@@ -1757,8 +1824,16 @@ static void nxv_flush(Computer* comp, long long end) {
 		return;
 	}
 	if (!V.live) nxv_take_up(comp);
-	nxv_fetch_to(comp, end);
-	nxv_render(comp, V.lastDot - NXV_LAG + 1);
+	nxv_flushing = 1;
+	// a copper running writes up to two changes a dot: run in pieces of NXV_COPRUN
+	// dots, each drawn before the next, so its changes never pile up a line
+	do {
+		long long e = end;
+		if (nx_cop_on(comp) && (e - V.lastDot - 1 > NXV_COPRUN)) e = V.lastDot + 1 + NXV_COPRUN;
+		nxv_fetch_to(comp, e);
+		nxv_render(comp, V.lastDot - NXV_LAG + 1);
+	} while (V.lastDot + 1 < end);
+	nxv_flushing = 0;
 }
 
 void nxv_line(Computer* comp) {
