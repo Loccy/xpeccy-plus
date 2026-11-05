@@ -1071,6 +1071,7 @@ void uReset(FDC* fdc) {
 //	fdc->dir = 0;	// cpu->fdc
 	uidle(fdc);
 	fdc->mr = 0;
+	fdc->slow = 0;
 	fdc->plan = NULL;
 	fdc->wait = 0;
 	fdc->trk = 0;

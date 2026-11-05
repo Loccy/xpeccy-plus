@@ -169,10 +169,12 @@ void difSetDrives(DiskIF* dif, int cnt) {
 
 // what is live: the interface set, or none while it is out
 static void dif_apply(DiskIF* dif) {
+	int was = dif->type;
 	dif->hw = findDHW(dif->out ? DIF_NONE : dif->cfg);
 	if (!dif->hw)
 		dif->hw = findDHW(DIF_NONE);
 	dif->type = dif->hw->id;
+	if (dif->type != was) dif->fdc->slow = 0;	// the +3's real time is not the next controller's
 }
 
 void difSetHW(DiskIF* dif, int type) {
