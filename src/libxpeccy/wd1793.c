@@ -12,6 +12,7 @@ static const int pauses[4] = {6000000,12000000,20000000,30000000};	// step rate,
 #define VG_START	20000		// command start, before the first step
 #define VG_SETTLE	15000000	// head settling: verify, and the E flag of type II/III
 #define VG_TURBO_STEP	20000
+#define VG_TURBO_BYTE	500	// ns a byte takes with fast disk access
 
 static int vg_step_time(FDC* fdc) {
 	return fdc_turbo(fdc) ? VG_TURBO_STEP : pauses[fdc->com & 3];
@@ -49,7 +50,7 @@ void wrCRC(FDC* fdc) {
 // wait ADR
 // return: 0 : not ADR, 1 : ADR, 2 : IDX
 int waitADR(FDC* fdc) {
-	fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? VG_TURBO_BYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) return 2;	// 2:IDX
 	if (fdc->flp->field != 1) return 0;		// 0:not ADR
 	return 1;
@@ -169,7 +170,7 @@ void vgstp00(FDC* fdc) {
 }
 
 void vgstp01(FDC* fdc) {
-	fdc->wait = fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait = fdc_turbo(fdc) ? VG_TURBO_BYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) {	// turn floppy to next byte, check IDX
 		fdc->cnt--;
 		if (fdc->cnt < 1) {		// check 15 IDX pulses
@@ -366,7 +367,7 @@ void vgrds02(FDC* fdc) {
 	if (fdc->cnt > 0) {
 		fdc->tmp = flpRd(fdc->flp, fdc->side);
 		flpNext(fdc->flp, fdc->side);
-		fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
+		fdc->wait += fdc_turbo(fdc) ? VG_TURBO_BYTE : fdc->bytedelay;
 		if ((fdc->flp->field == 2) || (fdc->flp->field == 3)) {
 			fdc->buf[4] = fdc->tmp;
 			fdc->pos++;
@@ -526,7 +527,7 @@ static fdcCall vgRdAdr[] = {&vgrds00,&vgrda00,&vgrda01,&vgchk02,&vgstp};
 
 // wait IDX
 void vgrdt00(FDC* fdc) {
-	fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? VG_TURBO_BYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) {
 		fdc->drq = 0;
 		fdc->dir = 1;
@@ -544,7 +545,7 @@ static fdcCall vgRdTrk[] = {&vgrds00,&vgrdt00,&vgrdt01,&vgstp};
 // write track
 
 void vgwrt00(FDC* fdc) {
-	fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? VG_TURBO_BYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) {
 		fdc->pos++;
 		fdc->wait = fdc->bytedelay;

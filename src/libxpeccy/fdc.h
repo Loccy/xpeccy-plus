@@ -24,6 +24,7 @@ enum {
 #define F_COM_SK	0x20
 
 #define F_SR0_AT	0x40	// abnormal termination
+#define F_SR0_NR	0x08	// not ready
 #define F_SR1_EN	0x80	// end of cylinder
 #define F_SR1_DE	0x20	// CRC error
 #define F_SR1_OR	0x10	// data lost
@@ -36,7 +37,6 @@ enum {
 #define F_SR2_BC	0x02	// bad cylinder (C = FF)
 #define F_SR2_MD	0x01	// no data mark
 
-#define TURBOBYTE 500		// same for turbo
 // fast disk access, unless the command in progress is to keep real time
 #define fdc_turbo(f) ((fdcFlag & FDC_FAST) && !(f)->slow)
 

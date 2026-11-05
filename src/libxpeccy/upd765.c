@@ -10,8 +10,8 @@
 #define DBGOUT(args...)
 #endif
 
-#define TRBBYTE 1000
-#define TRBSRT 1
+#define UPD_TURBO_BYTE 1000
+#define UPD_TURBO_STEP 1
 
 // wait until all args is done
 void uwargs(FDC* fdc) {
@@ -27,7 +27,7 @@ void unothing(FDC* fdc) {
 	if (fdc->flp->motor) {
 		flpNext(fdc->flp, fdc->side);
 	}
-	fdc->wait += fdc->bytedelay; // turbo ? TRBBYTE : fdc->bytedelay;
+	fdc->wait += fdc->bytedelay; // turbo ? UPD_TURBO_BYTE : fdc->bytedelay;
 }
 
 void uidle(FDC* fdc) {
@@ -162,7 +162,7 @@ void ucalib00(FDC* fdc) {
 	if (fdc->side) fdc->comBuf[0] |= 4;
 	uSetDrive(fdc);
 	fdc->cnt = 77;			// do 77 step back
-	fdc->wait += fdc_turbo(fdc) ? TRBSRT : fdc->srt;
+	fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_STEP : fdc->srt;
 	fdc->state |= (1 << drv);	// set "flp is in seek mode"
 	fdc->pos++;
 }
@@ -176,7 +176,7 @@ void ucalib01(FDC* fdc) {
 		fdc->pos++;
 	} else if (fdc->cnt > 0) {
 		flpStep(fdc->flp, FLP_BACK);
-		fdc->wait += fdc_turbo(fdc) ? TRBSRT : fdc->srt;
+		fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_STEP : fdc->srt;
 		fdc->cnt--;
 	} else {
 		fdc->sr0 &= 0x0f;
@@ -201,7 +201,7 @@ static fdcCall uCalib[] = {&uwargs,&ucalib00,&ucalib01,&ucalib02,&uTerm};
 void useek00(FDC* fdc) {
 	uSetDrive(fdc);
 	// fdc->trk = fdc->flp->trk;		// wait, oh shi...
-	fdc->wait += fdc_turbo(fdc) ? TRBSRT : fdc->srt;
+	fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_STEP : fdc->srt;
 	fdc->pos++;
 	fdc->state |= (1 << fdc->comBuf[0] & 3);	// set "flp is in seek mode"
 }
@@ -213,11 +213,11 @@ void useek01(FDC* fdc) {
 		fdc->pos++;
 	} else if (fdc->trk < fdc->comBuf[1]) {
 		flpStep(fdc->flp, FLP_FORWARD);
-		fdc->wait += fdc_turbo(fdc) ? TRBSRT : fdc->srt;
+		fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_STEP : fdc->srt;
 		fdc->trk++;
 	} else {
 		flpStep(fdc->flp, FLP_BACK);
-		fdc->wait += fdc_turbo(fdc) ? TRBSRT : fdc->srt;
+		fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_STEP : fdc->srt;
 		fdc->trk--;
 	}
 }
@@ -227,7 +227,7 @@ void useek02(FDC* fdc) {
 	fdc->sr0 &= 0x1f;		// b7,6=00:success
 	fdc->sr0 |= 0x20;		// seek end
 	if (fdc->trk != fdc->flp->trk) {
-		fdc->sr0 |= 0x40;	// b7,6=01:abnornal termination
+		fdc->sr0 |= F_SR0_AT;	// b7,6=01:abnornal termination
 	}
 	fdc->wait = fdc->bytedelay * 2;
 	fdc->pos++;
@@ -253,7 +253,7 @@ void urdaRS(FDC* fdc) {
 void urda00(FDC* fdc) {
 	uSetDrive(fdc);
 	if (!(fdc->flp->insert && fdc->flp->door)) {
-		fdc->sr0 |= 0x48;
+		fdc->sr0 |= F_SR0_AT | F_SR0_NR;
 		urdaRS(fdc);
 		uTerm(fdc);
 	} else {
@@ -369,7 +369,7 @@ void uread01(FDC* fdc) {
 static int u_find_dam(FDC* fdc) {
 	fdc->tmp = flpRd(fdc->flp, fdc->side);
 	flpNext(fdc->flp, fdc->side);
-	fdc->wait += fdc_turbo(fdc) ? TRBBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_BYTE : fdc->bytedelay;
 	if ((fdc->flp->field == 2) || (fdc->flp->field == 3)) {
 		fdc->crc = 0xcdb4;		// A1 A1 A1 counted
 		add_crc_16(fdc, fdc->tmp);
@@ -385,16 +385,16 @@ static int u_find_dam(FDC* fdc) {
 int ureadCHK(FDC* fdc, int rt, int wt) {
 	fdc->tmp = flpRd(fdc->flp, fdc->side);
 	flpNext(fdc->flp, fdc->side);
-	fdc->wait += fdc_turbo(fdc) ? TRBBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_BYTE : fdc->bytedelay;
 	if (fdc->flp->field == rt) return 1;
 	if ((fdc->flp->field == wt) && (~fdc->com & F_COM_SK)) {	// wrong data field type, skip off: set b4,sr2, read sector & terminate execution
-		fdc->sr2 |= 0x40;
+		fdc->sr2 |= F_SR2_CM;
 		return 1;
 	}
 	fdc->cnt--;
 	if (fdc->cnt > 0) return 0;	// seek in progress
-	fdc->sr0 |= 0x40;		// error
-	fdc->sr1 |= 0x04;		// no data
+	fdc->sr0 |= F_SR0_AT;		// error
+	fdc->sr1 |= F_SR1_ND;		// no data
 	return 2;
 }
 
@@ -496,13 +496,13 @@ void uread00(FDC* fdc) {
 // NOTE: multitrack means select hd1 after hd0 is done, not to read hd0 from start
 	fdc->sec = fdc->comBuf[3];	// R, sec.num
 	if (!(fdc->flp->insert && fdc->flp->door)) {
-		fdc->sr0 |= 0x48;	// not ready
+		fdc->sr0 |= F_SR0_AT | F_SR0_NR;	// not ready
 		ureadRS(fdc);		// prepare resp
 		uTerm(fdc);		// terminate
 	} else {
 		fdc->sr1 = F_SR1_MA | F_SR1_ND;	// until an ID mark, and the sector, turn up
 		fdc->cnt = 2;
-		fdc->wait += fdc_turbo(fdc) ? TRBBYTE : fdc->hlt;	// load head
+		fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_BYTE : fdc->hlt;	// load head
 		fdc->pos++;
 	}
 }
@@ -525,7 +525,7 @@ void urdtrk00(FDC* fdc) {
 	uSetDrive(fdc);
 	fdc->sec = fdc->comBuf[3];		// R, sec.num
 	if (!(fdc->flp->insert && fdc->flp->door)) {
-		fdc->sr0 |= 0x48;	// not ready
+		fdc->sr0 |= F_SR0_AT | F_SR0_NR;	// not ready
 		ureadRS(fdc);		// prepare resp
 		uTerm(fdc);		// terminate
 	} else {
@@ -619,7 +619,7 @@ void uscan01(FDC* fdc) {
 	fdc->cnt = 0x80 << (fdc->buf[3] & 3);
 	fdc->drq = 0;
 	fdc->dir = 1;
-	fdc->wait = fdc->bytedelay; // turbo ? TRBBYTE : fdc->bytedelay;
+	fdc->wait = fdc->bytedelay; // turbo ? UPD_TURBO_BYTE : fdc->bytedelay;
 	fdc->pos++;
 }
 
@@ -646,7 +646,7 @@ void uscan02(FDC* fdc) {
 	fdc->cnt--;
 	if (fdc->cnt < 1) {
 		fdc->pos++;
-		fdc->wait = fdc->bytedelay; // turbo ? TRBBYTE : fdc->bytedelay;
+		fdc->wait = fdc->bytedelay; // turbo ? UPD_TURBO_BYTE : fdc->bytedelay;
 	}
 }
 
@@ -675,12 +675,12 @@ void uwrdat00(FDC* fdc) {
 	uSetDrive(fdc);
 	fdc->sec = fdc->comBuf[3];		// R, sec.num
 	if (!(fdc->flp->insert && fdc->flp->door)) {
-		fdc->sr0 |= 0x48;		// not ready
+		fdc->sr0 |= F_SR0_AT | F_SR0_NR;		// not ready
 		ureadRS(fdc);
 		uTerm(fdc);
 	} else if (fdc->flp->protect)	{
 		fdc->sr1 |= F_SR1_NW;
-		fdc->sr0 |= 0x40;
+		fdc->sr0 |= F_SR0_AT;
 		ureadRS(fdc);
 		uTerm(fdc);
 	} else {
@@ -697,7 +697,7 @@ void uwrdat01(FDC* fdc) {
 	if (res == 2) {				// index
 		fdc->cnt--;
 		if (fdc->cnt < 1) {
-			fdc->sr0 |= 0x40;	// error
+			fdc->sr0 |= F_SR0_AT;	// error
 			fdc->sr1 |= F_SR1_ND;	// no data
 			ureadRS(fdc);
 			uTerm(fdc);
@@ -728,10 +728,10 @@ void uwrdat02(FDC* fdc) {
 		fdc->tns = 0;
 		fdc->pos++;
 	} else {
-		fdc->wait += fdc_turbo(fdc) ? TRBBYTE : fdc->bytedelay;
+		fdc->wait += fdc_turbo(fdc) ? UPD_TURBO_BYTE : fdc->bytedelay;
 		fdc->cnt--;
 		if (fdc->cnt < 1) {
-			fdc->sr0 |= 0x40;		// error
+			fdc->sr0 |= F_SR0_AT;		// error
 			fdc->sr1 |= F_SR1_ND;		// no data
 			ureadRS(fdc);
 			uTerm(fdc);
@@ -801,11 +801,11 @@ static fdcCall uWrData[] = {&uwargs,&uwrdat00,&uwrdat01,&uwrdat02,&uwrdat03,&uwr
 void utrkfrm00(FDC* fdc) {
 	uSetDrive(fdc);
 	if (!(fdc->flp->insert && fdc->flp->door)) {
-		fdc->sr0 |= 0x48;		// not ready
+		fdc->sr0 |= F_SR0_AT | F_SR0_NR;		// not ready
 		ureadRS(fdc);
 		uTerm(fdc);
 	} else if (fdc->flp->protect) {
-		fdc->sr0 |= 0x40;
+		fdc->sr0 |= F_SR0_AT;
 		fdc->sr1 |= F_SR1_NW;
 		ureadRS(fdc);
 		uTerm(fdc);
@@ -816,7 +816,7 @@ void utrkfrm00(FDC* fdc) {
 
 void utrkfrm01(FDC* fdc) {		// wait for index
 	flpNext(fdc->flp, fdc->side);
-	fdc->wait += fdc->bytedelay; // turbo ? TRBBYTE : fdc->bytedelay;
+	fdc->wait += fdc->bytedelay; // turbo ? UPD_TURBO_BYTE : fdc->bytedelay;
 	if (fdc->flp->index) {
 		fdc->cnt = 0;
 		fdc->scnt = 0;
