@@ -1496,6 +1496,18 @@ static bool path_in(const QStringList& list, const QString& path) {
 
 // Of the files at place next in the set (cur the image's own), the one to put in; empty
 // when every one is in skip
+// a place as the OSD shows it: a side's letter in capitals, "side B", "tape 1 side A"
+static QString place_text(const QString& place) {
+	static const QRegularExpression rx("\\b[a-d]\\b");
+	QString res = place;
+	QRegularExpressionMatchIterator it = rx.globalMatch(place);
+	while (it.hasNext()) {
+		const int at = int(it.next().capturedStart());
+		res[at] = res[at].toUpper();
+	}
+	return res;
+}
+
 static QString side_pick(Computer* comp, const QList<xSibling>& set, int cur, const QString& next, int id, int drv,
 		const QString& path, const QStringList& seen, const QStringList& skip) {
 	// An image that was in and has this one in its set: the user's own side A[a], which
@@ -1539,7 +1551,7 @@ QString media_next_side(Computer* comp, const QString& path, int id, int drv, co
 		const QString next = values[(((me + k * step) % n) + n) % n];
 		const QString res = side_pick(comp, set, cur, next, id, drv, path, seen, skip);
 		if (res.isEmpty()) continue;
-		if (place) *place = next;
+		if (place) *place = place_text(next);
 		return res;
 	}
 	return QString();

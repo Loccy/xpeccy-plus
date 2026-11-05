@@ -119,7 +119,7 @@ QList<xSibling> media_siblings(Computer*, const QString& path, int id, int drv, 
 // end. Of a side's several files (TOSEC's [a] alternates) the one in seen first (the
 // images that were in, newest first), else the one with the same [flags], else one with
 // none; a file in skip (a disk in another drive) is never taken, a place with none left
-// is passed. place gets its place in the set ("side b"). Empty when there is none.
+// is passed. place gets its place in the set ("side B"). Empty when there is none.
 QString media_next_side(Computer*, const QString& path, int id, int drv, const QStringList& seen, int step,
 	const QStringList& skip = QStringList(), QString* place = nullptr);
 // the image to open from an archive, as an archive path: the only one, the one picked
