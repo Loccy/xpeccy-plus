@@ -664,6 +664,7 @@ int fast_ffwd_frame() {
 // so a sprite flickered on every other frame still shows both of its phases. Not
 // while the frames are recorded, run ahead, or something may stop the machine mid-frame.
 static int fs_held = 0;			// the next frame was left undrawn here
+static int fs_undrawn = 0;		// ...and that frame, the one now running (fs_release let it go)
 static int fs_run = 0;			// frames drawn since the last one left out
 static int fs_said = 0;			// the log said it skips
 #define FS_QUIET	250		// frames drawn in a row that end a stretch of skipping (5 s)
@@ -688,20 +689,24 @@ int frame_skip_ok() {
 // the frame now going is drawn from here on after all (the debugger takes the machine
 // mid-frame and steps through it)
 void frame_skip_stop(Computer* comp) {
-	if (!fs_held) return;
-	vid_set_nodraw(comp->vid, 0);
+	if (!fs_held && !fs_undrawn) return;
+	vid_set_nodraw(comp->vid, 0);	// the coming one too
 	fs_held = 0;
+	fs_undrawn = 0;
 }
 
-// a frame Frame skip held back is drawn after all
+// Frame skip lets go of its hold: the frame starting now (its nodraw already taken at
+// the frame start) is the one left undrawn, the next is drawn
 static void fs_release(Video* vid) {
 	if (!fs_held) return;
 	vid_set_nodraw_next(vid, 0);
 	fs_held = 0;
+	fs_undrawn = vid->nodraw;
 }
 
 static void fs_frame(Computer* comp) {
 	Video* vid = comp->vid;
+	fs_undrawn = 0;				// the frame it was is over
 	// at normal speed only: slowed down, every frame is wanted
 	int on = conf.vid.frameSkip && !conf.emu.pause && (conf.emu.tmode == XTM_NONE) && (conf.emu.speed == 1.0)
 		&& frame_skip_allowed(comp);
@@ -757,8 +762,9 @@ void fast_picture_frame(Computer* comp) {
 		fs_frame(comp);
 		return;
 	}
-	if (fs_held) {				// fast mode takes the frames over
+	if (fs_held || fs_undrawn) {		// fast mode takes the frames over
 		fs_held = 0;
+		fs_undrawn = 0;
 		fs_run = 0;
 	}
 	if (!fp_held) {
