@@ -268,16 +268,6 @@
             <number>0</number>
            </property>
            <item>
-          <widget class="QLabel" name="labScrPixPfx">
-           <property name="text">
-            <string>#</string>
-           </property>
-           <property name="indent">
-            <number>0</number>
-           </property>
-          </widget>
-           </item>
-           <item>
             <widget class="xHexSpin" name="leScr">
              <property name="toolTip">
               <string>Pixel byte address. Type to find</string>
@@ -314,16 +304,6 @@
            <property name="spacing">
             <number>0</number>
            </property>
-           <item>
-          <widget class="QLabel" name="labScrAtrPfx">
-           <property name="text">
-            <string>#</string>
-           </property>
-           <property name="indent">
-            <number>0</number>
-           </property>
-          </widget>
-           </item>
            <item>
             <widget class="xHexSpin" name="leAtr">
              <property name="toolTip">
