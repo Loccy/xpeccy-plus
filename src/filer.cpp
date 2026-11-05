@@ -79,8 +79,7 @@ private:
 };
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-// Qt 5 builds a regex per pattern for every file it checks, on the GUI thread: a folder of 37k
-// files froze the window for 11 s. Its model gets no patterns; this keeps the files by suffix.
+// Qt 5 runs a regex per pattern per file on the GUI thread: its model gets no patterns, this keeps files by suffix
 class xSuffixFilter : public QSortFilterProxyModel {
 public:
 	explicit xSuffixFilter(QObject* parent) : QSortFilterProxyModel(parent) {}
@@ -155,8 +154,9 @@ static void file_dialog_tune(QFileDialog* dlg) {
 	static xFileTypes* types = new xFileTypes;	// never freed: a dialog may outlive any owner at exit
 	dlg->setIconProvider(types);
 	tree->setUniformRowHeights(true);
-	// The user's sort and view stay between runs, over what Qt restored (Downloads newest first)
+	// The user's sort and view, over the header state Qt restores
 	tree->sortByColumn(conf.fdlg.sort, conf.fdlg.desc ? Qt::DescendingOrder : Qt::AscendingOrder);
+	dlg->setViewMode(conf.fdlg.list ? QFileDialog::List : QFileDialog::Detail);
 	QObject::connect(tree->header(), &QHeaderView::sortIndicatorChanged, tree, [](int col, Qt::SortOrder ord) {
 		conf.fdlg.sort = qBound(0, col, 3);
 		conf.fdlg.desc = (ord == Qt::DescendingOrder);
@@ -165,7 +165,6 @@ static void file_dialog_tune(QFileDialog* dlg) {
 	QStackedWidget* views = dlg->findChild<QStackedWidget*>("stackedWidget");
 	if (!list || !views) return;
 	list->setLayoutMode(QListView::Batched);
-	dlg->setViewMode(conf.fdlg.list ? QFileDialog::List : QFileDialog::Detail);
 	auto fit = [list, views]() {
 		bool shown = (views->currentWidget() == list->parentWidget());
 		list->setUniformItemSizes(!shown);
@@ -173,6 +172,17 @@ static void file_dialog_tune(QFileDialog* dlg) {
 	};
 	QObject::connect(views, &QStackedWidget::currentChanged, list, fit);
 	fit();
+}
+
+// On each show: the sort and view last picked in any file dialog; sorted again only if changed
+static void file_dialog_recall(QFileDialog* dlg) {
+	QTreeView* tree = dlg->findChild<QTreeView*>("treeView");
+	if (!tree) return;
+	const Qt::SortOrder ord = conf.fdlg.desc ? Qt::DescendingOrder : Qt::AscendingOrder;
+	if ((tree->header()->sortIndicatorSection() != conf.fdlg.sort) || (tree->header()->sortIndicatorOrder() != ord))
+		tree->sortByColumn(conf.fdlg.sort, ord);
+	const QFileDialog::ViewMode mode = conf.fdlg.list ? QFileDialog::List : QFileDialog::Detail;
+	if (dlg->viewMode() != mode) dlg->setViewMode(mode);
 }
 
 // Built on first use, in the folder it is about to show: a Qt dialog built
@@ -457,6 +467,8 @@ static xFileTypeInfo ft_sltraw = {FL_SLT_BIN, 0, NULL, NULL, loadSlot, NULL, "RA
 static xFileTypeInfo ft_raw = {FL_RAW, 0, NULL, NULL, loadRaw, NULL, "RAW file to disk A"};
 static xFileTypeInfo ft_dum = {FL_NONE, 0, NULL, NULL, NULL, NULL, "Dummy entry"};
 
+#define DISK_TYPES FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0
+
 // 3rd parameter
 // < 0 : allways on
 // 0..3 : disk (must be inserted for save)
@@ -465,11 +477,11 @@ static xFileGroupInfo fg_tab[] = {
 	{FG_SNAPSHOT, ".szx", -1, "Snapshot", NULL, {FL_SZX, FL_SNA, FL_Z80, FL_SPG, FL_NEX, FL_SNX, 0}},
 	{FG_TAPE, ".tap", 4, "Tape", NULL, {FL_TAP, FL_TZX, FL_WAV, 0}},
 	// before the drives: a filter's group is the last name it starts with
-	{FG_DISKS, ".trd", 0, "Disk", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_A, ".trd", 0,"Disk A", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_B, ".trd", 1, "Disk B", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_C, ".trd", 2, "Disk C", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
-	{FG_DISK_D, ".trd", 3, "Disk D", NULL, {FL_SCL, FL_TRD, FL_TD0, FL_FDI, FL_UDI, FL_DSK, FL_IMA, FL_PCIMG, FL_HOBETA, 0}},
+	{FG_DISKS, ".trd", 0, "Disk", NULL, {DISK_TYPES}},
+	{FG_DISK_A, ".trd", 0, "Disk A", NULL, {DISK_TYPES}},
+	{FG_DISK_B, ".trd", 1, "Disk B", NULL, {DISK_TYPES}},
+	{FG_DISK_C, ".trd", 2, "Disk C", NULL, {DISK_TYPES}},
+	{FG_DISK_D, ".trd", 3, "Disk D", NULL, {DISK_TYPES}},
 	{FG_RAW, "", 0, "RAW file to disk", &ft_raw, {FL_RAW, 0}},
 	{FG_IF2_ROM, "", -1, "Cartridge image", &ft_sltraw, {FL_SLT_ROM, FL_SLT_BIN, 0}},
 	{FG_RZX, "", -1, "RZX playback", NULL, {FL_RZX, 0}},
@@ -653,21 +665,14 @@ QString file_get_hw_filter(Computer* comp, int id, int sv) {
 	int i;
 	xFileHWInfo* inf = file_find_hw(id);
 	if (inf->id > 0) {
-		// Open has one Disk group (each drive's own menu opens into that drive), Save one per drive
-		bool disks = false;
+		bool disks = false;		// Open has one Disk group, Save one per drive
 		for (i = 0; inf->child[i] > 0; i++)
 			disks |= (inf->child[i] == FG_DISKS);
-		i = 0;
-		while (inf->child[i] > 0) {
+		for (i = 0; inf->child[i] > 0; i++) {
 			int g = inf->child[i];
-			if (disks && (sv ? (g == FG_DISKS) : ((g >= FG_DISK_A) && (g <= FG_DISK_D)))) {
-				i++;
-				continue;
-			}
+			if (sv ? (g == FG_DISKS) : (disks && (g >= FG_DISK_A) && (g <= FG_DISK_D))) continue;
 			gfl = file_get_group_filter(comp, g, sv);
-			if (!gfl.isEmpty())
-				flt.append(gfl);
-			i++;
+			if (!gfl.isEmpty()) flt.append(gfl);
 		}
 	}
 	if ((flt.size() > 1) && !sv)
@@ -2301,6 +2306,7 @@ void fitFileDialog(QWidget* w) {
 	QTreeView* tree = dlg ? dlg->findChild<QTreeView*>("treeView") : nullptr;
 	if (!tree) return;
 	file_dialog_tune(dlg);
+	file_dialog_recall(dlg);
 	file_dialog_filtered(dlg);	// whatever patterns Qt put on the model since
 	QHeaderView* hdr = tree->header();
 	hdr->setSectionResizeMode(QHeaderView::ResizeToContents);
