@@ -21,6 +21,7 @@
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileIconProvider>
+#include <QFileSystemModel>
 #include <QHash>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -34,6 +35,7 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSet>
+#include <QSortFilterProxyModel>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QStyleOptionViewItem>
@@ -76,12 +78,77 @@ private:
 	mutable QHash<QString, QIcon> icons;
 };
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+// Qt 5 builds a regex per pattern for every file it checks, on the GUI thread: a folder of 37k
+// files froze the window for 11 s. Its model gets no patterns; this keeps the files by suffix.
+class xSuffixFilter : public QSortFilterProxyModel {
+public:
+	explicit xSuffixFilter(QObject* parent) : QSortFilterProxyModel(parent) {}
+	// takes the patterns the dialog has just given its model
+	void take() {
+		QFileSystemModel* fsm = static_cast<QFileSystemModel*>(sourceModel());
+		const QStringList pat = fsm->nameFilters();
+		if (pat.isEmpty()) return;
+		fsm->setNameFilters(QStringList());
+		exts.clear();
+		rest.clear();
+		all = false;
+		for (const QString& p : pat) {
+			const QString ext = p.mid(2);
+			if (p == "*")
+				all = true;
+			else if (p.startsWith("*.") && !ext.contains(QRegularExpression("[*?\\[]")))
+				exts.insert(ext.toLower());
+			else
+				rest.append(QRegularExpression(QRegularExpression::wildcardToRegularExpression(p), QRegularExpression::CaseInsensitiveOption));
+		}
+		invalidateFilter();
+	}
+	// the model's own order: folders first, names in natural order
+	void sort(int column, Qt::SortOrder order) override {sourceModel()->sort(column, order);}
+protected:
+	bool filterAcceptsRow(int row, const QModelIndex& parent) const override {
+		const QFileSystemModel* fsm = static_cast<const QFileSystemModel*>(sourceModel());
+		if (all || !fsm->nameFilters().isEmpty()) return true;	// a pattern typed as the name: Qt filters
+		const QModelIndex idx = fsm->index(row, 0, parent);
+		if (fsm->isDir(idx)) return true;
+		const QString name = fsm->fileName(idx);
+		const int dot = name.lastIndexOf('.');
+		if ((dot >= 0) && exts.contains(name.mid(dot + 1).toLower())) return true;
+		for (const QRegularExpression& re : rest)
+			if (re.match(name).hasMatch()) return true;
+		return false;
+	}
+private:
+	QSet<QString> exts;
+	QList<QRegularExpression> rest;
+	bool all = true;
+};
+#endif
+
+// After every setNameFilter / selectNameFilter of ours: Qt 5's patterns go to the suffix filter
+static void file_dialog_filtered(QFileDialog* dlg) {
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+	if (xSuffixFilter* sf = dynamic_cast<xSuffixFilter*>(dlg->proxyModel())) sf->take();
+#else
+	Q_UNUSED(dlg)
+#endif
+}
+
 // Must run after the views exist (a provider set before the model is dropped) and before the first listing.
 // Uniform rows stop the views measuring every row; List View gets them only while hidden, as one width would cut names when shown.
 static void file_dialog_tune(QFileDialog* dlg) {
 	QTreeView* tree = dlg->findChild<QTreeView*>("treeView");
 	if (!tree || dlg->property("xTuned").toBool()) return;	// native, or done
 	dlg->setProperty("xTuned", true);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+	if (!dlg->proxyModel() && dlg->findChild<QFileSystemModel*>()) {
+		xSuffixFilter* sf = new xSuffixFilter(dlg);
+		dlg->setProxyModel(sf);		// first: the views get it as their model
+		sf->take();
+		QObject::connect(dlg, &QFileDialog::filterSelected, sf, &xSuffixFilter::take);	// after Qt sets the user's pick
+	}
+#endif
 	static xFileTypes* types = new xFileTypes;	// never freed: a dialog may outlive any owner at exit
 	dlg->setIconProvider(types);
 	tree->setUniformRowHeights(true);
@@ -910,8 +977,10 @@ static QFileDialog* file_dialog_open_mode(const QString& title, const QString& f
 	QStringList want;
 	for (const QString& f : flt.split(flt.contains(";;") ? QString(";;") : QString("\n")))
 		want << f.simplified();
-	if ((filer->nameFilters() != want) || (filer->selectedNameFilter() != want.value(0)))
+	if ((filer->nameFilters() != want) || (filer->selectedNameFilter() != want.value(0))) {
 		filer->setNameFilter(flt);
+		file_dialog_filtered(filer);
+	}
 	filer->setDirectory(conf.lastDir.c_str());
 	filer->setHistory(QStringList());
 	return filer;
@@ -1924,6 +1993,7 @@ int save_file(Computer* comp, const char* name, int id, int drv, int live, const
 			filer->setNameFilter(flt);
 			if (!preLine.isEmpty()) filer->selectNameFilter(preLine);
 			filer->setAcceptMode(QFileDialog::AcceptSave);
+			file_dialog_filtered(filer);
 			if (suggest.isEmpty()) {
 				filer->setDirectory(conf.lastDir.c_str());
 			} else {
@@ -2179,6 +2249,7 @@ QString file_ask_save(const char* title, const char* filter, const char* ext, co
 	filer->setWindowTitle(title);
 	filer->setNameFilter(filter);
 	filer->setAcceptMode(QFileDialog::AcceptSave);
+	file_dialog_filtered(filer);
 	if (suggest.isEmpty()) {
 		filer->setDirectory(conf.lastDir.c_str());
 	} else {
