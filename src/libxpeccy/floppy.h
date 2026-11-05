@@ -118,10 +118,15 @@ void flpGetTrackFields(Floppy*,int,unsigned char*);
 void flpClearTrack(Floppy*,int);
 void flpClearDisk(Floppy*);
 void flp_track_written(Floppy*, int);	// what the image said beyond the track's bytes is gone
-int flp_add_weak(Floppy*, int tr, int pos, int len, int copies, const unsigned char* data, int made);
-int flp_keep_raw(Floppy*, int tr, const unsigned char* data, int len);
+void flp_add_weak(Floppy*, int tr, int pos, int len, int copies, const unsigned char* data, int made);
+void flp_keep_raw(Floppy*, int tr, const unsigned char* data, int len);
 
 unsigned short getCrc(unsigned char*, int);
+
+// the bytes a size code means to the uPD765: past 7 its counter stops at 16K
+static inline int flp_seclen(int n) {
+	return (n > 7) ? 0x4000 : (0x80 << n);
+}
 
 #ifdef __cplusplus
 }

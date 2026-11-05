@@ -14,7 +14,7 @@ static const int pauses[4] = {6000000,12000000,20000000,30000000};	// step rate,
 #define VG_TURBO_STEP	20000
 
 static int vg_step_time(FDC* fdc) {
-	return turbo ? VG_TURBO_STEP : pauses[fdc->com & 3];
+	return fdc_turbo(fdc) ? VG_TURBO_STEP : pauses[fdc->com & 3];
 }
 
 // WD1793 (KR1818VG93 on the Soviet clones)
@@ -49,7 +49,7 @@ void wrCRC(FDC* fdc) {
 // wait ADR
 // return: 0 : not ADR, 1 : ADR, 2 : IDX
 int waitADR(FDC* fdc) {
-	fdc->wait += turbo ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) return 2;	// 2:IDX
 	if (fdc->flp->field != 1) return 0;		// 0:not ADR
 	return 1;
@@ -68,14 +68,14 @@ int seekADR(FDC* fdc) {
 		flpNext(fdc->flp, fdc->side);
 	}
 	rdFCRC(fdc);
-	fdc->wait += turbo ? 1 : (6 * fdc->bytedelay);	// delay : 6 byte reading
+	fdc->wait += fdc_turbo(fdc) ? 1 : (6 * fdc->bytedelay);	// delay : 6 byte reading
 	return 1;					// 1:ADR
 }
 
 // send byte FDC->Floppy (wr commands)
 int vgSendByte(FDC* fdc) {
 	int res = 0;
-	if (turbo) {
+	if (fdc_turbo(fdc)) {
 		if (fdc->drq) {
 			if (fdc->tns > fdc->bytedelay) {
 				fdc->state |= 0x04;
@@ -114,7 +114,7 @@ int vgGetByte(FDC* fdc) {
 		// fdc->state |= 0x04;		// data lost (TODO:check)
 		fdc->data = 0x00;
 		res = 2;
-	} else if (turbo) {
+	} else if (fdc_turbo(fdc)) {
 		// The disk spins far faster than a loader expects, so one that comes for the
 		// data after playing its music would miss every byte: a byte waits for the cpu,
 		// out of a budget of one real revolution per command (Unreal's fast mode does
@@ -169,7 +169,7 @@ void vgstp00(FDC* fdc) {
 }
 
 void vgstp01(FDC* fdc) {
-	fdc->wait = turbo ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait = fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) {	// turn floppy to next byte, check IDX
 		fdc->cnt--;
 		if (fdc->cnt < 1) {		// check 15 IDX pulses
@@ -198,7 +198,7 @@ void vgchk00(FDC* fdc) {
 		vgstp(fdc);
 	} else {
 		fdc->cnt = 9;		// try seek ADR in 9 spins
-		if (!turbo) fdc->wait += VG_SETTLE;
+		if (!fdc_turbo(fdc)) fdc->wait += VG_SETTLE;
 		fdc->pos++;
 	}
 }
@@ -366,7 +366,7 @@ void vgrds02(FDC* fdc) {
 	if (fdc->cnt > 0) {
 		fdc->tmp = flpRd(fdc->flp, fdc->side);
 		flpNext(fdc->flp, fdc->side);
-		fdc->wait += turbo ? TURBOBYTE : fdc->bytedelay;
+		fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
 		if ((fdc->flp->field == 2) || (fdc->flp->field == 3)) {
 			fdc->buf[4] = fdc->tmp;
 			fdc->pos++;
@@ -407,7 +407,7 @@ void vgrds04(FDC* fdc) {
 // end: read, compare CRC, check multisector, stop
 void vgrds05(FDC* fdc) {
 	rdFCRC(fdc);
-	fdc->wait += turbo ? 1 : (2 * fdc->bytedelay);
+	fdc->wait += fdc_turbo(fdc) ? 1 : (2 * fdc->bytedelay);
 	if (fdc->crc != fdc->fcrc) {
 		// printf("crc error\n");
 		fdc->state |= 0x08;
@@ -466,7 +466,7 @@ void vgwrs02(FDC* fdc) {
 // write crc, check multisector, end
 void vgwrs03(FDC* fdc) {
 	wrCRC(fdc);
-	fdc->wait += turbo ? 1 : (2 * fdc->bytedelay);
+	fdc->wait += fdc_turbo(fdc) ? 1 : (2 * fdc->bytedelay);
 	if (fdc->com & 0x10) {
 		fdc->sec++;
 		fdc->pos = 2;
@@ -526,7 +526,7 @@ static fdcCall vgRdAdr[] = {&vgrds00,&vgrda00,&vgrda01,&vgchk02,&vgstp};
 
 // wait IDX
 void vgrdt00(FDC* fdc) {
-	fdc->wait += turbo ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) {
 		fdc->drq = 0;
 		fdc->dir = 1;
@@ -544,7 +544,7 @@ static fdcCall vgRdTrk[] = {&vgrds00,&vgrdt00,&vgrdt01,&vgstp};
 // write track
 
 void vgwrt00(FDC* fdc) {
-	fdc->wait += turbo ? TURBOBYTE : fdc->bytedelay;
+	fdc->wait += fdc_turbo(fdc) ? TURBOBYTE : fdc->bytedelay;
 	if (flpNext(fdc->flp, fdc->side)) {
 		fdc->pos++;
 		fdc->wait = fdc->bytedelay;
