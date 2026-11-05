@@ -869,6 +869,7 @@ void utrkfrm01(FDC* fdc) {		// wait for index
 }
 
 void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount);
+int diskFormFits(Floppy* flp, Sector* sdata, int scount);
 
 void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors header data
 	if (!fdc->drq) {		// byte recieved
@@ -877,16 +878,22 @@ void utrkfrm02(FDC* fdc) {		// recieve cnt (4 * spt) bytes from cpu = sectors he
 		fdc->drq = 1;			// want next byte
 		if (fdc->cnt >= 4) {		// if all 4 bytes is recieved, register new sector
 			fdc->cnt = 0;
-			fdc->slst[fdc->scnt].trk = fdc->buf[0];		// C cylinder
-			fdc->slst[fdc->scnt].head = fdc->buf[1];	// H head
-			fdc->slst[fdc->scnt].sec = fdc->buf[2];		// R sec.num
-			fdc->slst[fdc->scnt].sz = fdc->buf[3];		// N sec.size
-			fdc->slst[fdc->scnt].crc = -1;			// to be calculated
-			fdc->slst[fdc->scnt].type = 0xfb;		// type: normal
-			memset(fdc->slst[fdc->scnt].data, fdc->comBuf[4], 4096);	// fill sector data
-			fdc->scnt++;					// next sector
-			if (fdc->scnt >= fdc->comBuf[2]) {		// sectors/track
-				diskFormTrack(fdc->flp, (fdc->trk << 1) | fdc->side, fdc->slst, fdc->comBuf[2]);
+			// The index coming round ends the command (datasheet): the track
+			// holds the sectors that fit, and no more IDs are asked for
+			int fit = (fdc->scnt < (int)(sizeof(fdc->slst) / sizeof(fdc->slst[0])));
+			if (fit) {
+				fdc->slst[fdc->scnt].trk = fdc->buf[0];		// C cylinder
+				fdc->slst[fdc->scnt].head = fdc->buf[1];	// H head
+				fdc->slst[fdc->scnt].sec = fdc->buf[2];		// R sec.num
+				fdc->slst[fdc->scnt].sz = fdc->buf[3];		// N sec.size
+				fdc->slst[fdc->scnt].crc = -1;			// to be calculated
+				fdc->slst[fdc->scnt].type = 0xfb;		// type: normal
+				memset(fdc->slst[fdc->scnt].data, fdc->comBuf[4], 4096);	// fill sector data
+				fit = diskFormFits(fdc->flp, fdc->slst, fdc->scnt + 1);
+			}
+			if (fit) fdc->scnt++;				// next sector
+			if (!fit || (fdc->scnt >= fdc->comBuf[2])) {	// sectors/track
+				diskFormTrack(fdc->flp, (fdc->trk << 1) | fdc->side, fdc->slst, fdc->scnt);
 				fdc->drq = 0;				// all data completed, no more bytes needed
 				fdc->pos++;
 			} else {

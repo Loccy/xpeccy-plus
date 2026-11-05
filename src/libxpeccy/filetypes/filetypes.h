@@ -131,6 +131,7 @@ typedef struct {
 void diskClear(Floppy*);
 void trd_format(Floppy*);
 void diskFormTrack(Floppy*,int,Sector*,int);
+int diskFormFits(Floppy*, Sector*, int);	// 1 if diskFormTrack lays all of them down
 void diskFormTRDTrack(Floppy*,int,unsigned char*);
 
 int diskGetType(Floppy*);

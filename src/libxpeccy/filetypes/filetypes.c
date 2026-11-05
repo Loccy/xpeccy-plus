@@ -202,18 +202,10 @@ void diskFormTRDTrack(Floppy* flp, int tr, unsigned char* bpos) {
 	diskFormTrack(flp,tr,lst,16);
 }
 
-// format a single track from sectors list
-// <sdata> is list of <scount> sectors
-// TODO: calculate GAP3 len !!!
-void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
-	int i,ln;
-	int sc;
-	// a track with no sectors (images keep unformatted ones so) is left as the
-	// loader cleared it
-	if ((tr < 0) || (tr > 255) || (scount <= 0)) return;
-	unsigned char *ppos = flp->data[tr].byte;
+// the gap diskFormTrack puts after each of the sectors
+static long long disk_form_gap(Floppy* flp, Sector* sdata, int scount) {
 	long long sum = 0;		// up to a gigabyte a sector by the size code: no int
-	for (i = 0; i < scount; i++) {
+	for (int i = 0; i < scount; i++) {
 		// A size code past 23 overflowed the shift, which on x86 came out as 0
 		// (221 -> 128 << 29 -> 0). Protected disks carry such codes in an id
 		// field, and Kobrahsoft's SP4/SP5/DB1 boot only with the layout that
@@ -221,7 +213,24 @@ void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
 		// Not checked against a real drive.
 		sum += (sdata[i].sz < 24) ? (128LL << sdata[i].sz) : 0;
 	}
-	long long gap = (flp->trklen - sum) / scount - 72;
+	return (flp->trklen - sum) / scount - 72;
+}
+
+int diskFormFits(Floppy* flp, Sector* sdata, int scount) {
+	return (scount > 0) && (disk_form_gap(flp, sdata, scount) >= 10);
+}
+
+// format a single track from sectors list
+// <sdata> is list of <scount> sectors
+// TODO: calculate GAP3 len !!!
+void diskFormTrack(Floppy* flp, int tr, Sector* sdata, int scount) {
+	int ln;
+	int sc;
+	// a track with no sectors (images keep unformatted ones so) is left as the
+	// loader cleared it
+	if ((tr < 0) || (tr > 255) || (scount <= 0)) return;
+	unsigned char *ppos = flp->data[tr].byte;
+	long long gap = disk_form_gap(flp, sdata, scount);
 	if (gap < 10) return;
 	int dsz = (int)gap;
 	memset(ppos, 0x4e, flp->trklen);
