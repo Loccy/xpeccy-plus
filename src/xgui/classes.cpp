@@ -1146,9 +1146,10 @@ QWidget* xItemDelegate::createEditor(QWidget* par, const QStyleOptionViewItem&, 
 // The debugger's address fields. In a hex form a number is written with its
 // sign, and typing keeps it: select all and type C000, it is #C000. Only
 // Backspace or Delete on the sign itself takes it off - the number is decimal
-// then, and stays so until the field is left. A first character that is no hex
-// digit (a label, .HL, ;comment) goes in alone. In decimal nothing is added;
-// # or $ typed first makes it hex.
+// then, and stays so until the field is left; clearing the whole field takes it
+// too. A first character that is no hex digit (a label, .HL, ;comment) goes in
+// alone, and a letter past F drops the sign of a name begun with A-F: #BE, G,
+// BEG. In decimal nothing is added; # or $ typed first makes it hex.
 
 static bool is_hex_char(QChar chr) {
 	int c = chr.toLower().unicode();
@@ -1181,19 +1182,12 @@ QString dbg_num_tip(int val, bool adr, const QString& name) {
 
 // A typed address's tip: a label, a number by the one rule, or a label behind
 // the sign the typing kept. Nothing for anything else (.HL, page:offset, half a name)
-static QString field_tip(QString str) {
-	str = str.trimmed();
-	if (str.isEmpty()) return QString();
-	xAdr lab = find_label(str);
-	if (lab.type < 0) {
-		bool ok;
-		int val = dbg_num_parse(str, &ok);
-		if (ok) return dbg_num_tip(val, true);
-		str = dbg_num_unsign(str);
-		lab = find_label(str);
-	}
-	if ((lab.type < 0) || (lab.adr < 0)) return QString();
-	return dbg_num_tip(lab.adr, true, str);
+static QString field_tip(const QString& str) {
+	int val;
+	xAdr lab;
+	QString name;
+	if (!dbg_read_adr(str, &val, &lab, &name) || (val < 0)) return QString();
+	return dbg_num_tip(val, true, name);
 }
 
 class xNumSign : public QObject {
@@ -1275,8 +1269,24 @@ bool xNumSign::eventFilter(QObject* obj, QEvent* ev) {
 	bool del = (key == Qt::Key_Backspace) || (key == Qt::Key_Delete);
 	QString chr = kev->text();
 	bool digit = (chr.size() == 1) && is_hex_char(chr.at(0));
-	if (!del && !digit) return false;
 	bool hasSign = (lo > 0) || (hi < txt.size());
+	bool all = (start == 0) && (end == txt.size());		// the key takes the lot
+	if (!digit && hasSign && !all && (chr.size() == 1) && lab_char(chr.at(0))) {
+		// a name after all: the sign goes, the caret and selection stay on their text
+		int at = (lo > 0) ? 0 : hi;
+		int len = end - start;
+		edt->setSelection(at, 1);
+		edt->del();
+		if (at < start) start--;
+		if (len > 0) {
+			edt->setSelection(start, qMin(len, edt->text().size() - start));
+		} else {
+			edt->setCursorPosition(qMin(start, edt->text().size()));
+		}
+		return false;
+	}
+	if (!del && !digit) return false;
+	if (del && all) return false;			// select all and Delete: an empty field
 	if (!hasSign) {
 		// a field that is all typed over starts with the sign
 		if (bare || !digit || (start > 0) || (end < txt.size())) return false;

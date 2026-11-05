@@ -135,8 +135,11 @@ bool xbsFe(const xBrkPoint bpa, const xBrkPoint bpb) {return (bpa.fetch && !bpb.
 bool xbsRd(const xBrkPoint bpa, const xBrkPoint bpb) {return (bpa.read && !bpb.read);}
 bool xbsWr(const xBrkPoint bpa, const xBrkPoint bpb) {return (bpa.write && !bpb.write);}
 bool xbsCnt(const xBrkPoint bpa, const xBrkPoint bpb) {return (bpa.count < bpb.count);}
+// by the kind, then the address: the text sorts only in hex, and only padded
 bool xbsName(const xBrkPoint bpa, const xBrkPoint bpb) {
-	return brkGetString(bpa) < brkGetString(bpb);
+	if (bpa.type != bpb.type) return brkGetString(bpa).section(':', 0, 0) < brkGetString(bpb).section(':', 0, 0);
+	if (bpa.adr != bpb.adr) return bpa.adr < bpb.adr;
+	return bpa.eadr < bpb.eadr;
 }
 bool xbsCond(const xBrkPoint bpa, const xBrkPoint bpb) {return (bpa.cond < bpb.cond);}
 
@@ -363,31 +366,9 @@ static int brk_base_area(int type) {
 	}
 }
 
-static bool is_dec_only(const QString& str) {
-	if (str.isEmpty()) return false;
-	for (QChar chr : str)
-		if (!chr.isDigit()) return false;
-	return true;
-}
-
-// An address typed in the editor: a label, a number by the debugger's one rule
-// (dbg_num_parse), or a label behind the sign the typing kept. The list files
-// keep their own rule, brk_list_adr. lab gets the label's cell, type -1 for a number
-static bool brk_field_adr(const QString& txt, int* adr, xAdr* lab) {
-	bool ok = false;
-	*lab = find_label(txt);
-	if (lab->type < 0) {
-		*adr = dbg_num_parse(txt, &ok);
-		if (ok) return true;
-		*lab = find_label(dbg_num_unsign(txt));
-	}
-	if (lab->type < 0) return false;
-	*adr = lab->adr;
-	return true;
-}
-
-// One address field as the type reads it. A cpu address or a port is a number
-// or a label. A cell is an offset in the page of the page field, page:offset (the
+// One address field as the type reads it. A cpu address is a number by the
+// debugger's one rule (dbg_read_adr) or a label; a port, and its mask, hex as
+// they are shown, as the list files have them (brk_list_adr). A cell is an offset in the page of the page field, page:offset (the
 // page in hex, or an area's token: ROM0, DIV3), a label, or a cpu address - which
 // brings the cell mapped there now, when it is the kind of memory the type
 // watches. *cell is that cell, -1 when the field gave an offset alone
@@ -401,18 +382,24 @@ bool xBrkManager::readAdr(QString txt, int* adr, int* cell) {
 	int colon = txt.indexOf(':');
 	if (colon > 0) {
 		// the page is hex, as it is shown; the offset by the one rule - and a
-		// sign in front of the page, the one the typing keeps, counts for it
+		// sign in front of the page, the one the typing keeps, counts for an
+		// offset with none of its own
 		bool oko;
 		QString page = txt.left(colon);
 		QString ofs = txt.mid(colon + 1).trimmed();
-		if ((page.startsWith('#') || page.startsWith('$')) && is_dec_only(ofs)) ofs.prepend('#');
+		if ((page != dbg_num_unsign(page)) && (ofs == dbg_num_unsign(ofs))) ofs.prepend('#');
 		int off = dbg_num_parse(ofs, &oko);
 		if (!brk_is_cell(type) || !oko) return false;
 		if (!cell_from_text(brk_mem_type(type), dbg_num_unsign(page), off, cell)) return false;
 		*adr = off;
 		return true;
 	}
-	if (!brk_field_adr(txt, &val, &lab)) return false;
+	if (type == BRK_IOPORT) {
+		if (!brk_list_adr(txt, &val, NULL)) return false;
+		*adr = val;
+		return (val >= 0) && (val <= 0xffff);
+	}
+	if (!dbg_read_adr(txt, &val, &lab)) return false;
 	if (!brk_is_cell(type)) {
 		*adr = val;
 		return (val >= 0) && (val <= 0xffff);

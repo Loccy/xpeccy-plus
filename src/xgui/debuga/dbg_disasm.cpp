@@ -307,6 +307,24 @@ void dasmwr(Computer* comp, int adr, int bt) {
 	}
 }
 
+// a number in a command as a whole word, put in place of: a decimal 1 is not
+// the 1 of (IX+1), nor of 10
+static void replace_number(QString& cmd, const QString& num, const QString& with) {
+	int pos = 0;
+	while ((pos = cmd.indexOf(num, pos)) >= 0) {
+		QChar before = (pos > 0) ? cmd.at(pos - 1) : QChar(' ');
+		int end = pos + num.size();
+		QChar after = (end < cmd.size()) ? cmd.at(end) : QChar(' ');
+		bool inWord = before.isLetterOrNumber() || (before == '_') || (before == '#') || (before == '$');
+		if (!inWord && !after.isLetterOrNumber() && (after != '_')) {
+			cmd.replace(pos, num.size(), with);
+			pos += with.size();
+		} else {
+			pos = end;
+		}
+	}
+}
+
 void placeLabel(Computer* comp, dasmData& drow) {
 	int shift = 0;
 	int work = 1;
@@ -329,14 +347,8 @@ void placeLabel(Computer* comp, dasmData& drow) {
 				mn = dasm_mnem(comp, drow.oadr - shift, NULL);
 			}
 			if (shift < mn.len) {
-				// the operand as a whole word: a decimal 1 is not the 1 of (IX+1)
-				QRegularExpression num(QString("(?<![\\w#$])%0(?!\\w)")
-					.arg(QRegularExpression::escape(dbg_word(drow.oadr))));
-				if (shift == 0) {
-					drow.command.replace(num, lab);
-				} else {
-					drow.command.replace(num, QString("%0 + %1").arg(lab).arg(shift));
-				}
+				replace_number(drow.command, dbg_word(drow.oadr),
+					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
 			}
 			work = 0;
@@ -419,8 +431,9 @@ int dasmCode(Computer* comp, int adr, dasmData& drow) {
 	xMnem mnm = dasm_mnem(comp, adr, buf, &bytes);
 	for (unsigned char byte : bytes) drow.bytes.append(gethexbyte(byte));
 	drow.command = QString(buf).toUpper();
+	static const QRegularExpression hexSuffix("(?<![\\w#$])([0-9A-F]+)H(?!\\w)");
 	if (conf.dbg.numfmt == CPU_NUM_H)	// the sign stays small: C9h, not C9H
-		drow.command.replace(QRegularExpression("(?<![\\w#$])([0-9A-F]+)H(?!\\w)"), "\\1h");
+		drow.command.replace(hexSuffix, "\\1h");
 	drow.oadr = mnm.oadr;
 	drow.oflag = mnm.flag;
 	placeLabel(comp, drow);
@@ -662,7 +675,9 @@ int adr_of_reg(CPU* cpu, bool* flag, QString nam) {
 	return res;
 }
 
-int str_to_adr(Computer* comp, QString str) {
+// typed: the debugger's one rule (dbg_read_adr); else bare hex, as the control
+// port has always taken it (emw_network.cpp)
+int str_to_adr(Computer* comp, QString str, bool typed) {
 	bool flag = true;
 	int adr = -1;
 	QStringList lst;
@@ -689,17 +704,20 @@ int str_to_adr(Computer* comp, QString str) {
 				}
 			}
 		}
+	} else if (typed) {
+		flag = dbg_read_adr(str, &adr);
+	} else if (str.startsWith("#")) {			// #nnnn : hex adr
+		str.replace(0, 1, "0x");
+		adr = str.toInt(&flag, 16);
+	} else if (str.startsWith("0x")) {			// 0xnnnn : hex adr
+		adr = str.toInt(&flag, 16);
 	} else {
-		// a label first, then a number by the one rule (dbg_num_parse), then a
-		// label behind a hex sign the typing kept: #START
-		xAdr xadr = find_label(str);
-		if (xadr.type < 0) {
-			adr = dbg_num_parse(str, &flag);
-			if (!flag) xadr = find_label(dbg_num_unsign(str));
-		}
+		xAdr xadr = find_label(str);			// NAME : label name
 		if (xadr.type >= 0) {
 			adr = xadr.adr;
 			flag = true;
+		} else {						// other : plain hex
+			adr = str.toInt(&flag, 16);
 		}
 	}
 	if (!flag) adr = -1;
@@ -712,9 +730,9 @@ int asmAddr(Computer* comp, QVariant val, xAdr xadr) {
 	QString str = val.toString();
 	int adr;
 	if (str.startsWith('@')) {			// @label will not create new label, just jump if it exists
-		adr = str_to_adr(comp, str.mid(1));
+		adr = str_to_adr(comp, str.mid(1), true);
 	} else {
-		adr = str_to_adr(comp, str);
+		adr = str_to_adr(comp, str, true);
 	}
 	if (adr < 0) {
 		if (find_label(str).type >= 0) return -1;
@@ -843,10 +861,14 @@ QString asm_labels(const QString& src) {
 }
 
 // the hex the listing shows - #FF, $FF, FFh - as the assembler reads it, 0xFF;
-// a label that happens to read as FFh stays a label
+// a label that happens to read as FFh stays a label. A leading zero is taken
+// off a decimal number: the assembler would read it as octal
 static QString asm_hex_signs(QString str) {
+	static const QRegularExpression dollar("\\$(?=[0-9A-Fa-f])");
+	static const QRegularExpression zeros("(?<![\\w.])0+(?=[0-9])");
+	str.replace(zeros, "");
 	str.replace("#", "0x");
-	str.replace(QRegularExpression("\\$(?=[0-9A-Fa-f])"), "0x");
+	str.replace(dollar, "0x");
 	static const QRegularExpression suf("(?<!\\w)([0-9A-Fa-f]+)[hH](?!\\w)");
 	QList<QRegularExpressionMatch> found;
 	QRegularExpressionMatchIterator it = suf.globalMatch(str);
@@ -900,7 +922,7 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 					add_comment(xadr, str);
 				}
 			} else if (str.startsWith(".") || str.contains(":")) {		// .REG || seg:offset
-				idx = str_to_adr(comp, str);
+				idx = str_to_adr(comp, str, true);
 			} else {							// hex/label
 				idx = asmAddr(comp, val, xadr);
 			}

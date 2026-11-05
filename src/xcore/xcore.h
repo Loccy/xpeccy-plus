@@ -194,7 +194,8 @@ QString dbg_byte(int);
 QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
 QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
 int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal
-QString dbg_num_unsign(QString);	// the text with a leading hex sign taken off
+QString dbg_num_unsign(QString);	// the text with its hex sign taken off
+bool dbg_read_adr(const QString&, int* val, xAdr* lab = NULL, QString* name = NULL);	// label, number or #label
 const char* dbg_numfmt_name(int);	// the form as it is written in the config file
 int dbg_numfmt_parse(const std::string&);	// -1 for nothing known
 
@@ -359,7 +360,8 @@ int brk_mem_type(int type);		// the memory a cell breakpoint type watches, MEM_*
 // else its area's token (ROM0, DIV3...), as comp_cell() has the machine's pages
 QString cell_page_text(int memType, int abs, int* ofs);
 QString cell_text(int memType, int abs, bool withType);
-QString cell_view_text(int memType, int abs, bool withType = false);	// "11:#0123", the offset in the debugger's numbers	// "11:0123", withType "RAM:11:0123"
+// "11:0123", withType "RAM:11:0123"; cell_view_text has the offset in the debugger's numbers
+QString cell_view_text(int memType, int abs, bool withType = false);
 bool cell_from_text(int memType, QString page, int ofs, int* abs, bool wrap = false);	// a page so written and an offset
 int brk_save_list(const char*);
 

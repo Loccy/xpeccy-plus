@@ -63,7 +63,7 @@ void MainWin::disconnected() {
 
 static char dasmbuf[256];
 extern int dasmrd(int adr, void* ptr);
-extern int str_to_adr(Computer* comp, QString str);
+extern int str_to_adr(Computer* comp, QString str, bool typed = false);
 extern QString asm_labels(const QString&);
 
 void MainWin::socketRead() {

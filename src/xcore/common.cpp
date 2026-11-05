@@ -171,12 +171,35 @@ int dbg_num_parse(QString str, bool* ok) {
 	return good ? val : 0;
 }
 
-// what a typed text is once its hex sign is taken off: "#START" -> "START"
+// what a typed text is once its hex sign is taken off: "#START" -> "START",
+// "DRAWh" -> "DRAW"
 QString dbg_num_unsign(QString str) {
 	str = str.trimmed();
 	if (str.startsWith('#') || str.startsWith('$')) return str.mid(1);
 	if (str.startsWith("0x", Qt::CaseInsensitive)) return str.mid(2);
+	if ((str.size() > 1) && str.endsWith('h', Qt::CaseInsensitive)) str.chop(1);
 	return str;
+}
+
+// A typed address: a label, a number by the one rule, or a label behind a
+// sign the typing put there. lab gets the label, type -1 for a number; name
+// the label's name as found
+bool dbg_read_adr(const QString& txt, int* val, xAdr* lab, QString* name) {
+	xAdr xa = find_label(txt.trimmed());
+	QString nm = txt.trimmed();
+	bool ok = false;
+	if (xa.type < 0) {
+		*val = dbg_num_parse(txt, &ok);
+		if (!ok) {
+			nm = dbg_num_unsign(txt);
+			xa = find_label(nm);
+		}
+	}
+	if (lab) *lab = xa;
+	if (xa.type < 0) return ok;
+	*val = xa.adr;
+	if (name) *name = nm;
+	return true;
 }
 
 static const char* numFmtNames[] = {"hash", "dollar", "suffix", "decimal"};

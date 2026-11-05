@@ -243,7 +243,7 @@ Qt::ItemFlags xDumpModel::flags(const QModelIndex& idx) const {
 	return res;
 }
 
-extern int str_to_adr(Computer* comp, QString str);
+extern int str_to_adr(Computer* comp, QString str, bool typed);
 
 bool xDumpModel::setData(const QModelIndex& idx, const QVariant& val, int role) {
 	if (!idx.isValid()) return false;
@@ -258,7 +258,7 @@ bool xDumpModel::setData(const QModelIndex& idx, const QVariant& val, int role) 
 	unsigned char bt;
 	QString str = val.toString();
 	if (col == 0) {
-		fadr = str_to_adr(conf.zx, str);
+		fadr = str_to_adr(conf.zx, str, true);
 		if (fadr >= 0) {
 			dmpadr = (fadr - row * dmpsize) % maxadr;
 			update();
