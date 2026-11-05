@@ -1644,7 +1644,7 @@ static int nxv_still_ok(Computer* comp) {
 	Video* vid = comp->vid;
 	if (!vid_still_on || !vid->stillOk || vid->nodraw || vid->debug) return 0;
 	if ((NX.still.clean < 2) || (NX.still.flashDot < 0) || NX.powerFrame) return 0;
-	if (!V.live || (V.evHead != V.evN) || nx_cop_on(comp)) return 0;
+	if ((!V.live && !vid->still) || (V.evHead != V.evN) || nx_cop_on(comp)) return 0;
 	if (!((V.flash + 1) & 15) && !V.q[NXF_ULANEXT] && !V.q[NXF_ULAP]) return 0;
 	return 1;
 }
@@ -1674,6 +1674,9 @@ void nxv_frm(Video* vid) {
 		for (int y = 0; y < rows; y++)
 			memcpy(scrimg + y * bytesPerLine, bufimg + y * bytesPerLine, len);
 		vid->still = 1;
+		// the drawing stops at lastDot: whatever ends the still (nxv_wake, or a state or
+		// snapshot loaded with still off) takes it up at the ray, not from there
+		V.live = 0;
 	} else if (!ok && vid->still) {
 		vid_still_end(vid);
 	}
