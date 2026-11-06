@@ -57,9 +57,9 @@ before that point is upstream's history and is not repeated here.
 
 - **A `.pok` named on the command line before the image is kept**: the image's own cheat
   file took its place.
-- **Opening the game's tape or disk again turns its cheats off, bytes back** (File > Reload,
-  Recent and the rest): unticking one afterwards could write old bytes into the game loaded
-  again.
+- **Unticking a cheat no longer writes old bytes into a game loaded again**: a byte the game
+  changed stays, and opening the game's tape or disk again (File > Reload, Recent) turns the
+  cheats off first.
 - **The Tape Player lists the tape that went in while the machine ran**: a side picked from
   the tape menu, the next tape of a set or a tape opened without starting it left the old
   tape's blocks on the list.
