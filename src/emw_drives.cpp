@@ -160,13 +160,13 @@ QString MainWin::sideNext(int src, int step, QString* place) {
 	// an image still being read for this slot: a later one would drop it, so it is the
 	// one that goes in, and the press steps on from it
 	if ((src == mountSrc) && !mountPath.isEmpty()) path = mountPath;
-	if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place);
+	if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place, true);
 	QStringList skip;
 	for (int i = 0; i < 4; i++) {
 		const QString other = (i == src) ? QString() : sideHeld(i);
 		if (!other.isEmpty()) skip.append(other);
 	}
-	return media_next_side(comp, path, FH_DRIVE_A + src, src, {}, step, skip, place);
+	return media_next_side(comp, path, FH_DRIVE_A + src, src, {}, step, skip, place, true);
 }
 
 // Whether a drive's disk has another side to step to, for its buttons. The deck's tape

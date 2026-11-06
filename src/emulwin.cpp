@@ -4123,7 +4123,8 @@ void MainWin::watchTapeSet(Computer* comp) {
 	}
 	QString place;
 	const QString next = path.isEmpty() ? QString() : media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, &place);
-	tapeSides = !next.isEmpty();		// the Tape Player's buttons, whatever the option says
+	// the Tape Player's buttons, whatever the option says, and as they step
+	tapeSides = !next.isEmpty() || (!path.isEmpty() && !media_next_side(comp, path, FG_TAPE, -1, tapeSeen, 1, {}, nullptr, true).isEmpty());
 	const bool set = on && tapeSides;
 	if (set) xlog(XLG_TAPE, XLL_INFO, "one of a set: next comes %s", next.toLocal8Bit().constData());
 	emu_lock();

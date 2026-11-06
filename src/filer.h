@@ -120,8 +120,10 @@ QList<xSibling> media_siblings(Computer*, const QString& path, int id, int drv, 
 // images that were in, newest first), else the one with the same [flags], else one with
 // none; a file in skip (a disk in another drive) is never taken, a place with none left
 // is passed. place gets its place in the set ("side B"). Empty when there is none.
+// whole, for a step by hand: an image from an archive of several with no set by name
+// steps through the archive's own list, as the menus offer it.
 QString media_next_side(Computer*, const QString& path, int id, int drv, const QStringList& seen, int step,
-	const QStringList& skip = QStringList(), QString* place = nullptr);
+	const QStringList& skip = QStringList(), QString* place = nullptr, bool whole = false);
 // the image to open from an archive, as an archive path: the only one, the one picked
 // when ask, the first otherwise; empty when none or the user cancelled (said why)
 QString media_from_archive(Computer*, const QString& archive, int id, int drv, bool ask);
