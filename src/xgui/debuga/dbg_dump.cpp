@@ -18,6 +18,7 @@ QString getDumpString(QByteArray bts, int cp) {
 	QString res;
 	QTextCodec* codec = NULL;
 	switch(cp) {
+		case XCP_850: codec = QTextCodec::codecForName("IBM 850"); break;
 		case XCP_1251: codec = QTextCodec::codecForName("CP1251"); break;
 		case XCP_866: codec = QTextCodec::codecForName("IBM866"); break;
 		case XCP_KOI8R: codec = QTextCodec::codecForName("KOI8R"); break;
@@ -25,7 +26,7 @@ QString getDumpString(QByteArray bts, int cp) {
 	unsigned char bte;
 	for (int i = 0; i < bts.size(); i++) {
 		bte = (unsigned char)bts.at(i);
-		if ((bte > 31) && ((cp != XCP_ASCII) || (bte < 127))) {
+		if ((bte > 31) && (bte != 127)) {		// 127 is a control code in all of them
 			res.append(QChar(bte));
 		} else {
 			res.append(".");
@@ -100,7 +101,7 @@ void xDumpModel::mwr(int adr, unsigned char bt) {
 }
 
 xDumpModel::xDumpModel(QObject* par):xTableModel(par) {
-	codePage = XCP_ASCII;
+	codePage = XCP_850;
 	mode = XVIEW_CPU;
 	page = 0;
 	dmpadr = 0;
@@ -606,11 +607,11 @@ xDumpWidget::xDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) {
 	ui.cbDumpBytes->addItem("12/row", 12);
 	ui.cbDumpBytes->addItem("16/row", 16);
 
-	// plain ASCII first: the Spectrum's own characters, nothing above them
-	ui.cbCodePage->addItem("ASCII", XCP_ASCII);
-	ui.cbCodePage->addItem("WIN1251", XCP_1251);
+	// the Latin one first, then the Cyrillic ones; the names as code pages are written
+	ui.cbCodePage->addItem("CP850", XCP_850);
+	ui.cbCodePage->addItem("CP1251", XCP_1251);
 	ui.cbCodePage->addItem("CP866", XCP_866);
-	ui.cbCodePage->addItem("KOI8R", XCP_KOI8R);
+	ui.cbCodePage->addItem("KOI8-R", XCP_KOI8R);
 
 	ui.cbDumpView->addItem("CPU", XVIEW_CPU);
 	ui.cbDumpView->addItem("RAM", XVIEW_RAM);

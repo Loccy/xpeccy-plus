@@ -95,6 +95,7 @@ class xHexSpin : public QLineEdit {
 		void updateSign();
 		bool updateMask();
 		bool decPairs();
+		int regChars();		// XHS_NUMS: characters the field is as wide as
 		QString numText(int);
 		void decTextChange(const QString&);
 		void redraw();

@@ -1,5 +1,6 @@
 #include "watcher.h"
 #include "xcore/xcore.h"
+#include "xgui/debuga/dbg_dump.h"
 
 #include <QInputDialog>
 #include <QHeaderView>
@@ -31,19 +32,24 @@ void xWatcher::updateStyle() {
 	fitColumns();
 }
 
-// a byte a column, as wide as two digits and a little air; the address of a
-// watch spans the last three
+// a byte a column, as the DUMP panel has them: the cells are aligned right and
+// the first of a group of four is wider, so the groups stand apart. The
+// address of a watch spans the last three
 void xWatcher::fitColumns() {
 	QFontMetrics fm(conf.dbg.font);
-	int w = fm.horizontalAdvance("00") + 8;
+	int w = dump_cell_width(fm);
+	int all = 0;
 	QHeaderView* hdr = ui.wchMemTab->horizontalHeader();
 	hdr->setMinimumSectionSize(w);
 	hdr->setDefaultSectionSize(w);
-	for (int i = 0; i < WCH_BYTES; i++)
-		ui.wchMemTab->setColumnWidth(i, w);
+	for (int i = 0; i < WCH_BYTES; i++) {
+		int cw = w + (((i > 0) && !(i % DUMP_GROUP)) ? DUMP_GAP : 0);
+		ui.wchMemTab->setColumnWidth(i, cw);
+		all += cw;
+	}
 	// room for all of them, and for the scroll bar a long list brings; never one
 	// across, the last column takes what is left
-	ui.wchMemTab->setMinimumWidth(w * WCH_BYTES + ui.wchMemTab->frameWidth() * 2
+	ui.wchMemTab->setMinimumWidth(all + ui.wchMemTab->frameWidth() * 2
 		+ ui.wchMemTab->verticalScrollBar()->sizeHint().width() + 4);
 	ui.wchMemTab->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	int h = fm.height() + 4;
@@ -83,6 +89,12 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	ui.wchMemTab->setModel(model);
 	ui.wchMemTab->addAction(ui.actAddWatcher);
 	ui.wchMemTab->addAction(ui.actDelWatcher);
+	// it is never scrolled across: a moment of being too narrow (the registers
+	// beside it growing, decimal) would leave it scrolled, its left side cut off
+	QScrollBar* hsb = ui.wchMemTab->horizontalScrollBar();
+	connect(hsb, &QScrollBar::valueChanged, this, [hsb](int v) {
+		if (v != 0) hsb->setValue(0);
+	});
 
 // like in the debugger: pairs regName/regValue, in its numbers. No changed
 // marks: the values move every frame here
@@ -264,7 +276,7 @@ int xWatchModel::rowCount(const QModelIndex&) const {
 }
 
 int xWatchModel::columnCount(const QModelIndex&) const {
-	return WCH_BYTES;
+	return WCH_BYTES + 1;		// and an empty one after them that takes the slack
 }
 
 void xWatchModel::insertRow(int row, const QModelIndex& idx) {
@@ -320,7 +332,13 @@ QVariant xWatchModel::data(const QModelIndex& idx, int role) const {
 	if ((col < 0) || (col >= columnCount(idx))) return res;
 	xWatchItem itm;
 	xResult xr;
+	if (col >= WCH_BYTES) return res;		// the empty one
 	switch (role) {
+		case Qt::TextAlignmentRole:
+			// the bytes, and the address of a watch, stand to the right of their cells
+			if ((row & 1) || (col == WCH_BYTES - 3))
+				res = (int)(Qt::AlignRight | Qt::AlignVCenter);
+			break;
 		case Qt::DisplayRole:
 			itm = explist.at(row >> 1);
 			xr = xEval(itm.exp.toLocal8Bit().data(), itm.type);

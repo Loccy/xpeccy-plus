@@ -125,13 +125,13 @@ bool xHexSpin::updateMask() {
 		setInputMask((hsflag & XHS_BLANK) ? (QString(len, 'h') + ";-") : QString(len, 'h'));
 	}
 	blockSignals(blk);
-	dlen = decPairs() ? (hexLen / 2) * 4 - 1 : len;
+	dlen = decPairs() ? (hexLen / 2) * 5 - 2 : len;
 	refitWidth();
 	return dlen != was;
 }
 
 // a decimal field lit byte by byte shows each byte as a number of its own:
-// "  1 255" for 511
+// "  1  255" for 511, two spaces between - paintEvent draws the strip there
 bool xHexSpin::decPairs() {
 	return (base == 10) && (hsflag & XHS_SPLIT) && (hexLen >= 4) && !(hexLen & 1);
 }
@@ -143,9 +143,11 @@ QString xHexSpin::numText(int val) {
 		QStringList lst;
 		for (int i = hexLen / 2 - 1; i >= 0; i--)
 			lst.append(QString::number(((unsigned)val >> (i * 8)) & 0xff).rightJustified(3, ' '));
-		return lst.join(' ');
+		return lst.join("  ");
 	}
 	QString res = QString::number(val);
+	// a register stands to the right of its whole field, as wide as it is
+	if (hsflag & XHS_NUMS) return res.rightJustified(regChars(), ' ');
 	return (hsflag & XHS_FILL) ? res.rightJustified(len, ' ') : res;
 }
 
@@ -163,16 +165,21 @@ void xHexSpin::redraw() {
 // call it after a font change too, not only when the value length changes.
 // A register (XHS_NUMS) is as wide as a pair, or as one byte of it, whatever
 // it holds: PC lines up with HL edge to edge, IM with one half of a pair
+int xHexSpin::regChars() {
+	if (!(hsflag & XHS_NUMS)) return dlen;
+	bool dec = (base == 10);
+	if (max <= 0xff) return dec ? 3 : 2;
+	if (max <= 0xffff) return !dec ? 4 : conf.dbg.regsplit ? 8 : 5;
+	return dlen;
+}
+
 void xHexSpin::refitWidth() {
 	if (!(hsflag & XHS_AUTOW)) return;
-	int chars = dlen;
-	if (hsflag & XHS_NUMS) {
-		bool dec = (base == 10);
-		if (max <= 0xff) {
-			chars = dec ? 3 : 2;
-		} else if (max <= 0xffff) {
-			chars = !dec ? 4 : conf.dbg.regsplit ? 7 : 5;
-		}
+	int chars = regChars();
+	// a register's decimal text is padded to the width: Split pairs moves it
+	if ((hsflag & XHS_NUMS) && (base == 10) && !isblank && (text() != numText(value))) {
+		hsflag |= XHS_UPD;
+		onChange(value);
 	}
 	QFontMetrics fm(font());
 	setFixedWidth(fm.horizontalAdvance(QString(chars, '0') + sgnPre + sgnPost) + 10);
@@ -418,53 +425,69 @@ void xHexSpin::paintEvent(QPaintEvent* ev) {
 		if (!sgnPost.isEmpty()) pnt.drawText(tx + tw, y, sgnPost);
 	}
 	int bytes = splitBytes();
-	if (bytes && (base == 10)) {
-		// a number a byte: the halves stand apart, a strip of the panel's own
-		// colour between them, as two fields would
-		QString txt = text();
-		if (txt.size() == bytes * 4 - 1) {
-			QRect cr = contentsRect();
-			QFontMetrics fm = fontMetrics();
-			int x = cr.x() + (cr.width() - fm.horizontalAdvance(txt)) / 2;
-			int gw = fm.horizontalAdvance(QChar(' '));
-			int sw = qMin(gw, 4);
-			QWidget* par = parentWidget();
-			QColor gap = par ? par->palette().color(par->backgroundRole()) : palette().color(QPalette::Window);
-			QPainter pnt(this);
-			for (int i = 0; i < bytes - 1; i++) {
-				x += fm.horizontalAdvance(txt.mid(i * 4, 3));
-				pnt.fillRect(QRect(x + (gw - sw) / 2, rect().top(), sw, rect().height()), gap);
-				x += gw;
-			}
+	if (!bytes) return;
+	QString txt = text();
+	// a byte is two hex digits, or three decimal places with two spaces between
+	bool dec = (base == 10);
+	int cw = dec ? 3 : 2;
+	int sp = dec ? 2 : 0;
+	if (txt.size() != bytes * (cw + sp) - sp) return;		// mid-edit: nothing lines up
+	QFontMetrics fm = fontMetrics();
+	QRect cr = contentsRect();
+	int tw = fm.horizontalAdvance(txt);
+	int x0 = cr.x() + (cr.width() - tw) / 2;
+	// what the field leaves either side of its text, frame and padding: a
+	// decimal byte gets the same in its own box, so the halves read as two
+	// fields as wide as one of a byte (IM), the digits standing as far from
+	// the right of each
+	int padL = x0;
+	int padR = width() - (x0 + tw);
+	int spw = sp ? fm.horizontalAdvance(QString(sp, ' ')) : 0;
+	// each byte, from the left: where its digits are, and the part of the
+	// field that is its own
+	QVector<int> tx(bytes), tdw(bytes), from(bytes), to(bytes);
+	int x = x0;
+	for (int k = 0; k < bytes; k++) {
+		tx[k] = x;
+		tdw[k] = fm.horizontalAdvance(txt.mid(k * (cw + sp), cw));
+		x += tdw[k] + spw;
+	}
+	from[0] = 0;
+	to[bytes - 1] = width();
+	for (int k = 0; k < bytes - 1; k++) {
+		int a = tx[k] + tdw[k];		// hex: the bytes meet where the digits do
+		int b = a;
+		if (dec) {
+			a += padR;
+			b = tx[k + 1] - padL;
+			if (b <= a) a = b = (tx[k] + tdw[k] + tx[k + 1]) / 2;
+		}
+		to[k] = a;
+		from[k + 1] = b;
+	}
+	QPainter pnt(this);
+	if (dec) {
+		// the strip between two decimal bytes, in the panel's own colour
+		QWidget* par = parentWidget();
+		QColor gap = par ? par->palette().color(par->backgroundRole()) : palette().color(QPalette::Window);
+		for (int k = 0; k < bytes - 1; k++) {
+			int w = qMax(from[k + 1] - to[k], 1);
+			pnt.fillRect(QRect(to[k], 0, w, height()), gap);
 		}
 	}
-	if (!chgMask || !bytes || wholeFieldLit()) return;
+	if (!chgMask || wholeFieldLit()) return;
 	QColor bg = conf.pal.value(DBG_PAL_CHG_BG);
 	QColor fg = conf.pal.value(DBG_PAL_CHG_TXT);
 	if (!bg.isValid() && !fg.isValid()) return;
-	QString txt = text();
-	// a byte is two hex digits, or three decimal places and a space between
-	int cw = (base == 16) ? 2 : 3;
-	int gap = (base == 16) ? 0 : 1;
-	if (txt.size() != bytes * (cw + gap) - gap) return;		// mid-edit: nothing lines up
-	// inside the frame, so a lit byte does not paint over the field's border
-	QRect cr = contentsRect();
-	QFontMetrics fm = fontMetrics();
-	int x = cr.x() + (cr.width() - fm.horizontalAdvance(txt)) / 2;
-	int gw = gap ? fm.horizontalAdvance(QChar(' ')) : 0;
-	QPainter pnt(this);
 	if (fg.isValid()) pnt.setPen(fg);
-	// left to right, so each byte's width is measured once and carries the
-	// next one's position with it. Byte 0 is the last one
-	for (int i = bytes - 1; i >= 0; i--) {
-		QString dig = txt.mid((bytes - 1 - i) * (cw + gap), cw);
-		int w = fm.horizontalAdvance(dig);
-		if (chgMask & (1 << i)) {
-			QRect r(x, cr.y(), w, cr.height());
-			if (bg.isValid()) pnt.fillRect(r, bg);
-			pnt.drawText(r, Qt::AlignCenter, dig);
-		}
-		x += w + gw;
+	// a changed byte lights all of its part of the field, inside the frame's
+	// line. Byte 0 is the last one
+	for (int k = 0; k < bytes; k++) {
+		if (!(chgMask & (1 << (bytes - 1 - k)))) continue;
+		int l = qMax(from[k], 1);
+		int r = qMin(to[k], width() - 1);
+		if (bg.isValid()) pnt.fillRect(QRect(l, 1, r - l, height() - 2), bg);
+		pnt.drawText(QRect(tx[k], cr.y(), tdw[k], cr.height()), Qt::AlignCenter, txt.mid(k * (cw + sp), cw));
 	}
 }
 
