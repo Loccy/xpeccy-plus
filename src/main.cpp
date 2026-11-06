@@ -396,9 +396,15 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 	if (name.isEmpty()) name = list;		// no name: the pokes themselves
 	if (name.size() > POK_NAME_MAX) name = name.left(POK_NAME_MAX - 3) + "...";
 	QByteArray nam = name.toLatin1();		// what the window reads a .pok's names as
+	// an empty one, as a trailing ':' a frontend leaves, is no poke and no mistake
+	QStringList pokes = list.split(':', X_SkipEmptyParts);
+	if (pokes.isEmpty()) {
+		cli_warn(QString("--poke: no pokes in %0").arg(arg));
+		return;
+	}
 	if (!pok_add_trainer(pf, nam.constData(), nam.size())) return;
 	xTrainer* tr = &pf->list[pf->cnt - 1];
-	foreach(QString one, list.split(':')) {
+	foreach(QString one, pokes) {
 		QStringList pg = one.split('/');
 		QStringList num = pg.last().split(',');
 		int page = 8;
@@ -441,7 +447,8 @@ static void cli_cheats(MainWin& mwin, const QStringList& pokes) {
 	xPokFile pf = {0, 0, NULL};
 	foreach(QString arg, pokes)
 		cli_poke(arg, &pf);
-	if (pf.cnt) cheats_add(&pf, !own);
+	if (pf.cnt && !cheats_add(&pf, !own))
+		cli_warn("--poke: out of memory, no trainers taken");
 	pok_free(&pf);
 }
 

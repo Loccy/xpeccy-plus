@@ -111,7 +111,8 @@ void cheats_pick(const QString& image) {
 }
 
 // The command line's trainers, after a file given there (alone: the list emptied first,
-// so they win over the image's own). They go with the game, as a found file does.
+// so they win over the image's own). Alone they go with the game, as a found file does;
+// after a file they stay with it.
 bool cheats_add(xPokFile* pf, bool alone) {
 	chLock lock;
 	if (alone) ch_drop_file(ch_comp);
@@ -120,6 +121,7 @@ bool cheats_add(xPokFile* pf, bool alone) {
 		xTrainer* nl = (xTrainer*)realloc(ch_file.list, cnt * sizeof(xTrainer));
 		if (!nl) {
 			pok_free(pf);
+			ch_changed();		// the list may be gone already
 			return false;
 		}
 		ch_file.list = nl;
@@ -130,7 +132,7 @@ bool cheats_add(xPokFile* pf, bool alone) {
 	ch_state.resize(cnt, chState{0, -1, 0});
 	free(pf->list);
 	memset(pf, 0, sizeof(xPokFile));
-	ch_picked = true;
+	if (alone) ch_picked = true;
 	ch_cli = true;
 	ch_changed();
 	return true;
