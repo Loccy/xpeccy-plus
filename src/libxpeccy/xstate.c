@@ -172,7 +172,11 @@ static int xst_build(Computer* comp, xStateChunk* list) {
 // good: it sticks on for good on a drive with no disk in it. Idle means waiting
 // for a command - the wd1793 leaves no plan behind at all, the upd765 parks on a
 // do-nothing plan and raises idle, and a freshly reset wd1793 has neither yet.
-static int fdc_running(FDC* fdc) {
+// A controller out of the machine gets no time: a command it was left in (a
+// TR-DOS reset's Restore, then a switch to a machine without one) never moves.
+static int dif_running(DiskIF* dif) {
+	if (!dif || (dif->type == DIF_NONE)) return 0;
+	FDC* fdc = dif->fdc;
 	return fdc && fdc->plan && !fdc->idle;
 }
 
@@ -183,12 +187,7 @@ int xstate_safe(Computer* comp) {
 
 int xstate_safe_tape_aside(Computer* comp) {
 	if (!comp || !comp->hw) return 0;
-	// a controller out of the machine gets no time: a command it was left in (a
-	// TR-DOS reset's Restore, then a switch to a machine without one) never moves
-	if (comp->dif && (comp->dif->type != DIF_NONE)) {
-		if (fdc_running(comp->dif->fdc)) return 0;
-	}
-	return 1;
+	return !dif_running(comp->dif);
 }
 
 static size_t xst_total(xStateChunk* list, int count) {
