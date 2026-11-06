@@ -101,6 +101,11 @@ file's trainers are not: tick it once the game has loaded.
 - `ADR,VAL,ORG` adds the byte the game has there, so the window can tell whether the game
   in memory is the one the poke is for. `0` means it is not known, as in a cheat file.
 - `NAME=` names the trainer. Without it the trainer is named by its pokes.
+- `ADR` can be a label, also as `LABEL+N` or `LABEL-N`: from `-l` or the image's own
+  labels. The label carries its page, so no `PAGE/` goes before it. Its address is looked
+  up each time the trainer is ticked, so after you rebuild your program and **File >
+  Reload** it, the poke goes where the label is now. A label that is not loaded is named
+  in the trainer's row, and the trainer cannot be ticked.
 
 Give `--poke` once for each trainer: all the pokes of one `--poke` are ticked together.
 The trainers come after those of a cheat file named on the command line; without one, they
@@ -113,6 +118,7 @@ ticked.
 
 ```
 xpeccy-plus game.tap --poke "Infinite lives=35899,0" --poke 1/49152,0:1/49153,0
+xpeccy-plus -l game.lab game.tap --poke "Lives=lives,9" --poke "No check=check+2,0"
 ```
 
 ## Window
