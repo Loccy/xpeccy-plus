@@ -14,12 +14,11 @@ before that point is upstream's history and is not repeated here.
 - **Frame skip** (Options > Video): on a computer too slow for the machine a frame is left
   undrawn now and then, so the machine and its sound keep their speed. When the machine falls
   behind for a few seconds, Xpeccy+ offers to turn it on.
-- **Next Side, Shift+F3, puts in the next side of the tape or disk in use** - side B after
-  side A, disk 3 after disk 2 - with no menu; **Previous Side** goes back. Both are in the
-  **Media** menu, and the Tape Player and each drive of the Disk Manager have buttons for them.
-- **Autoreverse can be turned off**: its button in the Tape Player (Next tape of a set in
-  Options) makes a tape of a set start over at its end instead of going on to side B, for a
-  game that loads its levels from side B again and again.
+- **Next Side (Shift+F3) and Previous Side** put the next or previous side of the tape or
+  disk in use in, side B after side A. They are in the Media menu, with buttons in the Tape
+  Player and in each drive of the Disk Manager.
+- **Next tape of a set can be turned off** (Options, or Autoreverse in the Tape Player): the
+  tape then starts over at its end, for a game that loads its levels from side B again and again.
 
 ### Changed
 
