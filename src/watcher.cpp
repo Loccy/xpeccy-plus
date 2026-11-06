@@ -290,8 +290,11 @@ void xWatcher::edtWatcher() {
 xWatchModel::xWatchModel() {
 }
 
+// The last cell is the corner, not one past it: Qt 6 repaints only the cells of the
+// range, and a corner outside the table left the bytes as they were drawn first.
 void xWatchModel::update() {
-	emit QAbstractItemModel::dataChanged(index(0, 0), index(rowCount(), columnCount()));
+	if (!rowCount()) return;
+	emit QAbstractItemModel::dataChanged(index(0, 0), index(rowCount() - 1, columnCount() - 1));
 }
 
 QModelIndex xWatchModel::index(int row, int col, const QModelIndex&) const {
@@ -345,7 +348,7 @@ void xWatchModel::setItem(int idx, int type, QString exp) {
 	itm.type = type;
 	itm.exp = exp;
 	explist[idx] = itm;
-	emit QAbstractItemModel::dataChanged(index(idx, 0), index(idx, columnCount()));
+	emit QAbstractItemModel::dataChanged(index(idx * 2, 0), index(idx * 2 + 1, columnCount() - 1));	// its two rows
 }
 
 void xWatchModel::delItem(int idx) {
