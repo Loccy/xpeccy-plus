@@ -460,8 +460,13 @@ void xHexSpin::decTextChange(const QString& txt) {
 			if (!chr.isDigit() || (chr.unicode() > '9')) good = false;
 	}
 	if (!good) {
+		// back to the value as it is written: the last good text may be another
+		// base's, or a value out of a range turned upside down (-1) - neither
+		// reads back, and putting either in again would come back here for ever
 		int pos = cursorPosition();
-		setText(vtxt);
+		fixing = true;
+		setText(numText(value));
+		fixing = false;
 		setCursorPosition(pos - 1);
 		return;
 	}
@@ -480,7 +485,7 @@ void xHexSpin::decTextChange(const QString& txt) {
 }
 
 void xHexSpin::onTextChange(QString txt) {
-	if (isblank) return;		// the dashes are not a number to read
+	if (isblank || fixing) return;		// the dashes are not a number to read
 	if (base == 10) {
 		decTextChange(txt);
 		return;
@@ -501,7 +506,9 @@ void xHexSpin::onTextChange(QString txt) {
 			onChange(value);
 	} else {
 		pos = cursorPosition();		// Qt moves cursor at end of field after setText
+		fixing = true;
 		setText(vtxt);
+		fixing = false;
 		setCursorPosition(pos-1);
 	}
 }

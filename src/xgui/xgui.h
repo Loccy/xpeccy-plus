@@ -79,6 +79,7 @@ class xHexSpin : public QLineEdit {
 	private:
 		int chgMask;		// bytes changed by the last setValue, bit 0 = the lowest
 		bool isblank;		// holding nothing, with XHS_BLANK
+		bool fixing = false;	// putting back a text that was refused: not a new one
 		int hsflag;
 		int base;
 		int value;
