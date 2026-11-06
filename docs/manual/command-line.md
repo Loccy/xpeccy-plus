@@ -99,14 +99,17 @@ file's trainers are not: tick it once the game has loaded.
   byte asks for it when the trainer is ticked.
 - `PAGE/ADR,VAL` writes into a 128K memory page, 0 to 7, at that address in the page.
 - `ADR,VAL,ORG` adds the byte the game has there, so the window can tell whether the game
-  in memory is the one the poke is for.
+  in memory is the one the poke is for. `0` means it is not known, as in a cheat file.
 - `NAME=` names the trainer. Without it the trainer is named by its pokes.
 
 Give `--poke` once for each trainer: all the pokes of one `--poke` are ticked together.
 The trainers come after those of a cheat file named on the command line; without one, they
 take the place of the image's own cheat file, and go when another game is opened. Numbers
 are written as in the [debugging options](#debugging). A poke that cannot be read is
-reported as an unknown option is, and its `--poke` is left out.
+named in the message over the picture and in the log, and its `--poke` is left out.
+
+**File > Reload** of the image named here keeps the cheats named with it, with nothing
+ticked.
 
 ```
 xpeccy-plus game.tap --poke "Infinite lives=35899,0" --poke 1/49152,0:1/49153,0

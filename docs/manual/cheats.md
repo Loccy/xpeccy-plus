@@ -34,7 +34,7 @@ window again; a file you opened yourself stays, and so does the game's own when 
 another side of it from its list.
 
 A program that starts Xpeccy+ with a game can also hand its trainers over on the command
-line, with no file (see [Cheats](command-line.md#cheats) there). The window then says
+line, with no file (see [Cheats](command-line.md#cheats)). The window then says
 **Command line**, and the trainers stay with the game as its own cheat file would.
 
 A file that is not a cheat file at all is refused with a message.
@@ -92,8 +92,9 @@ it, with the cheat file.
 ```{index} Cheats; reset, Cheats; Rewind, Cheats; RZX
 ```
 
-A reset, opening a file, a machine switch, **Quick Load** and **Undo Quick Load** turn every
-cheat off and write nothing back: the memory they changed is gone. The cheat file stays in the window.
+A reset, opening a file, **File > Reload**, a machine switch, **Quick Load** and
+**Undo Quick Load** turn every cheat off and write nothing back: the memory they changed is
+gone. The cheat file stays in the window.
 
 **Rewind** keeps cheats on: a trainer whose bytes are back to the originals after going
 back in time is poked again. One whose bytes are something else goes off.
