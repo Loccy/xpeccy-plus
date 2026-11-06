@@ -19,10 +19,8 @@ before that point is upstream's history and is not repeated here.
   Player and in each drive of the Disk Manager.
 - **Next tape of a set can be turned off** (Options, or Autoreverse in the Tape Player): the
   tape then starts over at its end, for a game that loads its levels from side B again and again.
-- **Decimal numbers in the Debugger**: addresses, and the numbers in the listing's
-  commands, as `#FFFF`, `$FFFF`, `FFFFh` or `65535` (Options > Debugger > **Numbers**); a
-  button on the listing's toolbar and Ctrl+Shift+H switch hex and decimal, the registers and
-  port numbers included. A typed number is hex with a sign and decimal without, and a tip shows it in hex,
+- **Decimal numbers in the Debugger**: a toolbar button and Ctrl+Shift+H switch hex and
+  decimal, the hex form is picked in Options > Debugger, and a tip shows a number in hex,
   decimal and binary.
 
 ### Changed
