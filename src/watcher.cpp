@@ -1,7 +1,12 @@
 #include "watcher.h"
 #include "xcore/xcore.h"
+#include "xgui/debuga/dbg_dump.h"
 
 #include <QInputDialog>
+#include <QHeaderView>
+#include <QScrollBar>
+#include <QMenu>
+#include <QApplication>
 #include <QDebug>
 
 // expression evaluation moved to xcore/xexpr.cpp
@@ -11,35 +16,104 @@
 extern QString getStyleString(QString, QString, int = 0, int = 100);
 
 // the two headers follow the debugger's own, so a style with a .pal of its own
-// reaches them too
+// reaches them too. The font is the debugger's: this window is not one of its
+// children, so it takes it here, and the columns are measured in it
 
 void xWatcher::updateStyle() {
 	QString str = getStyleString("dbg.header.bg", "dbg.header.txt");
 	ui.label_15->setStyleSheet(str);
 	ui.label_14->setStyleSheet(str);
+	QFont uiFont = QApplication::font();
+	foreach (QWidget* wid, findChildren<QWidget*>())
+		wid->setFont(qobject_cast<QMenu*>(wid) ? uiFont : conf.dbg.font);
+	setFont(conf.dbg.font);
+	foreach (xHexSpin* xhs, regValues)
+		xhs->updatePal();
+	fitColumns();
+}
+
+// a byte a column, as the DUMP panel has them: the cells are aligned right and
+// the first of a group of four is wider, so the groups stand apart. The
+// address of a watch spans the last three
+void xWatcher::fitColumns() {
+	QFontMetrics fm(conf.dbg.font);
+	int w = dump_cell_width(fm);
+	int all = 0;
+	QHeaderView* hdr = ui.wchMemTab->horizontalHeader();
+	hdr->setMinimumSectionSize(w);
+	hdr->setDefaultSectionSize(w);
+	for (int i = 0; i < WCH_BYTES; i++) {
+		int cw = w + (((i > 0) && !(i % DUMP_GROUP)) ? DUMP_GAP : 0);
+		ui.wchMemTab->setColumnWidth(i, cw);
+		all += cw;
+	}
+	// room for all of them, and for the scroll bar a long list brings; never one
+	// across, the last column takes what is left
+	ui.wchMemTab->setMinimumWidth(all + ui.wchMemTab->frameWidth() * 2
+		+ ui.wchMemTab->verticalScrollBar()->sizeHint().width() + 4);
+	ui.wchMemTab->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	int h = fm.height() + 4;
+	ui.wchMemTab->verticalHeader()->setMinimumSectionSize(h);
+	ui.wchMemTab->verticalHeader()->setDefaultSectionSize(h);
+}
+
+// the registers as the debugger shows them: its base, and a pair lit (or, in
+// decimal, written) byte by byte with Split pairs
+// the fields as the debugger has them; again only when its numbers or Split
+// pairs moved - every frame would repolish them and put the caret back to 0
+void xWatcher::setupRegs(const xRegBunch& regs) {
+	setupKey = conf.dbg.numfmt * 2 + conf.dbg.regsplit;
+	for (int i = 0; (i < regValues.size()) && (regs.regs[i].id != REG_EOT); i++)
+		reg_field_setup(regValues[i], regs.regs[i].size, regs.regs[i].flag);
+}
+
+void xWatcher::setRegs(const xRegBunch& regs) {
+	if (setupKey != conf.dbg.numfmt * 2 + conf.dbg.regsplit) setupRegs(regs);
+	for (int i = 0; (i < regValues.size()) && (regs.regs[i].id != REG_EOT); i++) {
+		if (regs.regs[i].size == REG_BIT) {
+			regBits[i]->setChecked(regs.regs[i].value);
+		} else {
+			regValues[i]->setValue(regs.regs[i].value);
+		}
+	}
 }
 
 xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	int i;
 	ui.setupUi(this);
-	updateStyle();
 	model = new xWatchModel;
 	ui.wchMemTab->setModel(model);
 	ui.wchMemTab->addAction(ui.actAddWatcher);
 	ui.wchMemTab->addAction(ui.actDelWatcher);
+	// never scrolled across: a moment too narrow would leave its left side cut off
+	QScrollBar* hsb = ui.wchMemTab->horizontalScrollBar();
+	connect(hsb, &QScrollBar::valueChanged, this, [hsb](int v) {
+		if (v != 0) hsb->setValue(0);
+	});
 
-// like in deBUGa: pairs regName/regValue
+// like in the debugger: pairs regName/regValue, in its numbers. No changed
+// marks: the values move every frame here
 	QLabel* lp;
 	xHexSpin* hp;
 	for(i = 0; i < 32; i++) {
-		lp = new QLabel;
-		hp = new xHexSpin;
-		hp->setMaximumWidth(50);
+		lp = new QLabel(this);		// the window's from the start: the grid takes them later
+		lp->setContentsMargins(0, 0, 4, 0);	// don't let it touch the value
+		hp = new xHexSpin(this);
+		hp->setXFlag(XHS_DEC | XHS_FILL | XHS_AUTOW | XHS_NUMS);
+		hp->setFrame(false);
+		hp->setAlignment(Qt::AlignCenter);
+		// a register of one bit (IFF1, IFF2) is a mark, as in the debugger;
+		// it shows the state, the watcher changes nothing
+		QCheckBox* cb = new QCheckBox(this);
+		cb->setAttribute(Qt::WA_TransparentForMouseEvents);
+		cb->setFocusPolicy(Qt::NoFocus);
+		cb->setVisible(false);
+		lp->setVisible(false);
+		hp->setVisible(false);
 		regLabels.append(lp);
 		regValues.append(hp);
-		ui.regGrid->addWidget(lp, i >> 1, (i & 1) << 1);
-		ui.regGrid->addWidget(hp, i >> 1, ((i & 1) << 1) | 1);
-	}
+		regBits.append(cb);
+	}				// placeRegs() puts them into the grid
 //	ui.regGrid->setRowStretch(32, 10);
 
 	labswin = new xLabeList;
@@ -53,7 +127,7 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	label_complete(nui.leExpression);
 	connect(labswin, SIGNAL(labSelected(QString)), this, SLOT(insertLabel(QString)));
 
-	for(i = 0; i < 14; i++) ui.wchMemTab->setColumnWidth(i, 30);
+	updateStyle();
 
 	connect(ui.actAddWatcher, SIGNAL(triggered(bool)), this, SLOT(newWatcher()));
 	connect(ui.actDelWatcher, SIGNAL(triggered(bool)), this, SLOT(delWatcher()));
@@ -62,9 +136,49 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	connect(nui.pbOK, SIGNAL(released()), this, SLOT(confirmNew()));
 }
 
-void xWatcher::show() {
+// The rows of the debugger's two-column layout: a register, and beside it the
+// one the CPU's table pairs it with - PC SP, AF AF', ..., IR IM, IFF1 IFF2
+void xWatcher::placeRegs(const xRegBunch& regs) {
+	QLayoutItem* item;
+	while ((item = ui.regGrid->takeAt(0)) != nullptr)
+		delete item;		// the widgets stay, only their places go
+	int cnt = 0;
+	while ((cnt < regLabels.size()) && (regs.regs[cnt].id != REG_EOT))
+		cnt++;
+	QVector<char> done(cnt, 0);
+	int row = 0;
+	auto put = [this](int i, int row, int col) {
+		ui.regGrid->addWidget(regLabels[i], row, col * 2);
+		ui.regGrid->addWidget(regValues[i], row, col * 2 + 1);
+		ui.regGrid->addWidget(regBits[i], row, col * 2 + 1);
+	};
+	for (int i = 0; i < cnt; i++) {
+		if (done[i]) continue;		// already beside its pair
+		done[i] = 1;
+		put(i, row, 0);
+		for (int j = 0; (j < cnt) && regs.regs[i].pair; j++) {
+			if (!done[j] && (regs.regs[j].id == regs.regs[i].pair)) {
+				done[j] = 1;
+				put(j, row, 1);
+				break;
+			}
+		}
+		row++;
+	}
+}
 
-	xRegBunch regs = cpuGetRegs(conf.zx->cpu);
+void xWatcher::show() {
+	layoutRegs(conf.zx->cpu);
+	updateStyle();			// the font may have been read after this window was made
+	QDialog::show();
+}
+
+// the CPU's registers: names, places, fields; again when another CPU comes
+void xWatcher::layoutRegs(CPU* cpu) {
+	regCore = cpu->core;
+	xRegBunch regs = cpuGetRegs(cpu);
+	placeRegs(regs);
+	setupRegs(regs);
 	int work = 1;
 	for(int i = 0; i < 32; i++) {
 		if (work) {
@@ -72,19 +186,22 @@ void xWatcher::show() {
 				work = 0;
 				regLabels[i]->setVisible(false);
 				regValues[i]->setVisible(false);
+				regBits[i]->setVisible(false);
 			} else {
+				bool bit = (regs.regs[i].size == REG_BIT);
 				regLabels[i]->setVisible(true);
-				regValues[i]->setVisible(true);
+				regValues[i]->setVisible(!bit);
+				regBits[i]->setVisible(bit);
 				regLabels[i]->setText(regs.regs[i].name);
-				regValues[i]->setValue(regs.regs[i].value);
+				regLabels[i]->setToolTip(dbg_reg_tip(regs.regs[i].name));
 			}
 		} else {
 			regLabels[i]->setVisible(false);
 			regValues[i]->setVisible(false);
+			regBits[i]->setVisible(false);
 		}
 	}
-
-	QDialog::show();
+	setRegs(regs);
 }
 
 QString getBankType(int type) {
@@ -107,14 +224,8 @@ void xWatcher::fillFields(Computer* comp) {
 	if (!isVisible()) return;
 	if (comp == NULL) return;
 	model->comp = comp;
-
-	xRegBunch regs = cpuGetRegs(comp->cpu);
-	int i = 0;
-	while ((i < 32) && (regs.regs[i].id != REG_EOT)) {
-		// regLabels[i]->setText(regs.regs[i].name);
-		regValues[i]->setValue(regs.regs[i].value);
-		i++;
-	}
+	if (comp->cpu->core != regCore) layoutRegs(comp->cpu);
+	setRegs(cpuGetRegs(comp->cpu));
 	ui.wchBank0->setText(getBankName(comp->mem->map[0x00]));
 	ui.wchBank1->setText(getBankName(comp->mem->map[0x40]));
 	ui.wchBank2->setText(getBankName(comp->mem->map[0x80]));
@@ -146,9 +257,10 @@ void xWatcher::confirmNew() {
 	if (curwch < 0) {
 		model->addItem(type, str);
 		for (int i = 0; i < model->getItemCount() * 2; i += 2) {
-			ui.wchMemTab->setSpan(i, 0, 1, 11);
-			ui.wchMemTab->setSpan(i, 11, 1, 2);
+			ui.wchMemTab->setSpan(i, 0, 1, WCH_BYTES - 3);
+			ui.wchMemTab->setSpan(i, WCH_BYTES - 3, 1, 3);
 		}
+		fitColumns();
 	} else {
 		model->setItem(curwch, type, str);
 	}
@@ -196,7 +308,7 @@ int xWatchModel::rowCount(const QModelIndex&) const {
 }
 
 int xWatchModel::columnCount(const QModelIndex&) const {
-	return 13;
+	return WCH_BYTES + 1;		// and an empty one after them that takes the slack
 }
 
 void xWatchModel::insertRow(int row, const QModelIndex& idx) {
@@ -252,7 +364,13 @@ QVariant xWatchModel::data(const QModelIndex& idx, int role) const {
 	if ((col < 0) || (col >= columnCount(idx))) return res;
 	xWatchItem itm;
 	xResult xr;
+	if (col >= WCH_BYTES) return res;		// the empty one
 	switch (role) {
+		case Qt::TextAlignmentRole:
+			// the bytes, and the address of a watch, stand to the right of their cells
+			if ((row & 1) || (col == WCH_BYTES - 3))
+				res = (int)(Qt::AlignRight | Qt::AlignVCenter);
+			break;
 		case Qt::DisplayRole:
 			itm = explist.at(row >> 1);
 			xr = xEval(itm.exp.toLocal8Bit().data(), itm.type);
@@ -274,11 +392,11 @@ QVariant xWatchModel::data(const QModelIndex& idx, int role) const {
 					case WUT_ROM: res = "ROM: "+itm.exp; break;
 					default: res = "Error"; break;
 				}
-			} else if (col == 11) {
+			} else if (col == WCH_BYTES - 3) {
 				if (xr.err) {
 					res = "????";
 				} else {
-					res = (itm.type == WUT_CPU) ? gethexword(xr.value) : gethexint(xr.value);
+					res = (itm.type == WUT_CPU) ? dbg_adr(xr.value) : dbg_abs(xr.value);
 				}
 			}
 	}

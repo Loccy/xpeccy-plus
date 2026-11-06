@@ -500,6 +500,8 @@ void saveConfig() {
 	fprintf(cfile, "labels.image = %s\n", YESNO(conf.dbg.imglabels));
 	fprintf(cfile, "dim.address = %s\n", YESNO(conf.dbg.dimadr));
 	fprintf(cfile, "dim.opcodes = %s\n", YESNO(conf.dbg.dimops));
+	fprintf(cfile, "numbers = %s\n", dbg_numfmt_name(conf.dbg.numfmt));
+	fprintf(cfile, "numbers.hex = %s\n", dbg_numfmt_name(conf.dbg.hexfmt));
 	fprintf(cfile, "syntax.colors = %s\n", YESNO(conf.dbg.synhl));
 	fprintf(cfile, "block.separator = %s\n", YESNO(conf.dbg.blocksep));
 	fprintf(cfile, "show.memmap = %s\n", YESNO(conf.dbg.showmmap));
@@ -936,6 +938,8 @@ void loadConfig() {
 	conf.win.tbIcons = 0;		// as the window's width allows
 	conf.win.tbItems = "*";
 	conf.win.tbLocked = 1;
+	conf.dbg.numfmt = CPU_NUM_HASH;
+	conf.dbg.hexfmt = CPU_NUM_HASH;
 	conf.dbg.dbsize = 8;
 	conf.dbg.dwsize = 4;
 	conf.dbg.dmsize = 127;
@@ -1153,6 +1157,14 @@ void loadConfig() {
 					if (pnam == "labels.image") conf.dbg.imglabels = arg.b;
 					if (pnam == "dim.address") conf.dbg.dimadr = arg.b;
 					if (pnam == "dim.opcodes") conf.dbg.dimops = arg.b;
+					if (pnam == "numbers") {
+						int fmt = dbg_numfmt_parse(pval);
+						if (fmt >= 0) dbg_set_numfmt(fmt);
+					}
+					if (pnam == "numbers.hex") {
+						int fmt = dbg_numfmt_parse(pval);
+						if ((fmt >= 0) && (fmt != CPU_NUM_DEC)) conf.dbg.hexfmt = fmt;
+					}
 					if (pnam == "syntax.colors") conf.dbg.synhl = arg.b;
 					if (pnam == "block.separator") conf.dbg.blocksep = arg.b;
 					if (pnam == "show.memmap") conf.dbg.showmmap = arg.b;

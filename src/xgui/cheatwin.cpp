@@ -107,8 +107,8 @@ xCheatWin::xCheatWin(QWidget* p) : QDialog(p) {
 		connect(ed, &QLineEdit::returnPressed, this, &xCheatWin::pokeByHand);
 	QLabel* labAdr = new QLabel("Address");
 	QLabel* labVal = new QLabel("Value");
-	QLabel* labDec = new QLabel("dec");
-	QLabel* labHex = new QLabel("hex");
+	QLabel* labDec = new QLabel("DEC");
+	QLabel* labHex = new QLabel("HEX");
 	labAdr->setAlignment(Qt::AlignCenter);
 	labVal->setAlignment(Qt::AlignCenter);
 	QGridLayout* grid = new QGridLayout(box);

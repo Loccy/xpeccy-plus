@@ -332,9 +332,13 @@ static int comp_dasm_read(int adr, void* ptr) {
 }
 
 xMnem compDisasm(Computer* comp, int adr, char* buf, unsigned char* bytes, int size) {
-	if (comp->hw->disasm) return comp->hw->disasm(comp, adr, buf, bytes, size);
+	return compDisasmFmt(comp, adr, buf, bytes, size, CPU_NUM_HASH);
+}
+
+xMnem compDisasmFmt(Computer* comp, int adr, char* buf, unsigned char* bytes, int size, int fmt) {
+	if (comp->hw->disasm) return comp->hw->disasm(comp, adr, buf, bytes, size, fmt);
 	compDasmView view = {comp, adr};
-	xMnem mn = cpuDisasm(comp->cpu, adr, buf, comp_dasm_read, &view);
+	xMnem mn = cpuDisasmFmt(comp->cpu, adr, buf, comp_dasm_read, &view, fmt);
 	if (bytes) {
 		for (int i = 0; (i < size) && (i < mn.len); i++) bytes[i] = comp_dasm_read(adr + i, &view);
 	}

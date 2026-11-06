@@ -825,6 +825,7 @@ const char* cell_token(xCell, char* buf);	// a named area's page as text: ROM0, 
 int cell_token_parse(const char*, int* area, int* page);	// ...and back, 0: not a named area
 // Preview one instruction and up to size raw bytes without changing the machine.
 xMnem compDisasm(Computer*, int, char*, unsigned char*, int);
+xMnem compDisasmFmt(Computer*, int, char*, unsigned char*, int, int fmt);	// numbers in CPU_NUM_*
 int comp_skip_ticks(Computer*, int);
 int comp_halt_skip(Computer*, int* ns);		// HALT steps up to the next event at once, fast mode
 int comp_halt_skip_rt(Computer*, int* ns, long long room);	// the same in real time, a machine with hwQuiet.halt

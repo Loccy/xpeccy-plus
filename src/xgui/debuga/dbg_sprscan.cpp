@@ -8,6 +8,7 @@
 
 MemViewer::MemViewer(QWidget* p):QDialog(p) {
 	ui.setupUi(this);
+	ui.adrHex->setXFlag(XHS_DEC | XHS_ADDR);
 
 	vis = 0;
 

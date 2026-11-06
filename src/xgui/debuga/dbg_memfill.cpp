@@ -6,6 +6,8 @@
 
 xMemFiller::xMemFiller(QWidget* p):QDialog(p) {
 	ui.setupUi(this);
+	ui.leStartHex->setXFlag(XHS_DEC | XHS_ADDR);
+	ui.leEndHex->setXFlag(XHS_DEC | XHS_ADDR);
 	connect(ui.cbMethod, SIGNAL(currentIndexChanged(int)),this,SLOT(metChange()));
 	connect(ui.pbFill,SIGNAL(clicked(bool)),this,SLOT(fill()));
 }

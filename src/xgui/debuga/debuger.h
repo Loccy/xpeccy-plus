@@ -91,8 +91,10 @@ class DebugWin : public QMainWindow {
 		void heatSetDetached(bool);
 		void heatToggle();
 		void updateStyle();
+		void showNumFmt();
 	private:
 		void machinePanels();
+		void toggleNumFmt();
 		unsigned block:1;
 		cpuCore* curCpuCore;
 		QWidget* wid_cpu;
@@ -283,6 +285,7 @@ class DebugWin : public QMainWindow {
 		void chDumpFile();
 		void dmpStartOpen();
 		void dmpLimChanged();
+		void dmpLimits(bool final);
 		void dmpLenChanged();
 		void saveDumpBin();
 		void saveDumpHobeta();

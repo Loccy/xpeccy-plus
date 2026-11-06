@@ -356,11 +356,12 @@ xZXScrPanel::xZXScrPanel(QWidget* p):QWidget(p) {
 	// The two Custom inputs keep the default flags - no XHS_BGR, since a value
 	// moving is not news here the way it is in the register panel these borrow
 	// their look from. Their widths are pinned in fit_fields().
+	ui.leScrAdr->setXFlag(XHS_DEC | XHS_ADDR);
 	ui.leScrAdr->setMax(0x3fff);
 	// these two show dashes while nothing is pointed at, so they say as much
 	// as the rows above them do
-	ui.leScr->setXFlag(XHS_DEC | XHS_BLANK | XHS_AUTOW);
-	ui.leAtr->setXFlag(XHS_DEC | XHS_BLANK | XHS_AUTOW);
+	ui.leScr->setXFlag(XHS_DEC | XHS_BLANK | XHS_AUTOW | XHS_ADDR);
+	ui.leAtr->setXFlag(XHS_DEC | XHS_BLANK | XHS_AUTOW | XHS_ADDR);
 	ui.leScrPage->setMax(0xff);
 	// a short value lines up with the long ones instead of floating in its box
 	ui.leScrPage->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -496,7 +497,7 @@ void xZXScrPanel::fit_fields() {
 	ui.leAtr->refitWidth();
 	int few = fm.horizontalAdvance(QString(4, '0')) + 10;
 	ui.leScrPage->setFixedWidth(few);
-	ui.leScrAdr->setFixedWidth(few);
+	ui.leScrAdr->setFixedWidth(few + fm.horizontalAdvance("0"));	// an address: five in any form
 	// wide enough for its longest entry, and free to fill the column beyond that
 	ui.cbScrZoom->setMinimumWidth(comboFitWidth(ui.cbScrZoom));
 }

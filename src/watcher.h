@@ -9,6 +9,10 @@
 
 #include <QDialog>
 
+#include <QCheckBox>
+
+#define WCH_BYTES	16	// bytes a watch shows, a column each; its address spans the last three
+
 enum {
 	WUT_CPU = 0,
 	WUT_RAM,
@@ -59,7 +63,15 @@ class xWatcher : public QDialog {
 		xLabeList* listwin;
 		QList<QLabel*> regLabels;
 		QList<xHexSpin*> regValues;
+		QList<QCheckBox*> regBits;
 		int getCurRow();
+		void fitColumns();
+		void setRegs(const xRegBunch&);
+		void setupRegs(const xRegBunch&);
+		int setupKey = -1;		// the numbers and Split pairs setupRegs() was done for
+		const cpuCore* regCore = nullptr;	// the CPU layoutRegs() was done for
+		void layoutRegs(CPU*);
+		void placeRegs(const xRegBunch&);
 
 		QDialog* newWch;
 		xLabeList* labswin;

@@ -22,11 +22,10 @@ int xStackView::rowsFit() const {
 	return (free - one) / rowPitch() + 1;
 }
 
-// one line, and room for the name column: "0000:" (the +0 row's own address)
-// is always wider than an offset label like "+00:", so it sets the width
+// one line; the +0 row's "#0000:" is the widest name, a character to spare
 QSize xStackView::minimumSizeHint() const {
 	QFontMetrics fm = fontMetrics();
-	return QSize(fm.horizontalAdvance("0000:") + STACK_GAP + fm.horizontalAdvance("0000") + 2 * STACK_PAD,
+	return QSize(fm.horizontalAdvance("000000:") + STACK_GAP + fm.horizontalAdvance("00000") + 2 * STACK_PAD,
 		fm.height() + 2 * STACK_PAD);
 }
 

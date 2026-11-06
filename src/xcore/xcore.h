@@ -180,11 +180,34 @@ void x_user_reset(Computer*, int);
 void x_state_replaced();		// under emu_lock
 void x_media_replaced();		// under emu_lock
 int unreal_num(QString, bool*);		// #/$/0x hex, 0 octal, else decimal
-int str_num(QString, bool*);		// #/$/0x hex, else decimal (no octal)
+int str_num(QString, bool*);		// by dbg_num_parse: #/$/0x or h behind hex, else decimal
 QString getPortString(int, int);
 bool parsePort(const QString&, int*, int*);
 QString gethex6(int);
 QString gethexint(int);
+
+// numbers as the debugger shows them, in conf.dbg.numfmt (CPU_NUM_*)
+int dbg_hexfmt();		// the hex form picked, decimal shown or not
+void dbg_set_numfmt(int);	// the form shown; a hex one is remembered as the hex form too
+void dbg_sign(int fmt, QString* pre, QString* post);	// the hex sign of a form: # $ or h
+QString dbg_num_in(int val, int hexDigits, int fmt, int decDigits = 0);
+QString dbg_num(int val, int hexDigits, int decDigits = 0);	// decDigits 0: not padded
+QString dbg_adr(int);		// a 16-bit address: five characters in every form, for a column
+QString dbg_word(int);		// a word, an address in a line of text or a field
+QString dbg_byte(int);
+QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
+QString dbg_abs_t(int);
+bool is_hex_char(QChar);
+// an address as the listing and the control port take it: .REG, seg:ofs; typed
+// by the one rule and labels, else bare hex as the control port has it
+int str_to_adr(Computer* comp, QString str, bool typed = false);
+QString dbg_port(int port, int mask);	// a port: 7FFD or FE by its mask, in the form picked
+QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
+int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal
+QString dbg_num_unsign(QString);	// the text with its hex sign taken off
+bool dbg_read_adr(const QString&, int* val, xAdr* lab = NULL, QString* name = NULL);	// label, number or #label
+const char* dbg_numfmt_name(int);	// the form as it is written in the config file
+int dbg_numfmt_parse(const std::string&);	// -1 for nothing known
 
 // text in the zx spectrum's own character set, for showing only
 QString zx_text(const unsigned char*, int);
@@ -346,7 +369,9 @@ int brk_mem_type(int type);		// the memory a cell breakpoint type watches, MEM_*
 // a cell as page:offset - the page in hex when it is of the memory the type names,
 // else its area's token (ROM0, DIV3...), as comp_cell() has the machine's pages
 QString cell_page_text(int memType, int abs, int* ofs);
-QString cell_text(int memType, int abs, bool withType);	// "11:0123", withType "RAM:11:0123"
+QString cell_text(int memType, int abs, bool withType);
+// "11:0123", withType "RAM:11:0123"; cell_view_text has the offset in the debugger's numbers
+QString cell_view_text(int memType, int abs, bool withType = false);
 bool cell_from_text(int memType, QString page, int ofs, int* abs, bool wrap = false);	// a page so written and an offset
 int brk_save_list(const char*);
 
@@ -556,6 +581,7 @@ enum {
 	XCUT_LABLIST,
 	XCUT_DBG_RELOAD,
 	XCUT_DBG_CLOSE,
+	XCUT_DBG_NUMBERS,
 
 	XCUT_TOPC,
 	XCUT_SETPC,
@@ -1111,6 +1137,8 @@ struct xConfig {
 		unsigned nxdetach:1;	// ZX Next panel: shown in a window of its own
 		unsigned imglabels:1;	// an image's .labels comes with it
 		QFont font;
+		int numfmt;		// how addresses and the listing's values are written, CPU_NUM_*
+		int hexfmt;		// the hex form the decimal switch goes back to
 		int dbsize;
 		int dwsize;
 		int dmsize;

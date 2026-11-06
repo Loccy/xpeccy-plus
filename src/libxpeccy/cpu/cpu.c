@@ -153,106 +153,131 @@ static int cpu_dasm_read(int adr, int access, void* ptr) {
 }
 
 xMnem cpuDisasm(CPU* cpu, int adr, char* buf, cbdmr mrd, void* data) {
+	return cpuDisasmFmt(cpu, adr, buf, mrd, data, CPU_NUM_HASH);
+}
+
+xMnem cpuDisasmFmt(CPU* cpu, int adr, char* buf, cbdmr mrd, void* data, int fmt) {
 	cpuDasmReader reader = {mrd, data};
-	return cpuDisasmView(cpu, adr, buf, cpu_dasm_read, &reader);
+	return cpuDisasmViewFmt(cpu, adr, buf, cpu_dasm_read, &reader, fmt);
 }
 
 xMnem cpuDisasmView(CPU* cpu, int adr, char* buf, cbmr mrd, void* data) {
+	return cpuDisasmViewFmt(cpu, adr, buf, mrd, data, CPU_NUM_HASH);
+}
+
+// a number of 'digits' hex digits in the form fmt; decimal is not padded
+static char* dasm_num(char* buf, int val, int digits, int fmt) {
+	char dec[8];
+	int i;
+	if (fmt == CPU_NUM_DEC) {
+		i = 0;
+		do {
+			dec[i++] = '0' + (val % 10);
+			val /= 10;
+		} while (val > 0);
+		while (i > 0)
+			*buf++ = dec[--i];
+		return buf;
+	}
+	if (fmt == CPU_NUM_DOLLAR) {
+		*buf++ = '$';
+	} else if (fmt != CPU_NUM_H) {
+		*buf++ = '#';
+	}
+	for (i = digits - 1; i >= 0; i--)
+		*buf++ = halfByte[(val >> (i << 2)) & 0x0f];
+	if (fmt == CPU_NUM_H)
+		*buf++ = 'h';
+	return buf;
+}
+
+static int hex_digit(char c) {
+	if ((c >= '0') && (c <= '9')) return c - '0';
+	if ((c >= 'A') && (c <= 'F')) return c - 'A' + 10;
+	if ((c >= 'a') && (c <= 'f')) return c - 'a' + 10;
+	return -1;
+}
+
+xMnem cpuDisasmViewFmt(CPU* cpu, int adr, char* buf, cbmr mrd, void* data, int fmt) {
 	xMnem mn;
-//	opCode* opt = cpu->tab;
 	unsigned char op;
 	unsigned char tmp;
 	unsigned char dtl;
 	unsigned char dth;
-	unsigned short dtw;
+	int val;
+	int n;
 	mn.mnem = NULL;
 	mn.flag = 0;
 	if (!buf) buf = tmpbuf;
-//	if (opt == NULL) {			// no opcode tab
-//		strcpy(buf, "undef");
-//		mn.len = 1;
-//	} else {
-		mn = cpu->core->mnem(cpu, adr, mrd, data);
-		// mn.oadr = -1;
-		adr += mn.len;
-		tmp = strstr(mn.mnem, ":5") ? mrd((adr - 2) & 0xffff, CPU_DASM_CODE, data) : 0;
-		const char* src = mn.mnem;
-
-		while (*src != 0) {
-			if (*src == ':') {
-				src++;
-				op = *(src++);
-				switch(op) {
-					case '1':		// byte = (adr)
-						dtl = mrd(adr++, CPU_DASM_CODE, data);
-						mn.len++;
-						*buf++ = '#';
-						*buf++ = halfByte[dtl >> 4];
-						*buf++ = halfByte[dtl & 0x0f];
-						break;
-					case '2':		// word = (adr,adr+1)
-						dtl = mrd(adr++, CPU_DASM_CODE, data);
-						dth = mrd(adr++, CPU_DASM_CODE, data);
-						mn.len += 2;
-						mn.oadr = dtl | (dth << 8);
-						*buf++ = '#';
-						*buf++ = halfByte[dth >> 4];
-						*buf++ = halfByte[dth & 0x0f];
-						*buf++ = halfByte[dtl >> 4];
-						*buf++ = halfByte[dtl & 0x0f];
-						break;
-					case '3':		// word = adr + [e = (adr)]
-						dtl = mrd(adr++, CPU_DASM_CODE, data);
-						mn.len++;
-						dtw = (adr + (signed char)dtl) & 0xffff;
-						mn.oadr = dtw;
-						*buf++ = '#';
-						*buf++ = halfByte[(dtw >> 12) & 0x0f];
-						*buf++ = halfByte[(dtw >> 8) & 0x0f];
-						*buf++ = halfByte[(dtw >> 4) & 0x0f];
-						*buf++ = halfByte[dtw & 0x0f];
-						break;
-					case '4':		// signed byte e = (adr)
-						tmp = mrd(adr++, CPU_DASM_CODE, data);
-						mn.len++;
-					case '5':		// signed byte e = tmp
-						if (tmp < 0x80) {
-							*(buf++) = '+';
-						} else {
-							*(buf++) = '-';
-							tmp = (0xff - tmp) + 1;
-						}
-						*buf++ = '#';
-						*buf++ = halfByte[tmp >> 4];
-						*buf++ = halfByte[tmp & 0x0f];
-						break;
-					case '6':		// word = (adr,adr+1), high byte first (Z80N push nn)
-						dth = mrd(adr++, CPU_DASM_CODE, data);
-						dtl = mrd(adr++, CPU_DASM_CODE, data);
-						mn.len += 2;
-						*buf++ = '#';
-						*buf++ = halfByte[dth >> 4];
-						*buf++ = halfByte[dth & 0x0f];
-						*buf++ = halfByte[dtl >> 4];
-						*buf++ = halfByte[dtl & 0x0f];
-						break;
-					case '7':		// = #adr
-						*buf++ = '#';
-						*buf++ = halfByte[(adr >> 12) & 0x0f];
-						*buf++ = halfByte[(adr >> 8) & 0x0f];
-						*buf++ = halfByte[(adr >> 4) & 0x0f];
-						*buf++ = halfByte[adr & 0x0f];
-						break;
-					case ':':
-						*buf++ = ':';
-						break;
-				}
-			} else {
-				*(buf++) = *(src++);
+	mn = cpu->core->mnem(cpu, adr, mrd, data);
+	adr += mn.len;
+	tmp = strstr(mn.mnem, ":5") ? mrd((adr - 2) & 0xffff, CPU_DASM_CODE, data) : 0;
+	const char* src = mn.mnem;
+	while (*src != 0) {
+		if (*src == ':') {
+			src++;
+			op = *(src++);
+			switch(op) {
+				case '1':		// byte = (adr)
+					dtl = mrd(adr++, CPU_DASM_CODE, data);
+					mn.len++;
+					buf = dasm_num(buf, dtl, 2, fmt);
+					break;
+				case '2':		// word = (adr,adr+1)
+					dtl = mrd(adr++, CPU_DASM_CODE, data);
+					dth = mrd(adr++, CPU_DASM_CODE, data);
+					mn.len += 2;
+					mn.oadr = dtl | (dth << 8);
+					buf = dasm_num(buf, mn.oadr, 4, fmt);
+					break;
+				case '3':		// word = adr + [e = (adr)]
+					dtl = mrd(adr++, CPU_DASM_CODE, data);
+					mn.len++;
+					mn.oadr = (adr + (signed char)dtl) & 0xffff;
+					buf = dasm_num(buf, mn.oadr, 4, fmt);
+					break;
+				case '4':		// signed byte e = (adr)
+					tmp = mrd(adr++, CPU_DASM_CODE, data);
+					mn.len++;
+					// fall through
+				case '5':		// signed byte e = tmp
+					if (tmp < 0x80) {
+						*(buf++) = '+';
+					} else {
+						*(buf++) = '-';
+						tmp = (0xff - tmp) + 1;
+					}
+					buf = dasm_num(buf, tmp, 2, fmt);
+					break;
+				case '6':		// word = (adr,adr+1), high byte first (Z80N push nn)
+					dth = mrd(adr++, CPU_DASM_CODE, data);
+					dtl = mrd(adr++, CPU_DASM_CODE, data);
+					mn.len += 2;
+					buf = dasm_num(buf, dtl | (dth << 8), 4, fmt);
+					break;
+				case '7':		// = #adr
+					buf = dasm_num(buf, adr & 0xffff, 4, fmt);
+					break;
+				case ':':
+					*buf++ = ':';
+					break;
 			}
+		} else if ((*src == '#') && (fmt != CPU_NUM_HASH) && (hex_digit(src[1]) >= 0)) {
+			// a number written in the table itself, as rst #38
+			src++;
+			val = 0;
+			n = 0;
+			while (hex_digit(*src) >= 0) {
+				val = (val << 4) | hex_digit(*src);
+				src++;
+				n++;
+			}
+			buf = dasm_num(buf, val, n, fmt);
+		} else {
+			*(buf++) = *(src++);
 		}
-		*buf = 0;
-//	}
+	}
+	*buf = 0;
 	return mn;
 }
 

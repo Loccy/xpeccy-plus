@@ -562,12 +562,20 @@ QString cell_page_text(int memType, int abs, int* ofs) {
 	return QString(cell_token(cell, buf));
 }
 
-QString cell_text(int memType, int abs, bool withType) {
+static QString cell_text_by(int memType, int abs, bool withType, QString (*num)(int)) {
 	int ofs;
 	QString page = cell_page_text(memType, abs, &ofs);
-	QString res = QString("%0:%1").arg(page).arg(gethexword(ofs));
+	QString res = QString("%0:%1").arg(page).arg(num(ofs));
 	if (withType && page.at(0).isDigit()) res.prepend(QString("%0:").arg(cell_type_name(memType)));
 	return res;
+}
+
+QString cell_text(int memType, int abs, bool withType) {
+	return cell_text_by(memType, abs, withType, gethexword);
+}
+
+QString cell_view_text(int memType, int abs, bool withType) {
+	return cell_text_by(memType, abs, withType, dbg_word);
 }
 
 bool cell_from_text(int memType, QString page, int ofs, int* abs, bool wrap) {

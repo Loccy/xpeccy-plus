@@ -31,6 +31,7 @@ typedef struct {
 	int oadr;			// word operand like nn : jp nn; ld hl,(nn)
 	int flag;			// address cell flags
 	int oflag;			// opcode flag
+	int fmt;			// the form of its numbers (CPU_NUM_*): the debugger's, # for the trace log
 	QString aname;			// label/segment/address
 	QString bytes;			// all bytes inside command
 	QString command;		// command with replaced addr->label
@@ -113,6 +114,7 @@ class xDisasmTable : public QTableView {
 		void mousePressEvent(QMouseEvent*);
 		void mouseReleaseEvent(QMouseEvent*);
 		void mouseMoveEvent(QMouseEvent*);
+		bool viewportEvent(QEvent*) override;
 		void wheelEvent(QWheelEvent*);
 		void resizeEvent(QResizeEvent*);
 		void focusOutEvent(QFocusEvent*);
@@ -126,11 +128,14 @@ class xDasmSyntax : public QStyledItemDelegate {
 	public:
 		xDasmSyntax(QObject* = NULL);
 		QWidget* createEditor(QWidget*, const QStyleOptionViewItem&, const QModelIndex&) const;
+		bool helpEvent(QHelpEvent*, QAbstractItemView*, const QStyleOptionViewItem&, const QModelIndex&) override;
 	protected:
 		void paint(QPainter*, const QStyleOptionViewItem&, const QModelIndex&) const;
 };
 
 QList<dasmData> getDisasm(Computer*, int&);
+int dasmSome(Computer*, int adr, dasmData&, int fmt = -1);	// fmt -1: the debugger's form
+QString dasm_export(const dasmData&);
 bool is_block_end(const dasmData&);
 bool dasm_ends_block(const QList<dasmData>&);
 bool dasm_has_separator(const QList<dasmData>&);

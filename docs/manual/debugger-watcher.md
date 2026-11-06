@@ -9,7 +9,8 @@ The **Watcher** window shows the registers and some places in memory, and follow
 while the machine runs. Open it with **Tools > Watcher** in the main window, or
 **Watcher** under the {icon}`other` **Tools** button over the listing.
 
-1. **CPU** - the registers.
+1. **CPU** - the registers, hex or decimal as in the [CPU panel](debugger-cpu.md); IFF1 and
+   IFF2 are marks.
 2. **MEMORY** - the watches, two rows each.
 3. The four memory banks, from `#0000` to `#C000`: ROM or RAM, and the page.
 
@@ -37,8 +38,9 @@ The **Watcher Editor** has:
   the field.
 
 {icon}`checkbox` **OK** accepts the watch only when the expression is right. The first row
-of a watch shows its type and expression, and its value as an address; the second row the
-13 bytes that start at that address. `??` means the expression cannot be worked out at the moment.
+of a watch shows its type and expression, and its value as an address, written as the
+Debugger's addresses are (see [Hex or decimal](debugger-code.md#hex-or-decimal)); the second row the
+16 bytes that start at that address, in groups of four. `??` means the expression cannot be worked out at the moment.
 
 On the Next, a label in a **CPU addr** watch follows MMU paging. If its page is not mapped,
 the watch shows `??`; a **RAM addr** watch still reads the label's own RAM page.

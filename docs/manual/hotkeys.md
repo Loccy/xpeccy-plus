@@ -295,6 +295,7 @@ there too.
 | Save xmap | - | - |
 | Find pattern | Ctrl+F | Ctrl+F |
 | Switch labels | Ctrl+L | Ctrl+L |
+| Decimal numbers | Ctrl+Shift+H | Ctrl+Shift+H |
 | Show labels list | - | - |
 | Reload file | - | - |
 | Close | Esc | Esc |

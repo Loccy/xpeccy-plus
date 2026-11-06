@@ -108,6 +108,135 @@ QString gethexbyte(int num) {
 	return res.rightJustified(2, '0');
 }
 
+// The debugger's numbers. An address keeps five characters in every form
+// (#8000, $8000, 8000h, 32768), so a column holds either: a decimal one is
+// padded with spaces, never zeros. A value is not padded in decimal.
+
+int dbg_hexfmt() {
+	return (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : conf.dbg.numfmt;
+}
+
+void dbg_set_numfmt(int fmt) {
+	conf.dbg.numfmt = fmt;
+	if (fmt != CPU_NUM_DEC) conf.dbg.hexfmt = fmt;
+}
+
+void dbg_sign(int fmt, QString* pre, QString* post) {
+	pre->clear();
+	post->clear();
+	switch (fmt) {
+		case CPU_NUM_DEC: break;
+		case CPU_NUM_H: *post = "h"; break;
+		case CPU_NUM_DOLLAR: *pre = "$"; break;
+		default: *pre = "#"; break;
+	}
+}
+
+QString dbg_num_in(int val, int hexDigits, int fmt, int decDigits) {
+	if (fmt == CPU_NUM_DEC)
+		return QString::number(val).rightJustified(decDigits, ' ');
+	QString pre, post;
+	dbg_sign(fmt, &pre, &post);
+	return pre + formbufword(val).rightJustified(hexDigits, '0') + post;
+}
+
+QString dbg_num(int val, int hexDigits, int decDigits) {
+	return dbg_num_in(val, hexDigits, conf.dbg.numfmt, decDigits);
+}
+
+QString dbg_hex(int val, int digits) {
+	return dbg_num_in(val, digits, dbg_hexfmt());
+}
+
+QString dbg_adr(int adr) {
+	return dbg_num(adr & 0xffff, 4, 5);
+}
+
+QString dbg_word(int val) {
+	return dbg_num(val & 0xffff, 4);
+}
+
+QString dbg_byte(int val) {
+	return dbg_num(val & 0xff, 2);
+}
+
+QString dbg_abs(int adr) {
+	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr(adr);
+}
+
+QString dbg_abs_t(int adr) {
+	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_word(adr);
+}
+
+// a port: four hex digits for a full one, two for one decoded by its low byte
+QString dbg_port(int port, int mask) {
+	return dbg_num(port & 0xffff, (mask > 0xff) ? 4 : 2);
+}
+
+bool is_hex_char(QChar chr) {
+	int c = chr.toLower().unicode();
+	return ((c >= '0') && (c <= '9')) || ((c >= 'a') && (c <= 'f'));
+}
+
+// what a typed text is once its hex sign is taken off: "#START" -> "START",
+// "DRAWh" -> "DRAW"
+QString dbg_num_unsign(QString str) {
+	str = str.trimmed();
+	if (str.startsWith('#') || str.startsWith('$')) return str.mid(1);
+	if (str.startsWith("0x", Qt::CaseInsensitive)) return str.mid(2);
+	if ((str.size() > 1) && str.endsWith('h', Qt::CaseInsensitive)) str.chop(1);
+	return str;
+}
+
+// One rule for a number typed into the debugger: a hex sign - #, $ or 0x in
+// front, h behind - makes it hex, none decimal; a leading zero is not octal
+int dbg_num_parse(QString str, bool* ok) {
+	str = str.trimmed();
+	QString dig = dbg_num_unsign(str);
+	bool hex = (dig != str);
+	bool good = !dig.isEmpty();
+	for (QChar chr : dig) {
+		if (hex ? !is_hex_char(chr) : ((chr < QChar('0')) || (chr > QChar('9')))) good = false;
+	}
+	int val = good ? dig.toInt(&good, hex ? 16 : 10) : 0;
+	if (ok) *ok = good;
+	return good ? val : 0;
+}
+
+// A typed address: a label, a number by the one rule, or a label behind a
+// sign the typing put there. lab gets the label, type -1 for a number; name
+// the label's name as found
+bool dbg_read_adr(const QString& txt, int* val, xAdr* lab, QString* name) {
+	xAdr xa = find_label(txt.trimmed());
+	QString nm = txt.trimmed();
+	bool ok = false;
+	if (xa.type < 0) {
+		*val = dbg_num_parse(txt, &ok);
+		if (!ok) {
+			nm = dbg_num_unsign(txt);
+			xa = find_label(nm);
+		}
+	}
+	if (lab) *lab = xa;
+	if (xa.type < 0) return ok;
+	*val = xa.adr;
+	if (name) *name = nm;
+	return true;
+}
+
+static const char* numFmtNames[] = {"hash", "dollar", "suffix", "decimal"};
+
+const char* dbg_numfmt_name(int fmt) {
+	return ((fmt >= CPU_NUM_HASH) && (fmt <= CPU_NUM_DEC)) ? numFmtNames[fmt] : numFmtNames[0];
+}
+
+int dbg_numfmt_parse(const std::string& name) {
+	for (int i = CPU_NUM_HASH; i <= CPU_NUM_DEC; i++) {
+		if (name == numFmtNames[i]) return i;
+	}
+	return -1;
+}
+
 // A watched port written with four digits is the address on the bus as it is;
 // two digits mean a byte port, compared by its low byte alone. It is the number
 // of digits that says which, so the width travels in the mask and the two
@@ -218,15 +347,9 @@ QString shot_dir() {
 	return QDir::homePath();
 }
 
-// a number typed by the user: #, $ and 0x are hex, everything else decimal -
-// a leading zero is not octal
+// a number typed by the user, by the debugger's one rule
 int str_num(QString str, bool* ok) {
-	str = str.trimmed();
-	if (str.startsWith("#") || str.startsWith("$"))
-		return str.mid(1).toInt(ok, 16);
-	if (str.startsWith("0x", Qt::CaseInsensitive))
-		return str.mid(2).toInt(ok, 16);
-	return str.toInt(ok, 10);
+	return dbg_num_parse(str, ok);
 }
 
 bool str2bool(std::string v) {
@@ -549,4 +672,71 @@ QStringList xres_list(const char* kind, const QStringList& filt) {
 	}
 	res.sort(Qt::CaseInsensitive);
 	return res;
+}
+
+// a CPU register's value by its name
+static int adr_of_reg(CPU* cpu, bool* flag, QString nam) {
+	xRegBunch bch = cpuGetRegs(cpu);
+	int i = 0;
+	int res;
+	nam = nam.toUpper();
+	while ((bch.regs[i].id != REG_EOT) && (QString(bch.regs[i].name).toUpper() != nam))
+		i++;
+	if (bch.regs[i].id == REG_EOT) {
+		*flag = false;
+		res = 0;
+	} else {
+		*flag = true;
+		res = bch.regs[i].value;
+	}
+	return res;
+}
+
+// typed: the debugger's one rule (dbg_read_adr); else bare hex, as the control
+// port has always taken it (emw_network.cpp)
+int str_to_adr(Computer* comp, QString str, bool typed) {
+	bool flag = true;
+	int adr = -1;
+	QStringList lst;
+	int off;
+	int seg;
+	if (str.startsWith(".")) {			// .REG : name of CPU register
+		adr = adr_of_reg(comp->cpu, &flag, str.mid(1));
+	} else if (str.contains(":")) {			// seg:adr (for real mode)
+		lst = str.split(":",X_SkipEmptyParts);
+		if (lst.size() == 2) {
+			off = lst[1].toInt(&flag,16);
+			if (!flag) {
+				off = adr_of_reg(comp->cpu, &flag, lst[1]);
+			}
+			if (flag) {
+				seg = lst[0].toInt(&flag,16);
+				if (flag) {
+					adr = (seg << 4) + off;
+				} else {
+					seg = adr_of_reg(comp->cpu, &flag, lst[0]);
+					if (flag) {
+						adr = (seg << 4) + off;
+					}
+				}
+			}
+		}
+	} else if (typed) {
+		flag = dbg_read_adr(str, &adr);
+	} else if (str.startsWith("#")) {			// #nnnn : hex adr
+		str.replace(0, 1, "0x");
+		adr = str.toInt(&flag, 16);
+	} else if (str.startsWith("0x")) {			// 0xnnnn : hex adr
+		adr = str.toInt(&flag, 16);
+	} else {
+		xAdr xadr = find_label(str);			// NAME : label name
+		if (xadr.type >= 0) {
+			adr = xadr.adr;
+			flag = true;
+		} else {						// other : plain hex
+			adr = str.toInt(&flag, 16);
+		}
+	}
+	if (!flag) adr = -1;
+	return adr;
 }

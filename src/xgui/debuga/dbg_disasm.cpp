@@ -13,6 +13,9 @@
 #include <QVector>
 #include <QApplication>
 #include <QFontMetrics>
+#include <QRegularExpression>
+#include <QToolTip>
+#include <QHelpEvent>
 
 extern int blockStart;
 extern int blockEnd;
@@ -29,8 +32,6 @@ static xAdr dasm_xadr(Computer* comp, int adr, int access = MEM_VIEW_PC) {
 	xadr.abs = (page << 14) | xadr.adr;
 	return xadr;
 }
-
-extern int adr_of_reg(CPU* cpu, bool* flag, QString nam);
 
 static int text_width(const QFontMetrics& fm, const QString& str) {
 #if QT_VERSION >= QT_VERSION_CHECK(5,11,0)
@@ -133,9 +134,15 @@ QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
 	QPixmap icn;
 	QPainter pnt;
 	switch(role) {
+		case Qt::ToolTipRole:
+			// the address as a number, on its own row and on a label's
+			if ((col == 0) && !dasm[row].iscom && !dasm[row].issep)
+				res = dbg_num_tip(dasm[row].adr, true);
+			break;
 		case Qt::EditRole:
 			switch(col) {
-				case 0: res = dasm[row].aname; break;
+				// a decimal address is padded with spaces for the column, not for typing
+				case 0: res = dasm[row].iscom ? dasm[row].aname : QString(dasm[row].aname).remove(' '); break;
 				case 1: res = dasm[row].bytes; break;
 				case 2: res = dasm[row].command; break;
 			}
@@ -259,9 +266,17 @@ static int dasm_access(Computer* comp, int adr) {
 	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_PC;
 }
 
-static xMnem dasm_mnem(Computer* comp, int adr, char* buf, QByteArray* bytes = NULL) {
+static QString dasm_word(int val, int fmt) {
+	return dbg_num_in(val & 0xffff, 4, fmt);
+}
+
+static QString dasm_byte(int val, int fmt) {
+	return dbg_num_in(val & 0xff, 2, fmt);
+}
+
+static xMnem dasm_mnem(Computer* comp, int adr, char* buf, int fmt, QByteArray* bytes = NULL) {
 	if (!dasm_is_pc(comp, adr)) {
-		xMnem mn = cpuDisasm(comp->cpu, adr, buf, dasmrd, comp);
+		xMnem mn = cpuDisasmFmt(comp->cpu, adr, buf, dasmrd, comp, fmt);
 		if (bytes) {
 			bytes->resize(mn.len);
 			for (int i = 0; i < mn.len; i++) (*bytes)[i] = dasmrd(adr + i, comp);
@@ -269,11 +284,11 @@ static xMnem dasm_mnem(Computer* comp, int adr, char* buf, QByteArray* bytes = N
 		return mn;
 	}
 	unsigned char code[16];
-	xMnem mn = compDisasm(comp, adr, buf, bytes ? code : NULL, sizeof(code));
+	xMnem mn = compDisasmFmt(comp, adr, buf, bytes ? code : NULL, sizeof(code), fmt);
 	if (bytes) {
 		bytes->resize(mn.len);
 		if (mn.len > (int)sizeof(code)) {
-			compDisasm(comp, adr, buf, (unsigned char*)bytes->data(), bytes->size());
+			compDisasmFmt(comp, adr, buf, (unsigned char*)bytes->data(), bytes->size(), fmt);
 		} else {
 			memcpy(bytes->data(), code, mn.len);
 		}
@@ -299,6 +314,24 @@ void dasmwr(Computer* comp, int adr, int bt) {
 	}
 }
 
+// a number in a command as a whole word, put in place of: a decimal 1 is not
+// the 1 of (IX+1), nor of 10
+static void replace_number(QString& cmd, const QString& num, const QString& with) {
+	int pos = 0;
+	while ((pos = cmd.indexOf(num, pos)) >= 0) {
+		QChar before = (pos > 0) ? cmd.at(pos - 1) : QChar(' ');
+		int end = pos + num.size();
+		QChar after = (end < cmd.size()) ? cmd.at(end) : QChar(' ');
+		bool inWord = before.isLetterOrNumber() || (before == '_') || (before == '#') || (before == '$');
+		if (!inWord && !after.isLetterOrNumber() && (after != '_')) {
+			cmd.replace(pos, num.size(), with);
+			pos += with.size();
+		} else {
+			pos = end;
+		}
+	}
+}
+
 void placeLabel(Computer* comp, dasmData& drow) {
 	int shift = 0;
 	int work = 1;
@@ -318,15 +351,11 @@ void placeLabel(Computer* comp, dasmData& drow) {
 		} else {
 			mn.len = 8;					// default seek range
 			if ((drow.flag & 0xf0) == DBG_VIEW_CODE) {	// for code - size of opcode only
-				mn = dasm_mnem(comp, drow.oadr - shift, NULL);
+				mn = dasm_mnem(comp, drow.oadr - shift, NULL, drow.fmt);
 			}
 			if (shift < mn.len) {
-				num = gethexword(drow.oadr).prepend("#").toUpper();
-				if (shift == 0) {
-					drow.command.replace(num, QString("%0").arg(lab));
-				} else {
-					drow.command.replace(num, QString("%0 + %1").arg(lab).arg(shift));
-				}
+				replace_number(drow.command, dasm_word(drow.oadr, drow.fmt),
+					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
 			}
 			work = 0;
@@ -336,12 +365,12 @@ void placeLabel(Computer* comp, dasmData& drow) {
 
 int dasmByte(Computer* comp, int adr, dasmData& drow) {
 	int len = 1;
-	drow.command = QString("DB #%0").arg(gethexbyte(dasmrd(adr, comp)));
+	drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt));
 	adr++;
 	unsigned char fl = getBrk(comp, adr);
 	xAdr xadr = dasm_xadr(comp, adr);
 	while ((len < conf.dbg.dbsize) && (fl == DBG_VIEW_BYTE) && find_label(xadr).isEmpty()) {
-		drow.command.append(QString(",#%0").arg(gethexbyte(dasmrd(adr, comp))));
+		drow.command.append(QString(",%0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt)));
 		len++;
 		adr++;
 		fl = getBrk(comp, adr);
@@ -354,14 +383,14 @@ int dasmWord(Computer* comp, int adr, dasmData& drow) {
 	int len = 2;
 	int word = dasmrd(adr, comp);
 	word |= (dasmrd(adr + 1, comp) << 8);
-	drow.command = QString("DW #%0").arg(gethexword(word));
+	drow.command = QString("DW %0").arg(dasm_word(word, drow.fmt));
 	adr += 2;
 	unsigned char fl = getBrk(comp, adr);
 	xAdr xadr = dasm_xadr(comp, adr);
 	while ((len < conf.dbg.dwsize * 2) && (fl == DBG_VIEW_WORD) && find_label(xadr).isEmpty()) {
 		word = dasmrd(adr, comp);
 		word |= (dasmrd(adr + 1, comp) << 8);
-		drow.command.append(QString(",#%0").arg(gethexword(word)));
+		drow.command.append(QString(",%0").arg(dasm_word(word, drow.fmt)));
 		adr += 2;
 		len += 2;
 		fl = getBrk(comp, adr);
@@ -375,7 +404,7 @@ int dasmAddr(Computer* comp, int adr, dasmData& drow) {
 	int word = dasmrd(adr, comp);
 	word |= (dasmrd(adr + 1, comp) << 8);
 	drow.oadr = word;
-	drow.command = QString("DW #%0").arg(gethexword(word));
+	drow.command = QString("DW %0").arg(dasm_word(word, drow.fmt));
 	placeLabel(comp, drow);
 	return len;
 }
@@ -396,7 +425,7 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 		// the cpu address points in it too, and they are not the cell's
 		drow.flag = (getBrk(comp, adr) & 0x0f) | DBG_VIEW_BYTE;
 		clen = 1;
-		drow.command = QString("DB #%0").arg(dasmrd(adr, comp));
+		drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt));
 	} else {
 		drow.command.append("\"");
 	}
@@ -406,9 +435,12 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 int dasmCode(Computer* comp, int adr, dasmData& drow) {
 	char buf[1024];
 	QByteArray bytes;
-	xMnem mnm = dasm_mnem(comp, adr, buf, &bytes);
+	xMnem mnm = dasm_mnem(comp, adr, buf, drow.fmt, &bytes);
 	for (unsigned char byte : bytes) drow.bytes.append(gethexbyte(byte));
 	drow.command = QString(buf).toUpper();
+	static const QRegularExpression hexSuffix("(?<![\\w#$])([0-9A-F]+)H(?!\\w)");
+	if (drow.fmt == CPU_NUM_H)	// the sign stays small: C9h, not C9H
+		drow.command.replace(hexSuffix, "\\1h");
 	drow.oadr = mnm.oadr;
 	drow.oflag = mnm.flag;
 	placeLabel(comp, drow);
@@ -433,9 +465,27 @@ int dasmCode(Computer* comp, int adr, dasmData& drow) {
 	return mnm.len;
 }
 
+// A command as an assembler reads it: in the FFFFh form a number that starts
+// with a letter gets a 0 in front (C9h is a name to it, 0C9h a number). The
+// row's own label and a row of text (DB "...") are left alone
+QString dasm_export(const dasmData& drow) {
+	if ((drow.fmt != CPU_NUM_H) || ((drow.flag & 0xf0) == DBG_VIEW_TEXT)) return drow.command;
+	static const QRegularExpression letterHex("(?<![\\w#$])([A-F][0-9A-F]*h)(?!\\w)");
+	QString res = drow.command;
+	QList<int> at;
+	QRegularExpressionMatchIterator it = letterHex.globalMatch(res);
+	while (it.hasNext()) {
+		QRegularExpressionMatch m = it.next();
+		if (m.captured(1) != drow.label) at.prepend(m.capturedStart(1));
+	}
+	for (int pos : at) res.insert(pos, '0');		// from the end: earlier places stay
+	return res;
+}
+
 // adr is bus value
-int dasmSome(Computer* comp, int adr, dasmData& drow) {
+int dasmSome(Computer* comp, int adr, dasmData& drow, int fmt) {
 	int clen = 0;
+	drow.fmt = (fmt < 0) ? conf.dbg.numfmt : fmt;
 	drow.label.clear();
 	drow.bytes.clear();
 	drow.adr = adr;
@@ -460,6 +510,7 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 	xAdr xadr;
 	int oadr = adr;
 	drow.adr = adr;
+	drow.fmt = conf.dbg.numfmt;	// the label rows before dasmSome() sets it
 	drow.oflag = 0;
 	drow.ispc = 0;
 	drow.issel = 0;
@@ -533,9 +584,9 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 			case MEM_DIV: drow.aname = "DIV:"; break;
 			default: drow.aname = "???"; break;
 		}
-		drow.aname.append(QString("%1:%2").arg(gethexbyte((xadr.bank >> 6) & 0xff)).arg(gethexword(xadr.adr & 0x3fff)));
+		drow.aname.append(QString("%1:%2").arg(gethexbyte((xadr.bank >> 6) & 0xff)).arg(dbg_adr(xadr.adr & 0x3fff)));
 	} else {
-		drow.aname = gethexword(xadr.adr);
+		drow.aname = dbg_adr(xadr.adr);
 	}
 	// 2:command / 3:info
 	clen = dasmSome(comp, adr, drow);
@@ -595,7 +646,7 @@ int xDisasmModel::update_lst() {
 	int i;
 	Computer* comp = conf.zx;
 	int pc = cpu_get_pc(comp->cpu);
-	xMnem mnm = dasm_mnem(comp, pc, NULL);
+	xMnem mnm = dasm_mnem(comp, pc, NULL, conf.dbg.numfmt);
 	if (mnm.cond && mnm.met) {
 		for (i = 0; i < dasm.size(); i++) {
 			if ((dasm[i].adr == mnm.oadr) && (mnm.oadr != pc)) {
@@ -633,77 +684,16 @@ int getPrevAdr(Computer* comp, int adr) {
 	return adr;
 }
 
-int adr_of_reg(CPU* cpu, bool* flag, QString nam) {
-	xRegBunch bch = cpuGetRegs(cpu);
-	int i = 0;
-	int res;
-	nam = nam.toUpper();
-	while ((bch.regs[i].id != REG_EOT) && (QString(bch.regs[i].name).toUpper() != nam))
-		i++;
-	if (bch.regs[i].id == REG_EOT) {
-		*flag = false;
-		res = 0;
-	} else {
-		*flag = true;
-		res = bch.regs[i].value;
-	}
-	return res;
-}
 
-int str_to_adr(Computer* comp, QString str) {
-	bool flag = true;
-	int adr = -1;
-	QStringList lst;
-	int off;
-	int seg;
-	if (str.startsWith(".")) {			// .REG : name of CPU register
-		adr = adr_of_reg(comp->cpu, &flag, str.mid(1));
-	} else if (str.contains(":")) {			// seg:adr (for real mode)
-		lst = str.split(":",X_SkipEmptyParts);
-		if (lst.size() == 2) {
-			off = lst[1].toInt(&flag,16);
-			if (!flag) {
-				off = adr_of_reg(comp->cpu, &flag, lst[1]);
-			}
-			if (flag) {
-				seg = lst[0].toInt(&flag,16);
-				if (flag) {
-					adr = (seg << 4) + off;
-				} else {
-					seg = adr_of_reg(comp->cpu, &flag, lst[0]);
-					if (flag) {
-						adr = (seg << 4) + off;
-					}
-				}
-			}
-		}
-	} else if (str.startsWith("#")) {			// #nnnn : hex adr
-		str.replace(0, 1, "0x");
-		adr = str.toInt(&flag, 16);
-	} else if (str.startsWith("0x")) {			// 0xnnnn : hex adr
-		adr = str.toInt(&flag, 16);
-	} else {
-		xAdr xadr = find_label(str);			// NAME : label name
-		if (xadr.type >= 0) {
-			adr = xadr.adr;
-			flag = true;
-		} else {						// other : plain hex
-			adr = str.toInt(&flag, 16);
-		}
-	}
-	if (!flag) adr = -1;
-	return adr;
-}
-
-// convert string val to address (.reg, #HEXA, 0xHEXA, HEXA, label)
+// convert string val to address (.reg, a number, label)
 int asmAddr(Computer* comp, QVariant val, xAdr xadr) {
 	QString lab;
 	QString str = val.toString();
 	int adr;
 	if (str.startsWith('@')) {			// @label will not create new label, just jump if it exists
-		adr = str_to_adr(comp, str.mid(1));
+		adr = str_to_adr(comp, str.mid(1), true);
 	} else {
-		adr = str_to_adr(comp, str);
+		adr = str_to_adr(comp, str, true);
 	}
 	if (adr < 0) {
 		if (find_label(str).type >= 0) return -1;
@@ -831,6 +821,27 @@ QString asm_labels(const QString& src) {
 	return res + ops.join(",");
 }
 
+// the hex the listing shows - #FF, $FF, FFh - as the assembler reads it, 0xFF;
+// a label that happens to read as FFh stays a label. A leading zero is taken
+// off a decimal number: the assembler would read it as octal
+static QString asm_hex_signs(QString str) {
+	static const QRegularExpression dollar("\\$(?=[0-9A-Fa-f])");
+	static const QRegularExpression zeros("(?<![\\w.])0+(?=[0-9])");
+	str.replace(zeros, "");
+	str.replace("#", "0x");
+	str.replace(dollar, "0x");
+	static const QRegularExpression suf("(?<!\\w)([0-9A-Fa-f]+)[hH](?!\\w)");
+	QList<QRegularExpressionMatch> found;
+	QRegularExpressionMatchIterator it = suf.globalMatch(str);
+	while (it.hasNext())
+		found.prepend(it.next());		// from the end, so the places hold
+	for (const QRegularExpressionMatch& m : found) {
+		if (m.captured(0).at(0).isLetter() && (find_label(m.captured(0)).type >= 0)) continue;
+		str.replace(m.capturedStart(0), m.capturedLength(0), "0x" + m.captured(1));
+	}
+	return str;
+}
+
 bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int role) {
 	if (!cidx.isValid()) return false;
 	if (role != Qt::EditRole) return false;
@@ -872,7 +883,7 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 					add_comment(xadr, str);
 				}
 			} else if (str.startsWith(".") || str.contains(":")) {		// .REG || seg:offset
-				idx = str_to_adr(comp, str);
+				idx = str_to_adr(comp, str, true);
 			} else {							// hex/label
 				idx = asmAddr(comp, val, xadr);
 			}
@@ -896,7 +907,7 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 			ptr = getBrkPtr(comp, adr);
 			str = val.toString();
 			if (!str.startsWith("db \"", Qt::CaseInsensitive))		// #NUM -> 0xNUM if not db "..."
-				str.replace("#", "0x");
+				str = asm_hex_signs(str);
 			if (str.startsWith("db ", Qt::CaseInsensitive)) {		// db
 				if ((str.size() > 4) && (str.at(3) == '"') && str.endsWith("\"")) {		// db "text"
 					str = str.mid(4, str.size() - 5);
@@ -980,6 +991,17 @@ static bool is_word_char(QChar chr) {
 	return chr.isLetterOrNumber() || (chr == QChar(0x5f)) || (chr == QChar(0x23)) || (chr == QChar(0x24));
 }
 
+// a number as the listing writes it: #FF, $FF, 255, or FFh
+static bool is_number_word(const QString& tok) {
+	if (tok.isEmpty()) return false;
+	QChar chr = tok.at(0);
+	if ((chr == QChar(0x23)) || (chr == QChar(0x24)) || chr.isDigit()) return true;
+	if ((tok.size() < 2) || !tok.endsWith('h')) return false;	// C9h; most words are not
+	for (int i = 0; i < tok.size() - 1; i++)
+		if (!is_hex_char(tok.at(i)) || tok.at(i).isLower()) return false;
+	return true;
+}
+
 // an instruction is typed with the labels offered
 QWidget* xDasmSyntax::createEditor(QWidget* par, const QStyleOptionViewItem& opt, const QModelIndex& idx) const {
 	QWidget* wid = QStyledItemDelegate::createEditor(par, opt, idx);
@@ -1036,8 +1058,7 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 			bool word = is_word_char(text.at(pos));
 			while ((end < text.size()) && (end != lpos) && (is_word_char(text.at(end)) == word))
 				end++;
-			QChar chr = text.at(pos);
-			if (word && ((chr == QChar(0x23)) || (chr == QChar(0x24)) || chr.isDigit())) {
+			if (word && is_number_word(text.mid(pos, end - pos))) {
 				if (highlighted) {
 					bold = true;
 				} else {
@@ -1053,6 +1074,63 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 		pos = end;
 	}
 	pnt->restore();
+}
+
+// The tip of the word under the mouse: a number (an address when it is the
+// operand the command goes to or reads), or the label. The words are laid out
+// as paint() lays them, bold where it makes them bold, so the one found is the
+// one drawn there.
+bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyleOptionViewItem& option, const QModelIndex& idx) {
+	if (ev->type() != QEvent::ToolTip)
+		return QStyledItemDelegate::helpEvent(ev, view, option, idx);
+	QStyleOptionViewItem opt = option;
+	initStyleOption(&opt, idx);
+	QString text = opt.text;
+	QStyle* stl = opt.widget ? opt.widget->style() : QApplication::style();
+	QRect rect = stl->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
+	bool syn = conf.dbg.synhl && !text.startsWith("DB \"");
+	QString lab = syn ? idx.data(X_LabelRole).toString() : QString();
+	int lpos = lab.isEmpty() ? -1 : text.indexOf(lab);
+	QFont bfnt = opt.font;
+	bfnt.setBold(true);
+	QFontMetrics fm(opt.font);
+	QFontMetrics bfm(bfnt);
+	bool highlighted = opt.state & (QStyle::State_MouseOver | QStyle::State_Selected);
+	int x = rect.left();
+	int pos = 0;
+	QString tip;
+	QRect at;
+	while ((pos < text.size()) && tip.isEmpty()) {
+		int end = pos;
+		bool bold = false;
+		bool word = false;
+		if (pos == lpos) {
+			end = pos + lab.size();
+			bold = true;
+		} else {
+			word = is_word_char(text.at(pos));
+			while ((end < text.size()) && (end != lpos) && (is_word_char(text.at(end)) == word))
+				end++;
+			bold = syn && word && highlighted && is_number_word(text.mid(pos, end - pos));
+		}
+		QString tok = text.mid(pos, end - pos);
+		int w = text_width(bold ? bfm : fm, tok);
+		if ((ev->pos().x() >= x) && (ev->pos().x() < x + w)) {
+			bool ok = false;
+			int val = word ? dbg_num_parse(tok, &ok) : 0;
+			if (pos == lpos) {
+				xAdr xa = find_label(lab);
+				if (xa.adr >= 0) tip = dbg_num_tip(xa.adr, true, lab);
+			} else if (ok) {
+				tip = dbg_num_tip(val, val == idx.data(Qt::UserRole).toInt());
+			}
+			at = QRect(x, rect.top(), w, rect.height());
+		}
+		x += w;
+		pos = end;
+	}
+	dbg_show_tip(view->viewport(), at, tip, true);
+	return true;
 }
 
 // TABLE
@@ -1073,7 +1151,7 @@ xDisasmTable::xDisasmTable(QWidget* p):QTableView(p) {
 void xDisasmTable::resizeEvent(QResizeEvent* ev) {
 	int wid = ev->size().width();
 	QFontMetrics qfm(font());
-	int adw = text_width(qfm, "000:00:0000") + 10;
+	int adw = text_width(qfm, "000:00:00000") + 10;	// RAM:05:#0123: five for the offset in any form
 	int btw = text_width(qfm, "0000000000") + 10;
 	setColumnWidth(0, adw);
 	setColumnWidth(1, btw);
@@ -1201,7 +1279,7 @@ void xDisasmTable::copyToCbrd() {
 				work = 0;		// address overfill (FFFF+)
 			if (drow.isequ) {
 				str += drow.aname + ":";
-				str += drow.command;
+				str += dasm_export(drow);
 			} else if (drow.islab) {
 				if (drow.iscom) {
 					str += drow.aname;
@@ -1209,7 +1287,7 @@ void xDisasmTable::copyToCbrd() {
 					str += drow.aname + ":";
 				}
 			} else {
-				str += "\t" + drow.command;
+				str += "\t" + dasm_export(drow);
 			}
 			str += "\n";
 		}
@@ -1472,6 +1550,19 @@ void xDisasmTable::focusInEvent(QFocusEvent* ev) {
 	QModelIndex idx = currentIndex();
 	if (idx.isValid())
 		selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect);
+}
+
+// the address column's tip over its address, as the command column has it over
+// the number pointed at
+bool xDisasmTable::viewportEvent(QEvent* ev) {
+	if (ev->type() != QEvent::ToolTip)
+		return QTableView::viewportEvent(ev);
+	QHelpEvent* hev = static_cast<QHelpEvent*>(ev);
+	QModelIndex idx = indexAt(hev->pos());
+	if (!idx.isValid() || (idx.column() != 0))
+		return QTableView::viewportEvent(ev);
+	dbg_show_tip(viewport(), visualRect(idx), idx.data(Qt::ToolTipRole).toString(), true);
+	return true;
 }
 
 void xDisasmTable::mouseMoveEvent(QMouseEvent* ev) {

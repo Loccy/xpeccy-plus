@@ -1,8 +1,9 @@
 // C-like expression compiler/evaluator
 //
-// numbers use the machine's own base by default (0x/#/$ force hex), names are
-// looked up as cpu register -> pseudo-variable -> label -> number. registers
-// win over numbers, so BC is the register pair and 0BC is the number.
+// numbers follow the debugger's one rule (dbg_num_parse): decimal, or hex with
+// a sign - #, $ or 0x in front, h behind; a leading zero is not octal. names are
+// looked up as cpu register -> pseudo-variable -> label -> hex with h, so BC is
+// the register pair, and C9h is a number unless a label has that name.
 
 #include "xcore.h"
 #include "xexpr.h"
@@ -228,7 +229,7 @@ static void xe_primary(xeParser* prs) {
 		xe_emit_num(prs, val, 10);
 		return;
 	}
-	if (c == '#') {				// #nnnn : hex number
+	if ((c == '#') || (c == '$')) {		// #nnnn, $nnnn : hex number
 		prs->ptr++;
 		if (x_digit(*prs->ptr, 16) < 0) {
 			xe_fail(prs, "hex digit expected");
@@ -241,14 +242,23 @@ static void xe_primary(xeParser* prs) {
 		xe_emit_num(prs, val, 16);
 		return;
 	}
-	if (x_digit(c, 10) >= 0) {		// decimal, 0x = hex, leading zero = octal
+	if (x_digit(c, 10) >= 0) {		// decimal, 0x = hex, nnnnh = hex
 		base = 10;
 		if ((c == '0') && ((prs->ptr[1] == 'x') || (prs->ptr[1] == 'X'))) {
 			prs->ptr += 2;
 			base = 16;
-		} else if ((c == '0') && (x_digit(prs->ptr[1], 8) >= 0)) {
-			prs->ptr++;
-			base = 8;
+		} else {
+			const char* end = prs->ptr;
+			while (x_digit(*end, 16) >= 0) end++;
+			if (((*end == 'h') || (*end == 'H')) && !x_isletter(end[1]) && (x_digit(end[1], 10) < 0)) {
+				while ((dig = x_digit(*prs->ptr, 16)) >= 0) {
+					val = (val << 4) | dig;
+					prs->ptr++;
+				}
+				prs->ptr++;			// the h
+				xe_emit_num(prs, val, 16);
+				return;
+			}
 		}
 		if (x_digit(*prs->ptr, base) < 0) {
 			xe_fail(prs, "wrong number");
@@ -259,7 +269,7 @@ static void xe_primary(xeParser* prs) {
 			prs->ptr++;
 		}
 		if (x_digit(*prs->ptr, 16) >= 0) {	// 0FF and such: no bare hex any more
-			xe_fail(prs, "wrong digit for this base, hex needs 0x or #");
+			xe_fail(prs, "wrong digit for this base, hex needs #, $, 0x or h");
 			return;
 		}
 		xe_emit_num(prs, val, base);
@@ -327,6 +337,20 @@ static void xe_primary(xeParser* prs) {
 		if (xadr.type >= 0) {
 			xe_emit(prs, XE_LAB, 0, name.c_str());
 			return;
+		}
+		// hex with an h behind that starts with a letter: C9h
+		if ((uname.size() > 1) && (uname.back() == 'H')) {
+			bool hex = true;
+			val = 0;
+			for (size_t i = 0; i + 1 < uname.size(); i++) {
+				dig = x_digit(uname[i], 16);
+				if (dig < 0) hex = false;
+				val = (val << 4) | (dig & 15);
+			}
+			if (hex) {
+				xe_emit_num(prs, val, 16);
+				return;
+			}
 		}
 		xe_fail(prs, "no such register, variable or label");
 		return;

@@ -54,7 +54,6 @@ int tmpcnt = 0;
 
 int getRFIData(QComboBox*);
 void setRFIndex(QComboBox*, QVariant, int);
-int dasmSome(Computer*, int, dasmData&);
 
 // trace type
 enum {
@@ -145,6 +144,32 @@ class xMenuDot : public QWidget {
 // a dock title sits below the gap its style sheet leaves, a panel label doesn't
 static void markMenuHeader(QWidget* wid, int gap = 0) {
 	new xMenuDot(wid, MENU_DOT_TOP + gap);
+}
+
+// The debugger's numbers: hex in the form Options picked, or decimal. The
+// button names the base shown now; every window shown is redrawn.
+void DebugWin::toggleNumFmt() {
+	dbg_set_numfmt((conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : CPU_NUM_DEC);
+	showNumFmt();
+}
+
+void DebugWin::showNumFmt() {
+	ui_asm.tbNumbers->setText((conf.dbg.numfmt == CPU_NUM_DEC) ? "DEC" : "HEX");
+	QString key = shortcut_key(XCUT_DBG_NUMBERS);
+	ui_asm.tbNumbers->setToolTip(QString("Hex or decimal addresses and values%0")
+		.arg(key.isEmpty() ? QString() : QString(" (%0)").arg(key)));
+	// the address fields of the dialogs, shown or not
+	foreach(QWidget* wid, QApplication::allWidgets()) {
+		if (xHexSpin* fld = qobject_cast<xHexSpin*>(wid)) fld->numFmt();
+	}
+	if (!isVisible()) return;
+	rebuildCpuPanel();	// the registers' widths follow the base
+	fillNotCPU();		// not fillCPU: it would take the registers' changed marks away
+	fillDisasm();
+	wid_brk->draw();
+	for (QWidget* wid : QApplication::topLevelWidgets()) {
+		if (wid->isVisible()) wid->update();
+	}
 }
 
 void DebugWin::updateStyle() {
@@ -588,7 +613,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 		lab->setContentsMargins(0, 0, 4, 0);	// don't let it touch the value
 
 		xhs = new xHexSpin(wid_cpu);
-		xhs->setXFlag(XHS_BGR | XHS_DEC | XHS_FILL | XHS_AUTOW);
+		xhs->setXFlag(XHS_BGR | XHS_DEC | XHS_FILL | XHS_AUTOW | XHS_NUMS);
 		xhs->setVisible(false);
 		xhs->setFrame(false);
 		xhs->setMinimumHeight(21);
@@ -786,6 +811,8 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	connect(ui_asm.actSaveMap, SIGNAL(triggered(bool)),this,SLOT(saveMap()));
 	connect(ui_asm.actDisasm, SIGNAL(triggered(bool)),this,SLOT(saveDasm()));
 	connect(ui_asm.tbRefresh, SIGNAL(released()), this, SLOT(reload()));
+	connect(ui_asm.tbNumbers, &QToolButton::clicked, this, &DebugWin::toggleNumFmt);
+	showNumFmt();
 
 	connect(wid_heat, &xHeatWidget::s_adr, ui_asm.dasmTable, &xDisasmTable::setAdrX);
 	connect(wid_heat, &xHeatWidget::s_detach, this, &DebugWin::heatSetDetached);
@@ -804,6 +831,9 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	dui.tbSave->addAction(dui.aSaveToB);
 	dui.tbSave->addAction(dui.aSaveToC);
 	dui.tbSave->addAction(dui.aSaveToD);
+	// the addresses and lengths of both dump dialogs are in the debugger's numbers
+	foreach(xHexSpin* fld, QList<xHexSpin*>() << dui.leStart << dui.leEnd << dui.leLen)
+		fld->setXFlag(XHS_DEC | XHS_ADDR);
 	dui.leStart->setMin(0);
 	dui.leStart->setMax(0xffffff);
 	dui.leEnd->setMin(0);
@@ -819,12 +849,15 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	connect(dui.aSaveToD,SIGNAL(triggered()),this,SLOT(saveDumpToD()));
 	connect(dui.leStart,SIGNAL(valueChanged(int)),this,SLOT(dmpLimChanged()));
 	connect(dui.leEnd,SIGNAL(valueChanged(int)),this,SLOT(dmpLimChanged()));
+	connect(dui.leEnd, &QLineEdit::editingFinished, this, [this]() { dmpLimits(true); });
 	connect(dui.leLen,SIGNAL(valueChanged(int)),this,SLOT(dmpLenChanged()));
 	connect(dui.cbSource,SIGNAL(currentIndexChanged(int)),this,SLOT(dmpSourceChanged()));
 	connect(dui.sbPage,SIGNAL(valueChanged(int)),this,SLOT(dmpPageChanged()));
 
 	openDumpDialog = new QDialog(this);
 	oui.setupUi(openDumpDialog);
+	foreach(xHexSpin* fld, QList<xHexSpin*>() << oui.leStart << oui.leEnd << oui.leLen)
+		fld->setXFlag(XHS_DEC | XHS_ADDR);
 	connect(oui.tbFile,SIGNAL(clicked()),this,SLOT(chDumpFile()));
 	connect(oui.leStart,SIGNAL(textChanged(QString)),this,SLOT(dmpStartOpen()));
 	connect(oui.cbSource,SIGNAL(currentIndexChanged(int)),this,SLOT(odmpSourceChanged()));
@@ -1160,6 +1193,9 @@ void DebugWin::keyPressEvent(QKeyEvent* ev) {
 		case XCUT_LABLIST:
 			labswin->show();
 			break;
+		case XCUT_DBG_NUMBERS:
+			toggleNumFmt();
+			break;
 		case XCUT_DBG_RELOAD:
 			reload();
 			break;
@@ -1212,7 +1248,7 @@ void DebugWin::customEvent(QEvent* ev) {
 	switch(ev->type()) {
 		case DBG_EVENT_STEP:
 			if ((traceType == DBG_TRACE_LOG) && logfile.isOpen()) {
-				dasmSome(comp, pcadr, tracemnm);
+				dasmSome(comp, pcadr, tracemnm, CPU_NUM_HASH);	// the log keeps one form
 				tracestr = "\"";			// to avoid numbers conversion, like 3e4->3000
 				tracestr.append(gethexword(pcadr));
 				tracestr.append("\"|");
@@ -1522,10 +1558,6 @@ void DebugWin::reFormFlags(int width) {
 
 // put one register into the grid, at the grid column a layout column starts on
 void DebugWin::placeReg(xRegBunch* b, int i, int row, int col) {
-	// A register with a type of its own - the counter, the stack pointer, the
-	// flags, a segment - is one number. The rest are bytes that move on their
-	// own, so a changed one can light just the byte that moved.
-	dbgRegEdit[i]->setSplit(conf.dbg.regsplit && !(b->regs[i].flag & REG_TYPE_M));
 	ui_cpu.formRegs->addWidget(dbgRegLabs[i], row, col);
 	dbgRegLabs[i]->setVisible(true);
 	if (b->regs[i].size == REG_BIT) {
@@ -1603,15 +1635,9 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 	while ((cnt < dbgRegLabs.size()) && (b->regs[cnt].id != REG_EOT)) {
 		dbgRegLabs[cnt]->setText(b->regs[cnt].name);
 		dbgRegLabs[cnt]->setProperty("regid", b->regs[cnt].id);
-		int mx;
-		switch(b->regs[cnt].size) {
-			case REG_2: mx = 2; break;
-			case REG_BYTE: mx = 0xff; break;
-			case REG_24: mx = 0xffffff; break;
-			case REG_32: mx = 0x7fffffff; break;	// the field and the register value are int
-			default: mx = 0xffff; break;
-		}
-		dbgRegEdit[cnt]->setMax(mx);
+		dbgRegLabs[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
+		dbgRegBits[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
+		reg_field_setup(dbgRegEdit[cnt], b->regs[cnt].size, b->regs[cnt].flag);	// before it is measured
 		if (dbgRegLabs[cnt]->sizeHint().width() > labw) labw = dbgRegLabs[cnt]->sizeHint().width();
 		if (dbgRegEdit[cnt]->minimumWidth() > fldw) fldw = dbgRegEdit[cnt]->minimumWidth();
 		cnt++;
@@ -2367,7 +2393,7 @@ void DebugWin::saveDasm() {
 					work = 0;		// address overfill (FFFF+)
 				if (drow.isequ) {
 					strm << drow.aname << ":";
-					strm << drow.command;
+					strm << dasm_export(drow);
 				} else if (drow.islab) {
 					if (drow.iscom) {
 						strm << drow.aname;
@@ -2375,7 +2401,7 @@ void DebugWin::saveDasm() {
 						strm << drow.aname << ":";
 					}
 				} else {
-					strm << "\t" << drow.command;
+					strm << "\t" << dasm_export(drow);
 				}
 				strm << "\n";
 			}
@@ -2439,15 +2465,16 @@ void DebugWin::mapAuto() {
 
 // stack
 
-// the offset column: signed hex padded to two digits so the labels are all one width
+// the offset column: signed, in the debugger's base without a sign, two digits
+// so the labels are all one width
 static QString stack_offset_label(int ofs) {
 	return QString("%0%1:").arg(QLatin1Char(ofs < 0 ? '-' : '+'))
-		.arg(qAbs(ofs), 2, 16, QLatin1Char('0')).toUpper();
+		.arg(qAbs(ofs), 2, (conf.dbg.numfmt == CPU_NUM_DEC) ? 10 : 16, QLatin1Char('0')).toUpper();
 }
 
 // the +0 row names itself by its own address rather than a zero offset
 static QString stack_anchor_label(int sp) {
-	return QString("%0:").arg(gethexword(sp));
+	return QString("%0:").arg(dbg_adr(sp));
 }
 
 void DebugWin::fillStack() {
@@ -2464,8 +2491,8 @@ void DebugWin::fillStack() {
 	for (int i = 0; i < cnt; i++) {
 		row.anchor = !ofs;
 		row.name = ofs ? stack_offset_label(ofs) : stack_anchor_label(sp);
-		row.value = gethexbyte(rdbyte(adr + ofs + 1, comp));
-		row.value.append(gethexbyte(rdbyte(adr + ofs, comp)));
+		// mostly return addresses: written as the addresses are
+		row.value = dbg_adr(rdbyte(adr + ofs, comp) | (rdbyte(adr + ofs + 1, comp) << 8));
 		rows << row;
 		ofs += 2;
 	}
@@ -2555,7 +2582,7 @@ void DebugWin::fillPorts() {
 		for (n = 0; n < comp->pwcount; n++) {
 			if (!comp->pwatch[n].on) continue;
 			int val = comp_pwatch_val(comp, n);
-			setPortRow(i, getPortString(comp->pwatch[n].port, comp->pwatch[n].mask),
+			setPortRow(i, dbg_port(comp->pwatch[n].port, comp->pwatch[n].mask),
 				(val < 0) ? QString("--") : gethexbyte(val));
 			i++;
 		}
@@ -2818,10 +2845,19 @@ void DebugWin::dmpRange(bool reset) {
 }
 
 void DebugWin::dmpLimChanged() {
+	dmpLimits(false);
+}
+
+// final: Enter, the field left, or a save - an End below Start is pulled up
+// then, not while it is typed (the 4 of 40000)
+void DebugWin::dmpLimits(bool final) {
 	if (dmpBusy) return;
 	int start = dui.leStart->getValue();
 	int end = dui.leEnd->getValue();
-	if (end < start) end = start;
+	if (end < start) {
+		if (!final && dui.leEnd->hasFocus()) return;
+		end = start;
+	}
 	int len = end - start + 1;
 	dmpBusy = true;
 	int pos = dui.leEnd->cursorPosition();
@@ -2846,6 +2882,7 @@ void DebugWin::dmpLenChanged() {
 }
 
 QByteArray DebugWin::getDumpData() {
+	dmpLimits(true);		// a save button takes no focus: End may still be below Start
 	int area = getRFIData(dui.cbSource);
 	int page = dui.sbPage->value();
 	int adr = dui.leStart->getValue();
@@ -2867,7 +2904,7 @@ void DebugWin::dmpFileName(QString* name, int* start) {
 	int area = getRFIData(dui.cbSource);
 	int ofs = dui.leStart->getValue();
 	if (area == CELL_NONE) {
-		*name = dui.leStart->text();
+		*name = gethexword(ofs);	// hex, whatever the field shows
 		*start = ofs;
 		return;
 	}

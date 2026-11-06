@@ -43,12 +43,14 @@ QColor bg_tint(const QColor&);
 
 #define	XHS_BGR	1		// change background if value changed
 #define	XHS_DEC	(1<<1)		// hex/dec switch enabled
-#define XHS_FILL (1<<2)		// leading zeros
+#define XHS_FILL (1<<2)		// as wide as the biggest value: leading zeros in hex, spaces in decimal
 #define XHS_UPD (1<<3)		// force update text, reset after using
 #define XHS_AUTOW (1<<4)	// keep width as narrow as the value needs
 #define XHS_SPLIT (1<<5)	// light the bytes that changed, not the whole value
 #define XHS_LIT (1<<6)		// keep the field lit whatever the value does
 #define XHS_BLANK (1<<7)	// may hold nothing at all, shown as dashes
+#define XHS_ADDR (1<<8)		// an address: base and sign as the debugger writes numbers
+#define XHS_NUMS (1<<9)		// the base the debugger writes numbers in, no sign (a register)
 
 class xHexSpin : public QLineEdit {
 	Q_OBJECT
@@ -65,6 +67,7 @@ class xHexSpin : public QLineEdit {
 		bool isBlank() const;	// holding nothing, the way setBlank() left it
 		void setLit(bool);
 		int getMax();
+		void numFmt();		// XHS_ADDR: the debugger's numbers moved
 	signals:
 		void valueChanged(int);
 	public slots:
@@ -76,15 +79,26 @@ class xHexSpin : public QLineEdit {
 	private:
 		int chgMask;		// bytes changed by the last setValue, bit 0 = the lowest
 		bool isblank;		// holding nothing, with XHS_BLANK
+		bool fixing = false;	// putting back a text that was refused: not a new one
+		int fmtSeen = -1;	// the debugger's numbers numFmt() last set
 		int hsflag;
 		int base;
 		int value;
 		int min;
 		int max;
-		int len;
+		int len;		// digits of the biggest value, in the base shown
+		int hexLen;		// the same in hex: two a byte
+		int dlen;		// characters the text takes
 		QString vtxt;
+		QString sgnPre;		// XHS_ADDR in hex: the sign drawn beside the digits
+		QString sgnPost;
 		QRegExpValidator vldtr;
+		void updateSign();
 		bool updateMask();
+		bool decPairs();
+		int regChars();		// XHS_NUMS: characters the field is as wide as
+		QString numText(int);
+		void decTextChange(const QString&);
 		void redraw();
 		void unblank();
 		void startEdit();
@@ -96,6 +110,7 @@ class xHexSpin : public QLineEdit {
 		void focusInEvent(QFocusEvent*);
 		void wheelEvent(QWheelEvent*);
 		void paintEvent(QPaintEvent*);
+		void showEvent(QShowEvent*);
 };
 
 // A style sheet takes the whole slider over, tick marks included: Qt draws none
@@ -204,6 +219,25 @@ void center_once(QWidget*);
 void help_window(QWidget* parent, QDialog** win, const QString& res, const QString& title);
 void label_complete(QLineEdit*);
 bool lab_char(QChar);
+
+// An address field of the debugger. In a hex form its number carries the sign,
+// which stays put while the digits are typed over; property DBG_NUM_OFF set on
+// the field leaves it a plain one (a port, say). See classes.cpp
+#define DBG_NUM_OFF "xDbgNumOff"
+#define DBG_NUM_PORT "xDbgNumPort"	// a port: a number by the rule, no label, no tip of one
+void dbg_num_field(QLineEdit*);
+// what a number is: hex, decimal and binary, a line each; for an address (or a
+// word, which may be one) the label there above them. name: the label it was typed as
+QString dbg_num_tip(int val, bool adr, const QString& name = QString(), bool label = true);
+// a number's tip at a rectangle of a widget, nothing: hidden. above: over a
+// number pointed at, gone when the mouse leaves it; else under a field being
+// typed into, there until hidden. The other side at a screen edge
+void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above);
+// a register's field (XHS_NUMS) for its size and flags (xRegister): its range,
+// the debugger's base, Split pairs and the width those make
+void reg_field_setup(xHexSpin* fld, int size, int flag);
+// what a register that is no number is for (IM, IFF1, IFF2), empty for the rest
+QString dbg_reg_tip(const QString& name);
 
 // the update check (updatewin.cpp): the settings as they apply to this build, the
 // check a start makes when it is due, and Help > Check for Updates

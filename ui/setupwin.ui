@@ -2963,7 +2963,7 @@ Tap or hold: a tap switches it, a longer press holds it</string>
                  <property name="title">
                   <string>View</string>
                  </property>
-                 <layout class="QGridLayout" name="gridLayout_16" columnstretch="0,10">
+                 <layout class="QGridLayout" name="gridLayout_16" columnstretch="0,1,0,1">
                   <item row="0" column="0">
                    <widget class="QLabel" name="label_64">
                     <property name="text">
@@ -2971,7 +2971,7 @@ Tap or hold: a tap switches it, a longer press holds it</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="1">
+                  <item row="0" column="1" colspan="3">
                    <layout class="QHBoxLayout" name="horizontalLayout_38">
                     <item>
                      <widget class="QLineEdit" name="leDbgFont">
@@ -3077,7 +3077,29 @@ Tap or hold: a tap switches it, a longer press holds it</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="4" column="0">
+                  <item row="1" column="2">
+                   <widget class="QLabel" name="label_numbers">
+                    <property name="text">
+                     <string>Numbers</string>
+                    </property>
+                    <property name="toolTip">
+                     <string>How the debugger writes addresses and the listing's values.
+The button on the listing's bar switches hex and decimal</string>
+                    </property>
+                    <property name="indent">
+                     <number>12</number>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="3">
+                   <widget class="QComboBox" name="cbDbgNumbers">
+                    <property name="toolTip">
+                     <string>How the debugger writes addresses and the listing's values.
+The button on the listing's bar switches hex and decimal</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="2">
                    <widget class="QLabel" name="label_stackofs">
                     <property name="text">
                      <string>Stack offset</string>
@@ -3086,9 +3108,12 @@ Tap or hold: a tap switches it, a longer press holds it</string>
                      <string>Offset the stack panel starts at.
 It goes on until the panel runs out of height</string>
                     </property>
+                    <property name="indent">
+                     <number>12</number>
+                    </property>
                    </widget>
                   </item>
-                  <item row="4" column="1">
+                  <item row="2" column="3">
                    <widget class="QSpinBox" name="sbDbgStackOfs">
                     <property name="toolTip">
                      <string>Offset the stack panel starts at.

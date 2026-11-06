@@ -242,8 +242,19 @@ static inline int cpu_exec(CPU* cpu) {
 // built-in cores tab
 extern cpuCore cpuTab[];
 
+// how a disassembly writes numbers: #FF, $FF, FFh, 255
+enum {
+	CPU_NUM_HASH = 0,
+	CPU_NUM_DOLLAR,
+	CPU_NUM_H,
+	CPU_NUM_DEC
+};
+
+// the plain entries write #FF, as logs and traces have it
 xMnem cpuDisasm(CPU*, int, char*, cbdmr, void*);
 xMnem cpuDisasmView(CPU*, int, char*, cbmr, void*);
+xMnem cpuDisasmFmt(CPU*, int, char*, cbdmr, void*, int fmt);
+xMnem cpuDisasmViewFmt(CPU*, int, char*, cbmr, void*, int fmt);
 int cpuAsm(CPU*, const char*, char*, unsigned short);
 xAsmScan scanAsmTab(const char*, opCode*);
 unsigned short cpu_peek_word(cbdmr, void*, int);	// little-endian word at adr, wrapping at 0xffff
