@@ -107,6 +107,7 @@ void bdiReset(DiskIF* dif) {
 // +3DOS (uPD765)
 
 void uReset(FDC*);
+void uidle(FDC*);
 unsigned char uRead(FDC*, int);
 void uWrite(FDC*, int, unsigned char);
 
@@ -177,32 +178,27 @@ static void dif_apply(DiskIF* dif) {
 	if (dif->type != was) dif->fdc->slow = 0;	// the +3's real time is not the next controller's
 }
 
-// A machine with no disk interface has no controller either: a command left by
-// the one before (a TR-DOS reset's Restore, then a switch) ends there, as the chip
-// that ran it ends one, so that one put back without a reset takes the next.
-// One out for a divMMC is still in the machine, and keeps its own.
-static void dif_none_stop(DiskIF* dif, int chip) {
+// A command no time will finish (no interface, or one out) ends as the chip ends one.
+static void dif_end_command(DiskIF* dif, int chip) {
 	FDC* fdc = dif->fdc;
-	if ((dif->cfg != DIF_NONE) || !fdc->plan || fdc->idle) return;	// none running
+	if (!fdc->plan || fdc->idle) return;	// none running
 	fdc->plan = NULL;
-	fdc->pos = 0;
-	fdc->wait = -1;
-	fdc->idle = 1;
-	if (chip == DIF_P3DOS) {	// uPD765: ready for a command byte (uidle)
-		fdc->drq = 1;
-		fdc->dir = 0;
-	} else {			// wd1793: INTRQ up, not busy
+	if (chip == DIF_P3DOS) {	// uPD765: out of exec, ready for a command byte
+		fdc->irq = 0;
+		uidle(fdc);
+	} else {			// wd1793: INTRQ up, motor off
+		fdc->idle = 1;
 		fdc->irq = 1;
 		fdc->drq = 0;
-		fdc->state &= ~1;
+		if (fdc->flp) fdc->flp->motor = 0;
 	}
 }
 
 void difSetHW(DiskIF* dif, int type) {
-	int was = dif->type;
+	int was = dif->cfg;
 	dif->cfg = findDHW(type) ? type : DIF_NONE;
 	dif_apply(dif);
-	dif_none_stop(dif, was);
+	if (dif->cfg == DIF_NONE) dif_end_command(dif, was);
 }
 
 void dif_set_out(DiskIF* dif, int out) {
@@ -305,7 +301,7 @@ void difDestroy(DiskIF* dif) {
 
 void difReset(DiskIF* dif) {
 	dif->hw->reset(dif);
-	dif_none_stop(dif, dif->type);
+	if (dif->out) dif_end_command(dif, dif->cfg);	// the reset reaches one out for a divMMC
 }
 
 // Every drive's door closes in its own time, not only the selected one's: a disk

@@ -172,9 +172,7 @@ static int xst_build(Computer* comp, xStateChunk* list) {
 // good: it sticks on for good on a drive with no disk in it. Idle means waiting
 // for a command - the wd1793 leaves no plan behind at all, the upd765 parks on a
 // do-nothing plan and raises idle, and a freshly reset wd1793 has neither yet.
-// A machine with no disk interface runs no command: what the one before left
-// there is ended when it is set (dif_none_stop). One out for a divMMC is still
-// in the machine, its command only held.
+// A machine with no disk interface runs none: dif_end_command() ended what it got.
 static int dif_running(DiskIF* dif) {
 	if (!dif || (dif->cfg == DIF_NONE)) return 0;
 	FDC* fdc = dif->fdc;

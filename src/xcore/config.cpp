@@ -1533,8 +1533,7 @@ void loadConfig() {
 	} else {
 		// a start takes the one Options names; a config read again keeps its own
 		if (!conf.running && start_this()) macwant = conf.macStartId;
-		ok = !cli.empty() && xm_set(cli);
-		if (!ok) ok = xm_set(macwant);
+		ok = xm_set(cli.empty() ? macwant : cli);
 	}
 	if (!ok) {
 		xlog(XLG_CONF, XLL_WARN, "no machine to start, taking the first one");
