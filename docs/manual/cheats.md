@@ -93,9 +93,9 @@ it, with the cheat file.
 ```{index} Cheats; reset, Cheats; Rewind, Cheats; RZX
 ```
 
-A reset, opening a file, a machine switch, **Quick Load** and **Undo Quick Load** turn every
-cheat off and write nothing back: the memory they changed is gone. The cheat file stays in
-the window.
+A reset, opening another file, a machine switch, **Quick Load** and **Undo Quick Load** turn
+every cheat off and write nothing back: the memory they changed is gone. The cheat file
+stays in the window.
 
 Opening the game's tape or disk again, by **File > Reload** or any other way, turns every
 cheat off and puts their bytes back first, before the game is loaded again.
