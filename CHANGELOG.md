@@ -30,8 +30,8 @@ before that point is upstream's history and is not repeated here.
 - **The Debugger's addresses carry their hex sign, `#8000`**, and a number typed into an
   address field is decimal unless it has one (`#`, `$`, `0x` or `h`). The fields open with
   the sign, so typing over the digits stays hex. In conditions a leading 0 is no longer octal.
-- **The DUMP panel's text column is plain ASCII by default**; WIN1251, CP866 and KOI8R are
-  still in its list.
+- **The DUMP panel's text column shows CP437 by default**, the IBM PC's code page; CP1251,
+  CP866 and KOI8-R are still in its list.
 - **The Watcher uses the Debugger's font and shows 16 bytes a watch**; its registers look
   as in the Debugger.
 - **The ZX Spectrum Next runs much faster, with the same picture and sound**: games and demos
