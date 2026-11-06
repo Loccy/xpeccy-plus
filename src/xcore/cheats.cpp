@@ -49,10 +49,12 @@ static xTrainer* ch_trainer(int idx, chState** st) {
 	return &ch_file.list[idx];
 }
 
-// A trainer's labels to places, while it is off (one that is on stays where it went):
-// RAM as a 128K page and the address in it. CHT_NO_LABEL with the name, or POK_NO_RAM
-// for a label not in the first 128K of RAM.
-static int ch_resolve(xTrainer* tr, const chState* st, QString* miss) {
+// A trainer's labels to places, while it is off (one that is on stays where it went).
+// A label paged in counts its offset as the CPU does (#7FFE+4 is #8002, whatever page
+// that is); one paged out stays in its page. The place is a 128K page and the address in
+// it, as a .pok has it, or past those pages (the Next, a Pentagon 1024) the CPU address.
+// CHT_NO_LABEL with the name, or POK_NO_RAM.
+static int ch_resolve(Computer* comp, xTrainer* tr, const chState* st, QString* miss) {
 	if (st->on) return POK_FITS;
 	for (int i = 0; (i < st->labs.size()) && (i < tr->cnt); i++) {
 		const xPokeLabel& lb = st->labs[i];
@@ -62,12 +64,35 @@ static int ch_resolve(xTrainer* tr, const chState* st, QString* miss) {
 			if (miss) *miss = lb.name;
 			return CHT_NO_LABEL;
 		}
-		int abs = xa.abs + lb.off;
-		if ((xa.type != MEM_RAM) || (abs < 0) || (abs >= 0x20000)) return POK_NO_RAM;
-		// the window shows where the CPU sees it now, if it does; the page's own bits count
-		int cpu = conf.zx ? comp_find_xadr(conf.zx, MEM_RAM, abs, MEM_VIEW_READ) : -1;
-		tr->pokes[i].bank = abs >> 14;
-		tr->pokes[i].adr = (cpu >= 0) ? cpu : (0xc000 | (abs & 0x3fff));
+		bool byCpu = true;
+		int cpu = xa.abs + lb.off;		// MEM_IO: a CPU address label (the Next's)
+		int abs = 0;
+		if (xa.type == MEM_RAM) {
+			int at = comp_find_xadr(comp, MEM_RAM, xa.abs, MEM_VIEW_READ);
+			byCpu = (at >= 0);
+			cpu = at + lb.off;
+			abs = xa.abs + lb.off;
+		} else if (xa.type != MEM_IO) {
+			return POK_NO_RAM;
+		}
+		if (byCpu) {
+			if ((cpu < 0) || (cpu > 0xffff)) return POK_NO_RAM;
+			xAdr now = comp_get_xadr(comp, cpu, MEM_VIEW_READ);
+			if (now.type != MEM_RAM) return POK_NO_RAM;
+			abs = now.abs;
+		} else if ((abs < 0) || ((abs >> 14) != (xa.abs >> 14))) {
+			return POK_NO_RAM;		// out of a page the CPU does not see: nothing says where
+		}
+		xPoke* pk = &tr->pokes[i];
+		if (abs < 0x20000) {
+			pk->bank = abs >> 14;
+			pk->adr = byCpu ? cpu : (0xc000 | (abs & 0x3fff));	// shown as the CPU sees it
+		} else if (byCpu) {
+			pk->bank = 8;
+			pk->adr = cpu;
+		} else {
+			return POK_NO_RAM;
+		}
 	}
 	return POK_FITS;
 }
@@ -183,7 +208,7 @@ bool cheats_add(xPokFile* pf, const xPokeLabels& labs, bool alone, const QString
 	chLock lock;
 	bool ok = true;
 	int from = alone ? 0 : ch_file.cnt;
-	int cnt = pf->cnt;
+	int add = pf->cnt;
 	if (alone) {
 		ch_drop_file(ch_comp);
 		ch_file = *pf;
@@ -205,7 +230,7 @@ bool cheats_add(xPokFile* pf, const xPokeLabels& labs, bool alone, const QString
 			ch_cli = true;
 		}
 	}
-	for (int i = 0; ok && (i < cnt) && (i < labs.size()); i++)
+	for (int i = 0; ok && (i < add) && (i < labs.size()); i++)
 		ch_state[from + i].labs = labs[i];
 	ch_keep = image;
 	ch_changed();
@@ -247,7 +272,7 @@ int cheats_set(Computer* comp, int idx, bool on, bool force) {
 	if (on && tr->ask && (st->val < 0)) return POK_FITS;	// the window asks for the value first
 	if (comp->rzx.play) return CHT_RZX;
 	if (on) {
-		int res = ch_resolve(tr, st, NULL);
+		int res = ch_resolve(comp, tr, st, NULL);
 		if (res != POK_FITS) return res;
 		res = pok_check(comp, tr);
 		if (res == POK_MISMATCH) {
@@ -314,7 +339,7 @@ static xCheatRow ch_row(Computer* comp, xTrainer* tr, const chState* st) {
 	r.line = tr->line;
 	r.ask = tr->ask;
 	r.val = st->val;
-	int res = tr->why ? POK_FITS : ch_resolve(tr, st, &r.miss);
+	int res = tr->why ? POK_FITS : ch_resolve(comp, tr, st, &r.miss);
 	if ((res == POK_FITS) && !tr->why) res = pok_check(comp, tr);
 	if (res == POK_NO_PAGE || res == POK_NO_RAM || res == CHT_NO_LABEL) {
 		r.mark = res;

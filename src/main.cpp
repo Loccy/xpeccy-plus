@@ -408,7 +408,7 @@ static bool cli_poke_label(const QString& txt, xPokeLabel* lb) {
 	bool ok;
 	int n = str_num(s.mid(at + 1), &ok);
 	lb->off = (s[at] == '-') ? -n : n;
-	return ok;
+	return ok && (n <= 0xffff);
 }
 
 // --poke [NAME=]POKE[:POKE...], POKE = [PAGE/]ADR,VAL[,ORG]: one trainer, as a .pok has
@@ -449,10 +449,15 @@ static void cli_poke(const QString& arg, xPokFile* pf, xPokeLabels* labs) {
 			page = str_num(pg[0], &ok);
 			ok &= (page < 8);
 		}
-		if (ok) {
+		// a label loaded wins over a number, as in the debugger: "each" reads as #EAC too;
+		// one not loaded is a label only if it is not a number. A label has its own page
+		if (ok && (pg.size() == 1) && cli_poke_label(num[0], &lb) && (find_label_cell(lb.name).type >= 0)) {
+			adr = 0;
+		} else if (ok) {
+			lb = xPokeLabel{QString(), 0};
 			adr = str_num(num[0], &ok);
 			ok &= (adr <= 0xffff);
-			if (!ok && (pg.size() == 1)) ok = cli_poke_label(num[0], &lb);	// a label has its own page
+			if (!ok && (pg.size() == 1)) ok = cli_poke_label(num[0], &lb);
 		}
 		if (ok && (num[1].trimmed() != "?")) {
 			val = str_num(num[1], &ok);

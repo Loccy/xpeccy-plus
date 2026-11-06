@@ -276,13 +276,20 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 		case CHT_RZX: note("An RZX is playing: nothing goes in while it plays."); break;
 		case POK_NO_PAGE: note(QString("\"%0\" pokes a 128K page this machine does not have.").arg(name)); break;
 		case POK_NO_RAM: note(QString("\"%0\" pokes where this machine has no RAM now.").arg(name)); break;
-		case CHT_NO_LABEL:
-			note(QString("\"%0\" pokes at the label %1, which the labels loaded do not have.")
-				.arg(name, it->data(CW_NOTE, Qt::UserRole).toString()));
+		case CHT_NO_LABEL: {
+			QList<xCheatRow> rows = cheats_rows(conf.zx);		// the label as it is missed now
+			QString lab = ((idx >= 0) && (idx < rows.size())) ? rows[idx].miss : QString();
+			note(QString("\"%0\" pokes at the label %1, which the labels loaded do not have.").arg(name, lab));
 			break;
+		}
 		default: note(QString()); break;
 	}
 	fill();
+}
+
+static QString cw_lab_key() {
+	xLabelSet* set = conf.curlabset;
+	return set ? QString("%0 %1").arg(set->name).arg(set->list.size()) : QString();
 }
 
 // a label (from the command line) first, and where it is now if it was found
@@ -298,6 +305,7 @@ static QString cw_poke_text(const xPoke& pk, const QString& lab, bool placed) {
 
 void xCheatWin::fill() {
 	serial = cheats_serial();
+	labKey = cw_lab_key();
 	QString path = cheats_file();
 	QString name = QFileInfo(path).fileName();
 	if (cheats_cli())
@@ -348,12 +356,12 @@ void xCheatWin::fill() {
 		}
 		if (r.mark == POK_UNCHECKED)
 			it->setToolTip(CW_NOTE, "The file has no original bytes for it to compare");
-		it->setData(CW_NOTE, Qt::UserRole, r.miss);
 		if (r.why || (r.mark == POK_NO_PAGE) || (r.mark == POK_NO_RAM) || (r.mark == CHT_NO_LABEL))
 			it->setForeground(CW_NAME, grey);
 		for (int k = 0; k < r.pokes.size(); k++) {
 			QTreeWidgetItem* sub = new QTreeWidgetItem(it);
-			sub->setText(CW_NAME, cw_poke_text(r.pokes[k], r.labs.value(k), r.mark != CHT_NO_LABEL));
+			sub->setText(CW_NAME, cw_poke_text(r.pokes[k], r.labs.value(k),
+				(r.mark != CHT_NO_LABEL) && (r.mark != POK_NO_RAM)));
 			sub->setForeground(CW_NAME, grey);
 		}
 		tree->addTopLevelItem(it);
@@ -371,7 +379,7 @@ void xCheatWin::fill() {
 
 void xCheatWin::upd() {
 	if (!isVisible()) return;
-	if ((serial != cheats_serial()) || (rzx != (bool)conf.zx->rzx.play)) {
+	if ((serial != cheats_serial()) || (rzx != (bool)conf.zx->rzx.play) || (labKey != cw_lab_key())) {
 		if (!conf.zx->rzx.play && rzx) note(QString());
 		fill();
 	}
