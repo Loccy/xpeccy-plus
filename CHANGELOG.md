@@ -56,7 +56,7 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
-- **The Watcher's memory rows change while the machine runs** again, as its registers do.
+- **The Watcher's memory rows change while the machine runs**, as its registers do.
 - **A `.pok` named on the command line before the image is kept**: the image's own cheat
   file took its place.
 - **Unticking a cheat no longer writes old bytes into a game loaded again**: a byte the game
