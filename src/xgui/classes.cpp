@@ -349,7 +349,7 @@ void xHexSpin::setValue(int nval) {
 // now, so the changed bytes go on top of it, background and digits both.
 void xHexSpin::paintEvent(QPaintEvent* ev) {
 	QLineEdit::paintEvent(ev);
-	if (!sgnPre.isEmpty() || !sgnPost.isEmpty()) {
+	if (!isblank && (!sgnPre.isEmpty() || !sgnPost.isEmpty())) {		// dashes are no number
 		// the sign beside the digits, wherever the alignment puts them; the
 		// margins it has are kept free of text by setTextMargins
 		// where QLineEdit puts its text: the style's contents rect, less the
