@@ -67,6 +67,7 @@ class xWatcher : public QDialog {
 		int getCurRow();
 		void fitColumns();
 		void setRegs(const xRegBunch&);
+		void placeRegs(const xRegBunch&);
 
 		QDialog* newWch;
 		xLabeList* labswin;

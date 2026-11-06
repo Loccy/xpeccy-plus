@@ -101,25 +101,24 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	QLabel* lp;
 	xHexSpin* hp;
 	for(i = 0; i < 32; i++) {
-		lp = new QLabel;
+		lp = new QLabel(this);		// the window's from the start: the grid takes them later
 		lp->setContentsMargins(0, 0, 4, 0);	// don't let it touch the value
-		hp = new xHexSpin;
+		hp = new xHexSpin(this);
 		hp->setXFlag(XHS_DEC | XHS_FILL | XHS_AUTOW | XHS_NUMS);
 		hp->setFrame(false);
 		hp->setAlignment(Qt::AlignCenter);
 		// a register of one bit (IFF1, IFF2) is a mark, as in the debugger;
 		// it shows the state, the watcher changes nothing
-		QCheckBox* cb = new QCheckBox;
+		QCheckBox* cb = new QCheckBox(this);
 		cb->setAttribute(Qt::WA_TransparentForMouseEvents);
 		cb->setFocusPolicy(Qt::NoFocus);
 		cb->setVisible(false);
+		lp->setVisible(false);
+		hp->setVisible(false);
 		regLabels.append(lp);
 		regValues.append(hp);
 		regBits.append(cb);
-		ui.regGrid->addWidget(lp, i >> 1, (i & 1) << 1);
-		ui.regGrid->addWidget(hp, i >> 1, ((i & 1) << 1) | 1);
-		ui.regGrid->addWidget(cb, i >> 1, ((i & 1) << 1) | 1);
-	}
+	}				// placeRegs() puts them into the grid
 //	ui.regGrid->setRowStretch(32, 10);
 
 	labswin = new xLabeList;
@@ -142,9 +141,41 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	connect(nui.pbOK, SIGNAL(released()), this, SLOT(confirmNew()));
 }
 
+// The rows of the debugger's two-column layout: a register, and beside it the
+// one the CPU's table pairs it with - PC SP, AF AF', ..., IR IM, IFF1 IFF2
+void xWatcher::placeRegs(const xRegBunch& regs) {
+	QLayoutItem* item;
+	while ((item = ui.regGrid->takeAt(0)) != nullptr)
+		delete item;		// the widgets stay, only their places go
+	int cnt = 0;
+	while ((cnt < regLabels.size()) && (regs.regs[cnt].id != REG_EOT))
+		cnt++;
+	QVector<char> done(cnt, 0);
+	int row = 0;
+	auto put = [this](int i, int row, int col) {
+		ui.regGrid->addWidget(regLabels[i], row, col * 2);
+		ui.regGrid->addWidget(regValues[i], row, col * 2 + 1);
+		ui.regGrid->addWidget(regBits[i], row, col * 2 + 1);
+	};
+	for (int i = 0; i < cnt; i++) {
+		if (done[i]) continue;		// already beside its pair
+		done[i] = 1;
+		put(i, row, 0);
+		for (int j = 0; (j < cnt) && regs.regs[i].pair; j++) {
+			if (!done[j] && (regs.regs[j].id == regs.regs[i].pair)) {
+				done[j] = 1;
+				put(j, row, 1);
+				break;
+			}
+		}
+		row++;
+	}
+}
+
 void xWatcher::show() {
 
 	xRegBunch regs = cpuGetRegs(conf.zx->cpu);
+	placeRegs(regs);
 	int work = 1;
 	for(int i = 0; i < 32; i++) {
 		if (work) {
