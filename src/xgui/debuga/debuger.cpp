@@ -148,14 +148,14 @@ static void markMenuHeader(QWidget* wid, int gap = 0) {
 }
 
 // The debugger's numbers: hex in the form Options picked, or decimal. The
-// button reads as a byte is written now; every window shown is redrawn.
+// button names the base shown now; every window shown is redrawn.
 void DebugWin::toggleNumFmt() {
 	conf.dbg.numfmt = (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : CPU_NUM_DEC;
 	showNumFmt();
 }
 
 void DebugWin::showNumFmt() {
-	ui_asm.tbNumbers->setText(dbg_byte(0xff));
+	ui_asm.tbNumbers->setText((conf.dbg.numfmt == CPU_NUM_DEC) ? "DEC" : "HEX");
 	QString key = shortcut_key(XCUT_DBG_NUMBERS);
 	ui_asm.tbNumbers->setToolTip(QString("Hex or decimal addresses and values%0")
 		.arg(key.isEmpty() ? QString() : QString(" (%0)").arg(key)));
@@ -164,6 +164,7 @@ void DebugWin::showNumFmt() {
 		if (xHexSpin* fld = qobject_cast<xHexSpin*>(wid)) fld->numFmt();
 	}
 	if (!isVisible()) return;
+	rebuildCpuPanel();	// the registers' widths follow the base
 	fillNotCPU();		// not fillCPU: it would take the registers' changed marks away
 	fillDisasm();
 	wid_brk->draw();
@@ -613,7 +614,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 		lab->setContentsMargins(0, 0, 4, 0);	// don't let it touch the value
 
 		xhs = new xHexSpin(wid_cpu);
-		xhs->setXFlag(XHS_BGR | XHS_DEC | XHS_FILL | XHS_AUTOW);
+		xhs->setXFlag(XHS_BGR | XHS_DEC | XHS_FILL | XHS_AUTOW | XHS_NUMS);
 		xhs->setVisible(false);
 		xhs->setFrame(false);
 		xhs->setMinimumHeight(21);
@@ -1557,10 +1558,6 @@ void DebugWin::reFormFlags(int width) {
 
 // put one register into the grid, at the grid column a layout column starts on
 void DebugWin::placeReg(xRegBunch* b, int i, int row, int col) {
-	// A register with a type of its own - the counter, the stack pointer, the
-	// flags, a segment - is one number. The rest are bytes that move on their
-	// own, so a changed one can light just the byte that moved.
-	dbgRegEdit[i]->setSplit(conf.dbg.regsplit && !(b->regs[i].flag & REG_TYPE_M));
 	ui_cpu.formRegs->addWidget(dbgRegLabs[i], row, col);
 	dbgRegLabs[i]->setVisible(true);
 	if (b->regs[i].size == REG_BIT) {
@@ -1647,6 +1644,13 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 			default: mx = 0xffff; break;
 		}
 		dbgRegEdit[cnt]->setMax(mx);
+		// A register with a type of its own - the counter, the stack pointer, the
+		// flags, a segment - is one number. The rest are bytes that move on their
+		// own, so a changed one can light just the byte that moved; in decimal
+		// they are a number a byte then, which makes the field wider: set it
+		// before it is measured
+		dbgRegEdit[cnt]->numFmt();	// hidden ones too: a shown one would move only now
+		dbgRegEdit[cnt]->setSplit(conf.dbg.regsplit && !(b->regs[cnt].flag & REG_TYPE_M));
 		if (dbgRegLabs[cnt]->sizeHint().width() > labw) labw = dbgRegLabs[cnt]->sizeHint().width();
 		if (dbgRegEdit[cnt]->minimumWidth() > fldw) fldw = dbgRegEdit[cnt]->minimumWidth();
 		cnt++;

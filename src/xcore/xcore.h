@@ -188,10 +188,12 @@ QString gethexint(int);
 
 // numbers as the debugger shows them, in conf.dbg.numfmt (CPU_NUM_*)
 QString dbg_num(int val, int hexDigits, int decDigits = 0);	// decDigits 0: not padded
-QString dbg_adr(int);		// a 16-bit address: five characters in every form
+QString dbg_adr(int);		// a 16-bit address: five characters in every form, for a column
+QString dbg_adr_t(int);		// the same in a line of text or a field: decimal not padded
 QString dbg_word(int);
 QString dbg_byte(int);
 QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
+QString dbg_abs_t(int);
 QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
 int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal
 QString dbg_num_unsign(QString);	// the text with its hex sign taken off

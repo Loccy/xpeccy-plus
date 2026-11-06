@@ -33,9 +33,9 @@ QString brkGetString(xBrkPoint brk) {
 	QString res;
 	switch(brk.type) {
 		case BRK_CPUADR:
-			res = QString("CPU:%0").arg(dbg_adr(brk.adr));
+			res = QString("CPU:%0").arg(dbg_adr_t(brk.adr));
 			if (brk.eadr > brk.adr) {
-				res.append(QString("-%0").arg(dbg_adr(brk.eadr)));
+				res.append(QString("-%0").arg(dbg_adr_t(brk.eadr)));
 			}
 			break;
 		case BRK_IOPORT:
@@ -58,7 +58,7 @@ QString brkGetString(xBrkPoint brk) {
 			break;
 		}
 		case BRK_MEMEXT:
-			res = QString("EXT:%0 [%1:%2]").arg(dbg_num(brk.adr, 6)).arg(gethexbyte(brk.adr >> 14)).arg(dbg_adr(brk.adr & 0x3fff));
+			res = QString("EXT:%0 [%1:%2]").arg(dbg_num(brk.adr, 6)).arg(gethexbyte(brk.adr >> 14)).arg(dbg_adr_t(brk.adr & 0x3fff));
 			break;
 		case BRK_IRQ:
 			res = QString("IRQ");
@@ -525,17 +525,17 @@ void xBrkManager::chaAdr() {
 		res = err;
 	} else {
 		if (brk.type == BRK_CPUADR) {
-			res = dbg_adr(brk.adr);
-			if (brk.eadr > brk.adr) res.append("-").append(dbg_adr(brk.eadr));
+			res = dbg_adr_t(brk.adr);
+			if (brk.eadr > brk.adr) res.append("-").append(dbg_adr_t(brk.eadr));
 		} else {
 			int ofs;
 			res = QString("%0 %1").arg(brk_cell_name(brk.type)).arg(cell_view_text(brk_mem_type(brk.type), brk.adr));
 			if (brk.eadr > brk.adr) {
 				cell_page_text(brk_mem_type(brk.type), brk.eadr, &ofs);
-				res.append("-").append(dbg_adr(ofs));
+				res.append("-").append(dbg_adr_t(ofs));
 			}
 			int cpu = comp_find_xadr(conf.zx, brk_mem_type(brk.type), brk.adr, MEM_VIEW_READ);
-			res.append((cpu < 0) ? QString(", not mapped now") : QString(", at %0 now").arg(dbg_adr(cpu)));
+			res.append((cpu < 0) ? QString(", not mapped now") : QString(", at %0 now").arg(dbg_adr_t(cpu)));
 		}
 		QString lab = brk_label(brk.type, brk.adr);
 		if (!lab.isEmpty()) res.append(QString(", %0").arg(lab));
@@ -648,10 +648,10 @@ void xBrkManager::condHelp() {
 static QString brk_adr_text(int type, int abs) {
 	QString lab = brk_label(type, abs);
 	if (!lab.isEmpty()) return lab;
-	if (!brk_is_cell(type)) return dbg_adr(abs);
+	if (!brk_is_cell(type)) return dbg_adr_t(abs);
 	// an offset in the page field's page, or page:offset for any other area
 	xCell c = comp_cell(conf.zx, brk_mem_type(type), abs);
-	return (c.area == brk_base_area(type)) ? dbg_adr(c.ofs) : cell_view_text(brk_mem_type(type), abs);
+	return (c.area == brk_base_area(type)) ? dbg_adr_t(c.ofs) : cell_view_text(brk_mem_type(type), abs);
 }
 
 void xBrkManager::edit(xBrkPoint* sbrk) {

@@ -26,7 +26,8 @@
 int dump_cell_width(const QFontMetrics&);
 
 enum {
-	XCP_1251 = 1,
+	XCP_ASCII = 0,	// 32..126, a dot for the rest
+	XCP_1251,
 	XCP_866,
 	XCP_KOI8R
 };

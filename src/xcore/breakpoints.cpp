@@ -575,7 +575,7 @@ QString cell_text(int memType, int abs, bool withType) {
 }
 
 QString cell_view_text(int memType, int abs, bool withType) {
-	return cell_text_by(memType, abs, withType, dbg_adr);
+	return cell_text_by(memType, abs, withType, dbg_adr_t);
 }
 
 bool cell_from_text(int memType, QString page, int ofs, int* abs, bool wrap) {

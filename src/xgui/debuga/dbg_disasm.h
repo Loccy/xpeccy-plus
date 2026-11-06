@@ -113,6 +113,7 @@ class xDisasmTable : public QTableView {
 		void mousePressEvent(QMouseEvent*);
 		void mouseReleaseEvent(QMouseEvent*);
 		void mouseMoveEvent(QMouseEvent*);
+		bool viewportEvent(QEvent*) override;
 		void wheelEvent(QWheelEvent*);
 		void resizeEvent(QResizeEvent*);
 		void focusOutEvent(QFocusEvent*);

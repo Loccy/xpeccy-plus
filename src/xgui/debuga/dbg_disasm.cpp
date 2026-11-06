@@ -138,12 +138,13 @@ QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
 	switch(role) {
 		case Qt::ToolTipRole:
 			// the address as a number, on its own row and on a label's
-			if ((col == 0) && !dasm[row].iscom)
+			if ((col == 0) && !dasm[row].iscom && !dasm[row].issep)
 				res = dbg_num_tip(dasm[row].adr, true);
 			break;
 		case Qt::EditRole:
 			switch(col) {
-				case 0: res = dasm[row].aname; break;
+				// a decimal address is padded with spaces for the column, not for typing
+				case 0: res = dasm[row].iscom ? dasm[row].aname : QString(dasm[row].aname).remove(' '); break;
 				case 1: res = dasm[row].bytes; break;
 				case 2: res = dasm[row].command; break;
 			}
@@ -1170,6 +1171,7 @@ bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyl
 		QToolTip::hideText();
 	} else {
 		QToolTip::showText(ev->globalPos(), tip, view->viewport(), at);
+		dbg_place_tip(view->viewport(), at, true);
 	}
 	return true;
 }
@@ -1591,6 +1593,26 @@ void xDisasmTable::focusInEvent(QFocusEvent* ev) {
 	QModelIndex idx = currentIndex();
 	if (idx.isValid())
 		selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect);
+}
+
+// the address column's tip over its address, as the command column has it over
+// the number pointed at
+bool xDisasmTable::viewportEvent(QEvent* ev) {
+	if (ev->type() != QEvent::ToolTip)
+		return QTableView::viewportEvent(ev);
+	QHelpEvent* hev = static_cast<QHelpEvent*>(ev);
+	QModelIndex idx = indexAt(hev->pos());
+	if (!idx.isValid() || (idx.column() != 0))
+		return QTableView::viewportEvent(ev);
+	QString tip = idx.data(Qt::ToolTipRole).toString();
+	if (tip.isEmpty()) {
+		QToolTip::hideText();
+	} else {
+		QRect at = visualRect(idx);
+		QToolTip::showText(hev->globalPos(), tip, viewport(), at);
+		dbg_place_tip(viewport(), at, true);
+	}
+	return true;
 }
 
 void xDisasmTable::mouseMoveEvent(QMouseEvent* ev) {

@@ -43,13 +43,14 @@ QColor bg_tint(const QColor&);
 
 #define	XHS_BGR	1		// change background if value changed
 #define	XHS_DEC	(1<<1)		// hex/dec switch enabled
-#define XHS_FILL (1<<2)		// leading zeros
+#define XHS_FILL (1<<2)		// as wide as the biggest value: leading zeros in hex, spaces in decimal
 #define XHS_UPD (1<<3)		// force update text, reset after using
 #define XHS_AUTOW (1<<4)	// keep width as narrow as the value needs
 #define XHS_SPLIT (1<<5)	// light the bytes that changed, not the whole value
 #define XHS_LIT (1<<6)		// keep the field lit whatever the value does
 #define XHS_BLANK (1<<7)	// may hold nothing at all, shown as dashes
 #define XHS_ADDR (1<<8)		// an address: base and sign as the debugger writes numbers
+#define XHS_NUMS (1<<9)		// the base the debugger writes numbers in, no sign (a register)
 
 class xHexSpin : public QLineEdit {
 	Q_OBJECT
@@ -83,13 +84,18 @@ class xHexSpin : public QLineEdit {
 		int value;
 		int min;
 		int max;
-		int len;
+		int len;		// digits of the biggest value, in the base shown
+		int hexLen;		// the same in hex: two a byte
+		int dlen;		// characters the text takes
 		QString vtxt;
 		QString sgnPre;		// XHS_ADDR in hex: the sign drawn beside the digits
 		QString sgnPost;
 		QRegExpValidator vldtr;
 		void updateSign();
 		bool updateMask();
+		bool decPairs();
+		QString numText(int);
+		void decTextChange(const QString&);
 		void redraw();
 		void unblank();
 		void startEdit();
@@ -216,9 +222,12 @@ bool lab_char(QChar);
 // the field leaves it a plain one (a port, say). See classes.cpp
 #define DBG_NUM_OFF "xDbgNumOff"
 void dbg_num_field(QLineEdit*);
-// what a number is: decimal -> hex, binary; for an address (or a word, which
-// may be one) the label there and where it falls now. name: the label it was typed as
+// what a number is: hex, decimal and binary, a line each; for an address (or a
+// word, which may be one) the label there above them. name: the label it was typed as
 QString dbg_num_tip(int val, bool adr, const QString& name = QString());
+// the tip just shown moved over (or under) a rectangle of a widget: over a
+// number pointed at, under a field being typed into; the other side at a screen edge
+void dbg_place_tip(QWidget* wid, const QRect& at, bool above);
 
 // the update check (updatewin.cpp): the settings as they apply to this build, the
 // check a start makes when it is due, and Help > Check for Updates

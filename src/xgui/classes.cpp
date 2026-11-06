@@ -25,6 +25,7 @@
 #include <QAbstractItemView>
 #include <QActionGroup>
 #include <QMenu>
+#include <climits>
 
 QString gethexword(int);
 QString gethexbyte(uchar);
@@ -72,51 +73,80 @@ xHexSpin::xHexSpin(QWidget* p):QLineEdit(p) {
 	chgMask = 0;
 	isblank = false;
 	len = 6;
+	hexLen = 4;
+	dlen = 4;
 	vtxt = "0000";
 	// setValidator(&vldtr);
 	setBase(16);
 	setText(vtxt);
 	connect(this, SIGNAL(textChanged(QString)), SLOT(onTextChange(QString)));
+	// a decimal field emptied for typing and left so shows its value again
+	connect(this, &QLineEdit::editingFinished, this, [this]() {
+		if ((base == 10) && !isblank) {
+			hsflag |= XHS_UPD;
+			onChange(value);
+		}
+	});
 }
 
 int xHexSpin::getValue() {
 	return value;
 }
 
-// true when the number of digits moved: the text then needs redraw()
-bool xHexSpin::updateMask() {
-	int was = len;
-	unsigned mx;
-	QString rxp;
-	switch(base) {
-		case 10:
-			rxp = "[0-9]";
-			//setStyleSheet("border:1px solid black;");
-			break;
-		default:
-			base = 16;
-			rxp = "[A-Fa-f0-9]";
-			//setStyleSheet("border:1px solid green;");
-			break;
-	}
-	// count digits by dividing, so a max near the top of int does not overflow
-	len = 1;
-	mx = (unsigned)max / base;
+// digits of a value in a base: dividing, so a max near the top of int does not overflow
+static int num_digits(int val, int base) {
+	int len = 1;
+	unsigned mx = (unsigned)val / base;
 	while (mx) {
 		mx /= base;
 		len++;
 	}
-	rxp.append(QString("{%0}").arg(len));	// 'len' times this char
-	setRegExp(vldtr, rxp);
-	// the mask is what puts the cursor in overwrite mode; the part after the
-	// semicolon is what an empty position shows, for a field that may be empty.
-	// Qt cuts or pads the text to the new mask and reports it as textChanged:
-	// that text is not a value, so nobody hears it
+	return len;
+}
+
+// true when the width of the text moved: the text then needs redraw()
+bool xHexSpin::updateMask() {
+	int was = dlen;
+	if (base != 10) base = 16;
+	len = num_digits(max, base);
+	hexLen = num_digits(max, 16);
+	setRegExp(vldtr, QString((base == 10) ? "[0-9]{%0}" : "[A-Fa-f0-9]{%0}").arg(len));
+	// Hex has a mask, which puts the cursor in overwrite mode; the part after
+	// the semicolon is what an empty position shows, for a field that may be
+	// empty. Decimal has none: its numbers are not padded with zeros, so it is
+	// typed as text. Qt cuts or pads the text to a new mask and reports it as
+	// textChanged: that text is not a value, so nobody hears it
 	bool blk = blockSignals(true);
-	setInputMask((hsflag & XHS_BLANK) ? (QString(len, 'h') + ";-") : QString(len, 'h'));
+	if (base == 10) {
+		setInputMask(QString());
+		setPlaceholderText((hsflag & XHS_BLANK) ? QString(len, '-') : QString());
+	} else {
+		setPlaceholderText(QString());
+		setInputMask((hsflag & XHS_BLANK) ? (QString(len, 'h') + ";-") : QString(len, 'h'));
+	}
 	blockSignals(blk);
+	dlen = decPairs() ? (hexLen / 2) * 4 - 1 : len;
 	refitWidth();
-	return len != was;
+	return dlen != was;
+}
+
+// a decimal field lit byte by byte shows each byte as a number of its own:
+// "  1 255" for 511
+bool xHexSpin::decPairs() {
+	return (base == 10) && (hsflag & XHS_SPLIT) && (hexLen >= 4) && !(hexLen & 1);
+}
+
+QString xHexSpin::numText(int val) {
+	if (base != 10)
+		return QString::number(val, base).toUpper().rightJustified(len, '0');
+	if (decPairs()) {
+		QStringList lst;
+		for (int i = hexLen / 2 - 1; i >= 0; i--)
+			lst.append(QString::number(((unsigned)val >> (i * 8)) & 0xff).rightJustified(3, ' '));
+		return lst.join(' ');
+	}
+	QString res = QString::number(val);
+	return (hsflag & XHS_FILL) ? res.rightJustified(len, ' ') : res;
 }
 
 // The text again from the value, after the mask or the base moved under it.
@@ -134,7 +164,7 @@ void xHexSpin::redraw() {
 void xHexSpin::refitWidth() {
 	if (!(hsflag & XHS_AUTOW)) return;
 	QFontMetrics fm(font());
-	setFixedWidth(fm.horizontalAdvance(QString(len, '0') + sgnPre + sgnPost) + 10);
+	setFixedWidth(fm.horizontalAdvance(QString(dlen, '0') + sgnPre + sgnPost) + 10);
 }
 
 void xHexSpin::setBase(int b) {
@@ -150,7 +180,7 @@ void xHexSpin::setBase(int b) {
 // takes the sign off (decimal then), as in the other address fields; # or $
 // puts it back, and so does X, as in any field that switches
 void xHexSpin::numFmt() {
-	if (!(hsflag & XHS_ADDR)) return;
+	if (!(hsflag & (XHS_ADDR | XHS_NUMS))) return;
 	setBase((conf.dbg.numfmt == CPU_NUM_DEC) ? 10 : 16);
 }
 
@@ -231,6 +261,10 @@ void xHexSpin::setSplit(bool on) {
 	int flg = on ? (hsflag | XHS_SPLIT) : (hsflag & ~XHS_SPLIT);
 	if (flg == hsflag) return;
 	hsflag = flg;
+	if (base == 10) {
+		updateMask();		// one number or one a byte: another text, another width
+		redraw();
+	}
 	updatePal();		// the whole-field colour follows the setting too
 }
 
@@ -244,14 +278,16 @@ void xHexSpin::setLit(bool on) {
 	updatePal();
 }
 
-// How many bytes the field shows separately, 0 = it does not. Only hex lines
-// digits up with bytes, and only a centered field has its text where paintEvent
-// works it out to be - the two margins cancel out there.
+// How many bytes the field shows separately, 0 = it does not. Hex lines digits
+// up with bytes, decimal writes a number a byte (decPairs); only a centered
+// field has its text where paintEvent works it out to be - the two margins
+// cancel out there.
 int xHexSpin::splitBytes() {
 	if (!(hsflag & XHS_SPLIT)) return 0;
-	if ((base != 16) || (len < 4) || (len & 1)) return 0;
+	if ((hexLen < 4) || (hexLen & 1)) return 0;
+	if ((base != 16) && !decPairs()) return 0;
 	if (!(alignment() & Qt::AlignHCenter)) return 0;
-	return len / 2;
+	return hexLen / 2;
 }
 
 // Something changed and it is the whole field that says so - either every byte
@@ -376,40 +412,79 @@ void xHexSpin::paintEvent(QPaintEvent* ev) {
 	QColor fg = conf.pal.value(DBG_PAL_CHG_TXT);
 	if (!bg.isValid() && !fg.isValid()) return;
 	QString txt = text();
-	if (txt.size() != bytes * 2) return;		// mid-edit: nothing lines up
+	// a byte is two hex digits, or three decimal places and a space between
+	int cw = (base == 16) ? 2 : 3;
+	int gap = (base == 16) ? 0 : 1;
+	if (txt.size() != bytes * (cw + gap) - gap) return;		// mid-edit: nothing lines up
 	// inside the frame, so a lit byte does not paint over the field's border
 	QRect cr = contentsRect();
 	QFontMetrics fm = fontMetrics();
 	int x = cr.x() + (cr.width() - fm.horizontalAdvance(txt)) / 2;
+	int gw = gap ? fm.horizontalAdvance(QChar(' ')) : 0;
 	QPainter pnt(this);
 	if (fg.isValid()) pnt.setPen(fg);
 	// left to right, so each byte's width is measured once and carries the
-	// next one's position with it. Byte 0 is the last two digits
+	// next one's position with it. Byte 0 is the last one
 	for (int i = bytes - 1; i >= 0; i--) {
-		QString dig = txt.mid((bytes - 1 - i) * 2, 2);
+		QString dig = txt.mid((bytes - 1 - i) * (cw + gap), cw);
 		int w = fm.horizontalAdvance(dig);
 		if (chgMask & (1 << i)) {
 			QRect r(x, cr.y(), w, cr.height());
 			if (bg.isValid()) pnt.fillRect(r, bg);
 			pnt.drawText(r, Qt::AlignCenter, dig);
 		}
-		x += w;
+		x += w + gw;
 	}
 }
 
 void xHexSpin::onChange(int val) {
 	int pos = cursorPosition();
-	QString res = QString::number(val, base).toUpper();
-	res = res.rightJustified(len, '0');
-	if ((text() != res) || (hsflag & XHS_UPD)) {
+	QString old = text();
+	QString res = numText(val);
+	if ((old != res) || (hsflag & XHS_UPD)) {
 		hsflag &= ~XHS_UPD;
 		setText(res);
-		setCursorPosition(pos);
+		// decimal stands to the right: the caret keeps its place from the end
+		setCursorPosition((base == 10) ? qMax(0, res.size() - (old.size() - pos)) : pos);
 	}
+}
+
+// Decimal as typed: one number, or one a byte with decPairs. A field emptied,
+// or one byte short, waits for the rest; anything but digits is refused
+void xHexSpin::decTextChange(const QString& txt) {
+	QStringList parts = txt.split(' ', X_SkipEmptyParts);
+	int bytes = decPairs() ? (hexLen / 2) : 1;
+	bool good = (parts.size() <= bytes);
+	foreach(QString prt, parts) {
+		foreach(QChar chr, prt)
+			if (!chr.isDigit() || (chr.unicode() > '9')) good = false;
+	}
+	if (!good) {
+		int pos = cursorPosition();
+		setText(vtxt);
+		setCursorPosition(pos - 1);
+		return;
+	}
+	if (parts.size() < bytes) return;
+	qint64 nval = 0;
+	foreach(QString prt, parts) {
+		qint64 v = (prt.size() > 12) ? INT_MAX : prt.toLongLong();
+		nval = (bytes > 1) ? ((nval << 8) | qMin(v, (qint64)0xff)) : v;
+	}
+	vtxt = txt;
+	int xval = minMaxCorrect((int)qMin(nval, (qint64)INT_MAX), min, max);
+	if (value != xval)
+		setValue(xval);
+	else
+		onChange(value);
 }
 
 void xHexSpin::onTextChange(QString txt) {
 	if (isblank) return;		// the dashes are not a number to read
+	if (base == 10) {
+		decTextChange(txt);
+		return;
+	}
 	if (txt.size() < len) {
 		txt = txt.leftJustified(len, '0');
 	} else {
@@ -1160,24 +1235,38 @@ QString dbg_num_tip(int val, bool adr, const QString& name) {
 	val &= 0xffff;
 	bool word = adr || (val > 0xff);
 	QString bin = QString::number(val, 2).rightJustified(word ? 16 : 8, '0');
-	for (int i = bin.size() - 4; i > 0; i -= 4)
-		bin.insert(i, ' ');
-	QString res = QString("%0 -> %1, %2").arg(val).arg(dbg_hex(val, word ? 4 : 2), bin);
-	if (!word || !conf.zx) return res;
-	xAdr xa = comp_get_xadr(conf.zx, val, MEM_VIEW_READ);
-	QString lab = name.isEmpty() ? find_label(xa) : name;
-	QString where;
-	switch (xa.type) {
-		case MEM_RAM:
-		case MEM_ROM:
-		case MEM_SLOT:
-		case MEM_DIV:
-		case MEM_EXT:
-			where = cell_view_text(xa.type, xa.abs, true);
-			break;
+	if (word) bin.insert(8, ' ');
+	QString lab;
+	if (word && conf.zx)
+		lab = name.isEmpty() ? find_label(comp_get_xadr(conf.zx, val, MEM_VIEW_READ)) : name;
+	// a table, so the values line up whatever the font makes of the names
+	QString row("<tr><td>%0&nbsp;</td><td><b>%1</b></td></tr>");
+	QString res("<table cellspacing=0 cellpadding=0>");
+	if (!lab.isEmpty())
+		res.append(QString("<tr><td colspan=2><b>%0</b></td></tr>").arg(lab.toHtmlEscaped()));
+	res.append(row.arg("HEX:", dbg_hex(val, word ? 4 : 2)));
+	res.append(row.arg("DEC:").arg(val));
+	res.append(row.arg("BIN:", bin));
+	res.append("</table>");
+	return res;
+}
+
+void dbg_place_tip(QWidget* wid, const QRect& at, bool above) {
+	QRect r(wid->mapToGlobal(at.topLeft()), at.size());
+	QScreen* sc = QGuiApplication::screenAt(r.center());
+	QRect scr = (sc ? sc : QGuiApplication::primaryScreen())->availableGeometry();
+	foreach(QWidget* tip, QApplication::topLevelWidgets()) {
+		if (!tip->isVisible() || !tip->inherits("QTipLabel")) continue;
+		int over = r.top() - tip->height() - 2;
+		int under = r.bottom() + 3;
+		bool up = above ? (over >= scr.top()) : (under + tip->height() > scr.bottom());
+		QPoint pos(r.left(), up ? over : under);
+		if (pos.x() + tip->width() > scr.right())
+			pos.setX(scr.right() - tip->width());
+		if (pos.x() < scr.left())
+			pos.setX(scr.left());
+		tip->move(pos);
 	}
-	QString more = QString("%0  %1").arg(where, lab).trimmed();
-	return more.isEmpty() ? res : QString("%0\n%1").arg(res, more);
 }
 
 // A typed address's tip: a label, a number by the one rule, or a label behind
@@ -1222,20 +1311,9 @@ void xNumSign::showTip() {
 		hideTip();
 		return;
 	}
-	QPoint below = edt->mapToGlobal(QPoint(0, edt->height() + 2));
-	QToolTip::showText(below, txt, edt, QRect(), 3600000);
+	QToolTip::showText(edt->mapToGlobal(QPoint(0, edt->height() + 2)), txt, edt, QRect(), 3600000);
 	tip = true;
-	QScreen* sc = QGuiApplication::screenAt(below);
-	QRect scr = (sc ? sc : QGuiApplication::primaryScreen())->availableGeometry();
-	foreach(QWidget* wid, QApplication::topLevelWidgets()) {
-		if (!wid->isVisible() || !wid->inherits("QTipLabel")) continue;
-		QPoint pos = below;
-		if (pos.y() + wid->height() > scr.bottom())
-			pos.setY(edt->mapToGlobal(QPoint(0, 0)).y() - wid->height() - 2);
-		if (pos.x() + wid->width() > scr.right())
-			pos.setX(scr.right() - wid->width());
-		wid->move(pos);
-	}
+	dbg_place_tip(edt, edt->rect(), false);
 }
 
 void xNumSign::hideTip() {

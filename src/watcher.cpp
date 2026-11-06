@@ -2,6 +2,9 @@
 #include "xcore/xcore.h"
 
 #include <QInputDialog>
+#include <QHeaderView>
+#include <QMenu>
+#include <QApplication>
 #include <QDebug>
 
 // expression evaluation moved to xcore/xexpr.cpp
@@ -11,30 +14,76 @@
 extern QString getStyleString(QString, QString, int = 0, int = 100);
 
 // the two headers follow the debugger's own, so a style with a .pal of its own
-// reaches them too
+// reaches them too. The font is the debugger's: this window is not one of its
+// children, so it takes it here, and the columns are measured in it
 
 void xWatcher::updateStyle() {
 	QString str = getStyleString("dbg.header.bg", "dbg.header.txt");
 	ui.label_15->setStyleSheet(str);
 	ui.label_14->setStyleSheet(str);
+	QFont uiFont = QApplication::font();
+	foreach (QWidget* wid, findChildren<QWidget*>())
+		wid->setFont(qobject_cast<QMenu*>(wid) ? uiFont : conf.dbg.font);
+	setFont(conf.dbg.font);
+	foreach (xHexSpin* xhs, regValues)
+		xhs->updatePal();
+	fitColumns();
+}
+
+// a byte a column, as wide as two digits and a little air; the address of a
+// watch spans the last two
+void xWatcher::fitColumns() {
+	QFontMetrics fm(conf.dbg.font);
+	int w = fm.horizontalAdvance("00") + 8;
+	QHeaderView* hdr = ui.wchMemTab->horizontalHeader();
+	hdr->setMinimumSectionSize(w);
+	hdr->setDefaultSectionSize(w);
+	for (int i = 0; i < 13; i++)		// xWatchModel's columns
+		ui.wchMemTab->setColumnWidth(i, w);
+	int h = fm.height() + 4;
+	ui.wchMemTab->verticalHeader()->setMinimumSectionSize(h);
+	ui.wchMemTab->verticalHeader()->setDefaultSectionSize(h);
+}
+
+// the registers as the debugger shows them: its base, and a pair lit (or, in
+// decimal, written) byte by byte with Split pairs
+void xWatcher::setRegs(const xRegBunch& regs) {
+	for (int i = 0; (i < regValues.size()) && (regs.regs[i].id != REG_EOT); i++) {
+		int mx;
+		switch (regs.regs[i].size) {
+			case REG_2: mx = 2; break;
+			case REG_BIT: mx = 1; break;
+			case REG_BYTE: mx = 0xff; break;
+			case REG_24: mx = 0xffffff; break;
+			case REG_32: mx = 0x7fffffff; break;
+			default: mx = 0xffff; break;
+		}
+		regValues[i]->setMax(mx);
+		regValues[i]->numFmt();
+		regValues[i]->setSplit(conf.dbg.regsplit && !(regs.regs[i].flag & REG_TYPE_M));
+		regValues[i]->setValue(regs.regs[i].value);
+	}
 }
 
 xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	int i;
 	ui.setupUi(this);
-	updateStyle();
 	model = new xWatchModel;
 	ui.wchMemTab->setModel(model);
 	ui.wchMemTab->addAction(ui.actAddWatcher);
 	ui.wchMemTab->addAction(ui.actDelWatcher);
 
-// like in deBUGa: pairs regName/regValue
+// like in the debugger: pairs regName/regValue, in its numbers. No changed
+// marks: the values move every frame here
 	QLabel* lp;
 	xHexSpin* hp;
 	for(i = 0; i < 32; i++) {
 		lp = new QLabel;
+		lp->setContentsMargins(0, 0, 4, 0);	// don't let it touch the value
 		hp = new xHexSpin;
-		hp->setMaximumWidth(50);
+		hp->setXFlag(XHS_DEC | XHS_FILL | XHS_AUTOW | XHS_NUMS);
+		hp->setFrame(false);
+		hp->setAlignment(Qt::AlignCenter);
 		regLabels.append(lp);
 		regValues.append(hp);
 		ui.regGrid->addWidget(lp, i >> 1, (i & 1) << 1);
@@ -53,7 +102,7 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	label_complete(nui.leExpression);
 	connect(labswin, SIGNAL(labSelected(QString)), this, SLOT(insertLabel(QString)));
 
-	for(i = 0; i < 14; i++) ui.wchMemTab->setColumnWidth(i, 30);
+	updateStyle();
 
 	connect(ui.actAddWatcher, SIGNAL(triggered(bool)), this, SLOT(newWatcher()));
 	connect(ui.actDelWatcher, SIGNAL(triggered(bool)), this, SLOT(delWatcher()));
@@ -76,14 +125,14 @@ void xWatcher::show() {
 				regLabels[i]->setVisible(true);
 				regValues[i]->setVisible(true);
 				regLabels[i]->setText(regs.regs[i].name);
-				regValues[i]->setValue(regs.regs[i].value);
 			}
 		} else {
 			regLabels[i]->setVisible(false);
 			regValues[i]->setVisible(false);
 		}
 	}
-
+	setRegs(regs);
+	updateStyle();			// the font may have been read after this window was made
 	QDialog::show();
 }
 
@@ -108,13 +157,7 @@ void xWatcher::fillFields(Computer* comp) {
 	if (comp == NULL) return;
 	model->comp = comp;
 
-	xRegBunch regs = cpuGetRegs(comp->cpu);
-	int i = 0;
-	while ((i < 32) && (regs.regs[i].id != REG_EOT)) {
-		// regLabels[i]->setText(regs.regs[i].name);
-		regValues[i]->setValue(regs.regs[i].value);
-		i++;
-	}
+	setRegs(cpuGetRegs(comp->cpu));
 	ui.wchBank0->setText(getBankName(comp->mem->map[0x00]));
 	ui.wchBank1->setText(getBankName(comp->mem->map[0x40]));
 	ui.wchBank2->setText(getBankName(comp->mem->map[0x80]));
@@ -149,6 +192,7 @@ void xWatcher::confirmNew() {
 			ui.wchMemTab->setSpan(i, 0, 1, 11);
 			ui.wchMemTab->setSpan(i, 11, 1, 2);
 		}
+		fitColumns();
 	} else {
 		model->setItem(curwch, type, str);
 	}

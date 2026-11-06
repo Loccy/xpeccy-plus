@@ -25,7 +25,7 @@ QString getDumpString(QByteArray bts, int cp) {
 	unsigned char bte;
 	for (int i = 0; i < bts.size(); i++) {
 		bte = (unsigned char)bts.at(i);
-		if (bte > 31) {
+		if ((bte > 31) && ((cp != XCP_ASCII) || (bte < 127))) {
 			res.append(QChar(bte));
 		} else {
 			res.append(".");
@@ -100,7 +100,7 @@ void xDumpModel::mwr(int adr, unsigned char bt) {
 }
 
 xDumpModel::xDumpModel(QObject* par):xTableModel(par) {
-	codePage = XCP_1251;
+	codePage = XCP_ASCII;
 	mode = XVIEW_CPU;
 	page = 0;
 	dmpadr = 0;
@@ -207,7 +207,7 @@ QVariant xDumpModel::data(const QModelIndex& idx, int role) const {
 			if (col == 0) {
 				if (mode != XVIEW_CPU)
 					adr = dump_page_ofs(conf.zx, dump_view_area(mode), adr);
-				res = dbg_adr(adr);
+				res = dbg_adr_t(adr);
 			} else if (col == 17) {
 				// no edit
 			} else {
@@ -606,6 +606,8 @@ xDumpWidget::xDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) {
 	ui.cbDumpBytes->addItem("12/row", 12);
 	ui.cbDumpBytes->addItem("16/row", 16);
 
+	// plain ASCII first: the Spectrum's own characters, nothing above them
+	ui.cbCodePage->addItem("ASCII", XCP_ASCII);
 	ui.cbCodePage->addItem("WIN1251", XCP_1251);
 	ui.cbCodePage->addItem("CP866", XCP_866);
 	ui.cbCodePage->addItem("KOI8R", XCP_KOI8R);
@@ -616,6 +618,7 @@ xDumpWidget::xDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) {
 	ui.cbDumpView->addItem("DIV", XVIEW_DIV);
 	ui.cbDumpView->setItemData(3, "divMMC's RAM by 8K bank", Qt::ToolTipRole);
 
+	ui.leDumpPageBase->setXFlag(XHS_DEC | XHS_ADDR);	// an address: in the debugger's numbers
 	ui.leDumpPageBase->setMin(0);
 	ui.leDumpPageBase->setMax(0xffff);
 
@@ -720,7 +723,7 @@ void xDumpWidget::draw() {	ui.dumpTable->update();
 }
 
 void xDumpWidget::adr_changed(int adr) {
-	titleWidget->setText(QString("DUMP | %0").arg(dbg_abs(adr & 0xffffff)));
+	titleWidget->setText(QString("DUMP | %0").arg(dbg_abs_t(adr & 0xffffff)));
 //	setWindowTitle(QString::number(adr, 16).right(6).toUpper().rightJustified(6,'0'));
 }
 

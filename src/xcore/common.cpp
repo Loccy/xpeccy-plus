@@ -109,12 +109,13 @@ QString gethexbyte(int num) {
 }
 
 // The debugger's numbers. An address keeps five characters in every form
-// (#8000, $8000, 8000h, 32768), so a column holds either; a value is not
-// padded in decimal, as an assembler writes it.
+// (#8000, $8000, 8000h, 32768), so a column holds either: a decimal one is
+// padded with spaces, never zeros. A value is not padded in decimal, as an
+// assembler writes it.
 
 static QString num_text(int val, int hexDigits, int decDigits, int fmt) {
 	if (fmt == CPU_NUM_DEC)
-		return QString::number(val).rightJustified(decDigits, '0');
+		return QString::number(val).rightJustified(decDigits, ' ');
 	QString res = formbufword(val).rightJustified(hexDigits, '0');
 	switch (fmt) {
 		case CPU_NUM_DOLLAR: return res.prepend('$');
@@ -135,6 +136,10 @@ QString dbg_adr(int adr) {
 	return dbg_num(adr & 0xffff, 4, 5);
 }
 
+QString dbg_adr_t(int adr) {
+	return dbg_num(adr & 0xffff, 4);
+}
+
 QString dbg_word(int val) {
 	return dbg_num(val & 0xffff, 4);
 }
@@ -145,6 +150,10 @@ QString dbg_byte(int val) {
 
 QString dbg_abs(int adr) {
 	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr(adr);
+}
+
+QString dbg_abs_t(int adr) {
+	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr_t(adr);
 }
 
 // One rule for a number typed into the debugger: a hex sign - #, $ or 0x in

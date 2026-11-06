@@ -60,6 +60,8 @@ class xWatcher : public QDialog {
 		QList<QLabel*> regLabels;
 		QList<xHexSpin*> regValues;
 		int getCurRow();
+		void fitColumns();
+		void setRegs(const xRegBunch&);
 
 		QDialog* newWch;
 		xLabeList* labswin;
