@@ -411,12 +411,10 @@ static aymChip* snd_ts_chip(TSound* ts, int i) {
 	return (i == 0) ? ts->chipA : (i == 1) ? ts->chipB : (i == 2) ? ts->chipC : ts->chipD;
 }
 
-// Can the sound thread mix this machine itself. An SAA's level goes over when it
-// moves (sndMixIn.saa), once in tens of sub-samples. Not one with a GS: its DACs
-// move at nearly every sub-sample, and the copy would be told of each
+// Can the sound thread mix this machine itself. The SAA's and the GS's levels go
+// over when they move (sndMixIn); the GS's own cpu runs here, at the sample
 static int snd_mirror_fits(Computer* comp) {
 	if (!comp->hw->sndtake || !comp->hw->sndmix) return 0;
-	if (comp->gs->enable) return 0;
 	return 1;
 }
 
