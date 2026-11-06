@@ -410,7 +410,10 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 		cli_warn(QString("--poke: no pokes in %0").arg(arg));
 		return;
 	}
-	if (!pok_add_trainer(pf, nam.constData(), nam.size())) return;
+	if (!pok_add_trainer(pf, nam.constData(), nam.size())) {
+		cli_warn("--poke: out of memory");
+		return;
+	}
 	xTrainer* tr = &pf->list[pf->cnt - 1];
 	foreach(QString one, pokes) {
 		QStringList pg = one.split('/');

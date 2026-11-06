@@ -35,6 +35,7 @@ page 7: check=3 apply=3 40000=0
 rom: check=4 apply=4
 twice: 50006=2 where=0 undo 50006=77
 rolled back: where=1 again where=0 changed where=2
+changed since: undo 50010=99 50011=31
 by hand: rom=4 200 201 202 203 undo 10 11 12 13
 == apply128
 page 7 in: check=1 apply=0 page0=201 page7=0 cpu 58813=0 cpu #4000=7
