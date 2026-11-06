@@ -135,7 +135,7 @@ the list by it.
 | Text | Kind |
 |---|---|
 | `CPU:8000`, `CPU:4000-5AFF` | **CPU address**, an address or a range |
-| `IO:00FE mask 0001` | **I/O port**, the port and its mask |
+| `IO:#00FE mask #0001` | **I/O port**, the port and its mask; in decimal `IO:254 mask #0001` |
 | `RAM:014000 [05:0000]` | **RAM cell**: the place in all of RAM, then the page and the offset in it |
 | `ROM:...`, `SLT:...`, `DIV:...` | **ROM cell**, **Slot cell**, **divMMC cell**, written the same way; a divMMC page is 8K, its ROM `DIVROM` |
 | `IRQ` | **Interrupt** |
@@ -197,7 +197,8 @@ The **Address** fields take a number - hex with a sign, `#8000`, `$8000`, `0x800
 `8000h`, decimal without one, `32768` - or a label name (see
 [Typing a number](debugger-code.md#typing-a-number)). A label takes priority over a number
 written the same way: if there is a label `BEEFh`, `BEEFh` is that label and `#BEEF` the
-number. A port and its mask are hex, with no sign.
+number. **Port** takes a number the same way, but no label; its **mask** is bits, always
+hex, with or without a sign.
 
 ![A RAM cell in the editor](images/dbg-brk-editor-cell.png)
 

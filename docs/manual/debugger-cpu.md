@@ -15,8 +15,11 @@ marked: after an instruction that changes only A, only the A half of AF lights u
 
 The values are hex or decimal, as the Debugger's other numbers (see
 [Hex or decimal](debugger-code.md#hex-or-decimal)). In decimal a pair is two numbers with
-**Split pairs** on, a byte each, as `  1 255` for HL = 511, and each lights up on its own;
-with **Split pairs** off it is one number, `  511`.
+**Split pairs** on, a byte each in a field of its own, as `  1 | 255` for HL = 511, and each
+lights up on its own; with **Split pairs** off it is one number, `  511`. PC and SP are as
+wide as a pair, and IM as one byte of it.
+
+Rest the mouse on **IM**, **IFF1** or **IFF2** for what it is.
 
 ## Changing registers
 

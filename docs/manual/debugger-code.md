@@ -97,8 +97,9 @@ disk dump of the **FDD** panel, **STACK** (its words as well), the **Breakpoints
 fields of **Save dump**, **Load dump**, **Fill...**, **Sprite scanner** and the **Screen**
 panel. A page number in front of an address stays hex, as **MEMMAP** shows it:
 `05:#0123` or `05:  291`. The registers of the **CPU** panel and the **Watcher** follow it
-as well (see [CPU panel](debugger-cpu.md)). The bytes of the listing and the dumps, the
-ports and the panels of the hardware stay hex.
+as well (see [CPU panel](debugger-cpu.md)), and so do the port numbers of **PORTS** and of
+the **Breakpoints** list. The bytes of the listing and the dumps, the mask of a port and the
+panels of the hardware stay hex.
 
 ### Typing a number
 

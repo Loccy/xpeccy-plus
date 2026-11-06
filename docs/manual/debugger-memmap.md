@@ -24,7 +24,9 @@ window is for writing only: a write in its first `#0500` bytes also goes to the 
 row and these bytes in the dump are drawn in the **FMAPS** color; the tooltip of a byte
 in the dump says where a write to it goes.
 
-**PORTS** lists the watched ports and the last value on each. For a port whose value the
+**PORTS** lists the watched ports and the last value on each. The port is written as the
+Debugger's addresses are, `#7FFD` or `32765` (see
+[Hex or decimal](debugger-code.md#hex-or-decimal)); the value is hex. For a port whose value the
 machine keeps in a register, such as `7FFD` on a 128K, the value shown is that register's;
 for any other port it is the last byte read from it or written to it, and `--` until the
 port is used.
