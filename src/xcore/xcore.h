@@ -194,6 +194,7 @@ QString dbg_word(int);
 QString dbg_byte(int);
 QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
 QString dbg_abs_t(int);
+QString dbg_port(int port, int mask);	// a port: 7FFD or FE by its mask, in the form picked
 QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
 int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal
 QString dbg_num_unsign(QString);	// the text with its hex sign taken off

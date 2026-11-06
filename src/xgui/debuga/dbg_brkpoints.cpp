@@ -39,7 +39,9 @@ QString brkGetString(xBrkPoint brk) {
 			}
 			break;
 		case BRK_IOPORT:
-			res = QString("IO:%0 mask %1").arg(gethexword(brk.adr)).arg(gethexword(brk.mask));
+			// the port in the form picked; its mask hex, with the sign in decimal too:
+			// a mask is bits, not a number
+			res = QString("IO:%0 mask %1").arg(dbg_port(brk.adr, 0xffff)).arg(dbg_hex(brk.mask & 0xffff, 4));
 			break;
 		case BRK_MEMRAM:
 		case BRK_MEMROM:
@@ -367,8 +369,8 @@ static int brk_base_area(int type) {
 }
 
 // One address field as the type reads it. A cpu address is a number by the
-// debugger's one rule (dbg_read_adr) or a label; a port, and its mask, hex as
-// they are shown, as the list files have them (brk_list_adr). A cell is an offset in the page of the page field, page:offset (the
+// debugger's one rule (dbg_read_adr) or a label; a port a number by the same
+// rule (its mask is read by readRange). A cell is an offset in the page of the page field, page:offset (the
 // page in hex, or an area's token: ROM0, DIV3), a label, or a cpu address - which
 // brings the cell mapped there now, when it is the kind of memory the type
 // watches. *cell is that cell, -1 when the field gave an offset alone
@@ -395,9 +397,10 @@ bool xBrkManager::readAdr(QString txt, int* adr, int* cell) {
 		return true;
 	}
 	if (type == BRK_IOPORT) {
-		if (!brk_list_adr(txt, &val, NULL)) return false;
+		bool ok;
+		val = dbg_num_parse(txt, &ok);
 		*adr = val;
-		return (val >= 0) && (val <= 0xffff);
+		return ok && (val >= 0) && (val <= 0xffff);
 	}
 	if (!dbg_read_adr(txt, &val, &lab)) return false;
 	if (!brk_is_cell(type)) {
@@ -441,7 +444,8 @@ bool xBrkManager::readRange(xBrkPoint* brk, QString* err, QLineEdit** fld) {
 		brk->eadr = adr;
 		brk->mask = 0xffff;
 		if (!haveEnd) return true;
-		if (!readAdr(ui.leEnd->text(), &eadr, &ecell)) {
+		// the mask is bits: hex, with or without a sign, as the list files have it
+		if (!brk_list_adr(ui.leEnd->text().trimmed(), &eadr, NULL) || (eadr < 0) || (eadr > 0xffff)) {
 			*err = "the mask is not a number";
 			return false;
 		}
@@ -583,7 +587,8 @@ void xBrkManager::chaType(int i) {
 	setLimits(t);
 	chaCond(ui.leCond->text());		// the note about HITS depends on the type
 	bool port = (t == BRK_IOPORT);
-	ui.leStart->setProperty(DBG_NUM_OFF, port);		// a port stays hex, as it always was
+	// a port is a number like an address; its mask is bits and stays hex
+	ui.leStart->setProperty(DBG_NUM_PORT, port);
 	ui.leEnd->setProperty(DBG_NUM_OFF, port);
 	ui.labStart->setText(port ? "Port" : "Address");
 	ui.labTo->setText(port ? "mask" : "to");
@@ -689,7 +694,7 @@ void xBrkManager::edit(xBrkPoint* sbrk) {
 		ui.leStart->clear();
 		ui.leEnd->clear();
 	} else if (obrk.type == BRK_IOPORT) {
-		ui.leStart->setText(gethexword(obrk.adr & 0xffff));
+		ui.leStart->setText(dbg_num(obrk.adr & 0xffff, 4));
 		ui.leEnd->setText(gethexword(obrk.mask & 0xffff));
 	} else {
 		ui.leStart->setText(brk_adr_text(obrk.type, obrk.adr));

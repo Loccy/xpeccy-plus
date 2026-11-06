@@ -1635,6 +1635,8 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 	while ((cnt < dbgRegLabs.size()) && (b->regs[cnt].id != REG_EOT)) {
 		dbgRegLabs[cnt]->setText(b->regs[cnt].name);
 		dbgRegLabs[cnt]->setProperty("regid", b->regs[cnt].id);
+		dbgRegLabs[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
+		dbgRegBits[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
 		int mx;
 		switch(b->regs[cnt].size) {
 			case REG_2: mx = 2; break;
@@ -1651,6 +1653,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		// before it is measured
 		dbgRegEdit[cnt]->numFmt();	// hidden ones too: a shown one would move only now
 		dbgRegEdit[cnt]->setSplit(conf.dbg.regsplit && !(b->regs[cnt].flag & REG_TYPE_M));
+		dbgRegEdit[cnt]->refitWidth();	// a word is as wide as a split pair: PC too
 		if (dbgRegLabs[cnt]->sizeHint().width() > labw) labw = dbgRegLabs[cnt]->sizeHint().width();
 		if (dbgRegEdit[cnt]->minimumWidth() > fldw) fldw = dbgRegEdit[cnt]->minimumWidth();
 		cnt++;
@@ -2595,7 +2598,7 @@ void DebugWin::fillPorts() {
 		for (n = 0; n < comp->pwcount; n++) {
 			if (!comp->pwatch[n].on) continue;
 			int val = comp_pwatch_val(comp, n);
-			setPortRow(i, getPortString(comp->pwatch[n].port, comp->pwatch[n].mask),
+			setPortRow(i, dbg_port(comp->pwatch[n].port, comp->pwatch[n].mask),
 				(val < 0) ? QString("--") : gethexbyte(val));
 			i++;
 		}

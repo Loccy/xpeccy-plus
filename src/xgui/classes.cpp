@@ -160,11 +160,22 @@ void xHexSpin::redraw() {
 }
 
 // XHS_AUTOW: 'len' digits + a bit for the frame and cursor.
-// call it after a font change too, not only when the value length changes
+// call it after a font change too, not only when the value length changes.
+// A register (XHS_NUMS) is as wide as a pair, or as one byte of it, whatever
+// it holds: PC lines up with HL edge to edge, IM with one half of a pair
 void xHexSpin::refitWidth() {
 	if (!(hsflag & XHS_AUTOW)) return;
+	int chars = dlen;
+	if (hsflag & XHS_NUMS) {
+		bool dec = (base == 10);
+		if (max <= 0xff) {
+			chars = dec ? 3 : 2;
+		} else if (max <= 0xffff) {
+			chars = !dec ? 4 : conf.dbg.regsplit ? 7 : 5;
+		}
+	}
 	QFontMetrics fm(font());
-	setFixedWidth(fm.horizontalAdvance(QString(dlen, '0') + sgnPre + sgnPost) + 10);
+	setFixedWidth(fm.horizontalAdvance(QString(chars, '0') + sgnPre + sgnPost) + 10);
 }
 
 void xHexSpin::setBase(int b) {
@@ -407,6 +418,26 @@ void xHexSpin::paintEvent(QPaintEvent* ev) {
 		if (!sgnPost.isEmpty()) pnt.drawText(tx + tw, y, sgnPost);
 	}
 	int bytes = splitBytes();
+	if (bytes && (base == 10)) {
+		// a number a byte: the halves stand apart, a strip of the panel's own
+		// colour between them, as two fields would
+		QString txt = text();
+		if (txt.size() == bytes * 4 - 1) {
+			QRect cr = contentsRect();
+			QFontMetrics fm = fontMetrics();
+			int x = cr.x() + (cr.width() - fm.horizontalAdvance(txt)) / 2;
+			int gw = fm.horizontalAdvance(QChar(' '));
+			int sw = qMin(gw, 4);
+			QWidget* par = parentWidget();
+			QColor gap = par ? par->palette().color(par->backgroundRole()) : palette().color(QPalette::Window);
+			QPainter pnt(this);
+			for (int i = 0; i < bytes - 1; i++) {
+				x += fm.horizontalAdvance(txt.mid(i * 4, 3));
+				pnt.fillRect(QRect(x + (gw - sw) / 2, rect().top(), sw, rect().height()), gap);
+				x += gw;
+			}
+		}
+	}
 	if (!chgMask || !bytes || wholeFieldLit()) return;
 	QColor bg = conf.pal.value(DBG_PAL_CHG_BG);
 	QColor fg = conf.pal.value(DBG_PAL_CHG_TXT);
@@ -1238,13 +1269,13 @@ static bool is_hex_char(QChar chr) {
 	return ((c >= '0') && (c <= '9')) || ((c >= 'a') && (c <= 'f'));
 }
 
-QString dbg_num_tip(int val, bool adr, const QString& name) {
+QString dbg_num_tip(int val, bool adr, const QString& name, bool label) {
 	val &= 0xffff;
 	bool word = adr || (val > 0xff);
 	QString bin = QString::number(val, 2).rightJustified(word ? 16 : 8, '0');
 	if (word) bin.insert(8, ' ');
 	QString lab;
-	if (word && conf.zx)
+	if (word && label && conf.zx)
 		lab = name.isEmpty() ? find_label(comp_get_xadr(conf.zx, val, MEM_VIEW_READ)) : name;
 	// a table, so the values line up whatever the font makes of the names
 	QString row("<tr><td>%0&nbsp;</td><td><b>%1</b></td></tr>");
@@ -1256,6 +1287,22 @@ QString dbg_num_tip(int val, bool adr, const QString& name) {
 	res.append(row.arg("BIN:", bin));
 	res.append("</table>");
 	return res;
+}
+
+QString dbg_reg_tip(const QString& name) {
+	if (name == "IM")
+		return "Interrupt mode, set by IM 0, IM 1 or IM 2.\n"
+			"Mode 1 calls #0038, mode 2 the address in\n"
+			"the table at I * 256 + the byte on the bus";
+	if (name == "IFF1")
+		return "Interrupts enabled: EI sets it, DI clears it,\n"
+			"and so does taking an interrupt. While it is\n"
+			"off, the CPU does not answer INT";
+	if (name == "IFF2")
+		return "A copy of IFF1, kept while an NMI runs:\n"
+			"RETN puts it back into IFF1. LD A,I and\n"
+			"LD A,R show it in the P/V flag";
+	return QString();
 }
 
 void dbg_place_tip(QWidget* wid, const QRect& at, bool above) {
@@ -1313,7 +1360,16 @@ xNumSign::~xNumSign() {
 // clear of the text being typed. Qt puts a tip off by the size of the mouse
 // cursor, from wherever it is given, so it is moved once shown.
 void xNumSign::showTip() {
-	QString txt = edt->hasFocus() ? field_tip(edt->text()) : QString();
+	QString txt;
+	if (!edt->hasFocus() || edt->property(DBG_NUM_OFF).toBool()) {
+		// a field of plain hex (a port's mask) has nothing to say
+	} else if (edt->property(DBG_NUM_PORT).toBool()) {
+		bool ok;
+		int val = dbg_num_parse(edt->text(), &ok);
+		if (ok && (val >= 0)) txt = dbg_num_tip(val, false, QString(), false);
+	} else {
+		txt = field_tip(edt->text());
+	}
 	if (txt.isEmpty()) {
 		hideTip();
 		return;

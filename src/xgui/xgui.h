@@ -222,13 +222,16 @@ bool lab_char(QChar);
 // which stays put while the digits are typed over; property DBG_NUM_OFF set on
 // the field leaves it a plain one (a port, say). See classes.cpp
 #define DBG_NUM_OFF "xDbgNumOff"
+#define DBG_NUM_PORT "xDbgNumPort"	// a port: a number by the rule, no label, no tip of one
 void dbg_num_field(QLineEdit*);
 // what a number is: hex, decimal and binary, a line each; for an address (or a
 // word, which may be one) the label there above them. name: the label it was typed as
-QString dbg_num_tip(int val, bool adr, const QString& name = QString());
+QString dbg_num_tip(int val, bool adr, const QString& name = QString(), bool label = true);
 // the tip just shown moved over (or under) a rectangle of a widget: over a
 // number pointed at, under a field being typed into; the other side at a screen edge
 void dbg_place_tip(QWidget* wid, const QRect& at, bool above);
+// what a register that is no number is for (IM, IFF1, IFF2), empty for the rest
+QString dbg_reg_tip(const QString& name);
 
 // the update check (updatewin.cpp): the settings as they apply to this build, the
 // check a start makes when it is due, and Help > Check for Updates

@@ -152,6 +152,12 @@ QString dbg_abs(int adr) {
 	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr(adr);
 }
 
+// a port as the debugger shows it: four hex digits for a full one, two for one
+// decoded by its low byte; decimal as it is
+QString dbg_port(int port, int mask) {
+	return dbg_num(port & 0xffff, (mask > 0xff) ? 4 : 2);
+}
+
 QString dbg_abs_t(int adr) {
 	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr_t(adr);
 }

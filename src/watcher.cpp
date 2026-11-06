@@ -3,6 +3,7 @@
 
 #include <QInputDialog>
 #include <QHeaderView>
+#include <QScrollBar>
 #include <QMenu>
 #include <QApplication>
 #include <QDebug>
@@ -31,15 +32,20 @@ void xWatcher::updateStyle() {
 }
 
 // a byte a column, as wide as two digits and a little air; the address of a
-// watch spans the last two
+// watch spans the last three
 void xWatcher::fitColumns() {
 	QFontMetrics fm(conf.dbg.font);
 	int w = fm.horizontalAdvance("00") + 8;
 	QHeaderView* hdr = ui.wchMemTab->horizontalHeader();
 	hdr->setMinimumSectionSize(w);
 	hdr->setDefaultSectionSize(w);
-	for (int i = 0; i < 13; i++)		// xWatchModel's columns
+	for (int i = 0; i < WCH_BYTES; i++)
 		ui.wchMemTab->setColumnWidth(i, w);
+	// room for all of them, and for the scroll bar a long list brings; never one
+	// across, the last column takes what is left
+	ui.wchMemTab->setMinimumWidth(w * WCH_BYTES + ui.wchMemTab->frameWidth() * 2
+		+ ui.wchMemTab->verticalScrollBar()->sizeHint().width() + 4);
+	ui.wchMemTab->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	int h = fm.height() + 4;
 	ui.wchMemTab->verticalHeader()->setMinimumSectionSize(h);
 	ui.wchMemTab->verticalHeader()->setDefaultSectionSize(h);
@@ -58,9 +64,14 @@ void xWatcher::setRegs(const xRegBunch& regs) {
 			case REG_32: mx = 0x7fffffff; break;
 			default: mx = 0xffff; break;
 		}
+		if (regs.regs[i].size == REG_BIT) {
+			regBits[i]->setChecked(regs.regs[i].value);
+			continue;
+		}
 		regValues[i]->setMax(mx);
 		regValues[i]->numFmt();
 		regValues[i]->setSplit(conf.dbg.regsplit && !(regs.regs[i].flag & REG_TYPE_M));
+		regValues[i]->refitWidth();	// a word as wide as a split pair, as in the debugger
 		regValues[i]->setValue(regs.regs[i].value);
 	}
 }
@@ -84,10 +95,18 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 		hp->setXFlag(XHS_DEC | XHS_FILL | XHS_AUTOW | XHS_NUMS);
 		hp->setFrame(false);
 		hp->setAlignment(Qt::AlignCenter);
+		// a register of one bit (IFF1, IFF2) is a mark, as in the debugger;
+		// it shows the state, the watcher changes nothing
+		QCheckBox* cb = new QCheckBox;
+		cb->setAttribute(Qt::WA_TransparentForMouseEvents);
+		cb->setFocusPolicy(Qt::NoFocus);
+		cb->setVisible(false);
 		regLabels.append(lp);
 		regValues.append(hp);
+		regBits.append(cb);
 		ui.regGrid->addWidget(lp, i >> 1, (i & 1) << 1);
 		ui.regGrid->addWidget(hp, i >> 1, ((i & 1) << 1) | 1);
+		ui.regGrid->addWidget(cb, i >> 1, ((i & 1) << 1) | 1);
 	}
 //	ui.regGrid->setRowStretch(32, 10);
 
@@ -121,14 +140,19 @@ void xWatcher::show() {
 				work = 0;
 				regLabels[i]->setVisible(false);
 				regValues[i]->setVisible(false);
+				regBits[i]->setVisible(false);
 			} else {
+				bool bit = (regs.regs[i].size == REG_BIT);
 				regLabels[i]->setVisible(true);
-				regValues[i]->setVisible(true);
+				regValues[i]->setVisible(!bit);
+				regBits[i]->setVisible(bit);
 				regLabels[i]->setText(regs.regs[i].name);
+				regLabels[i]->setToolTip(dbg_reg_tip(regs.regs[i].name));
 			}
 		} else {
 			regLabels[i]->setVisible(false);
 			regValues[i]->setVisible(false);
+			regBits[i]->setVisible(false);
 		}
 	}
 	setRegs(regs);
@@ -189,8 +213,8 @@ void xWatcher::confirmNew() {
 	if (curwch < 0) {
 		model->addItem(type, str);
 		for (int i = 0; i < model->getItemCount() * 2; i += 2) {
-			ui.wchMemTab->setSpan(i, 0, 1, 11);
-			ui.wchMemTab->setSpan(i, 11, 1, 2);
+			ui.wchMemTab->setSpan(i, 0, 1, WCH_BYTES - 3);
+			ui.wchMemTab->setSpan(i, WCH_BYTES - 3, 1, 3);
 		}
 		fitColumns();
 	} else {
@@ -240,7 +264,7 @@ int xWatchModel::rowCount(const QModelIndex&) const {
 }
 
 int xWatchModel::columnCount(const QModelIndex&) const {
-	return 13;
+	return WCH_BYTES;
 }
 
 void xWatchModel::insertRow(int row, const QModelIndex& idx) {
@@ -318,7 +342,7 @@ QVariant xWatchModel::data(const QModelIndex& idx, int role) const {
 					case WUT_ROM: res = "ROM: "+itm.exp; break;
 					default: res = "Error"; break;
 				}
-			} else if (col == 11) {
+			} else if (col == WCH_BYTES - 3) {
 				if (xr.err) {
 					res = "????";
 				} else {
