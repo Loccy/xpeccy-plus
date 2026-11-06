@@ -23,7 +23,8 @@ before that point is upstream's history and is not repeated here.
   decimal, the hex form is picked in Options > Debugger, and a tip shows a number in hex,
   decimal and binary.
 - **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
-  programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`.
+  programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`. An
+  address can be a label, looked up when the cheat is ticked, so it follows a rebuilt program.
 
 ### Changed
 
@@ -55,6 +56,7 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **The Watcher's memory rows change while the machine runs** again, as its registers do.
 - **A `.pok` named on the command line before the image is kept**: the image's own cheat
   file took its place.
 - **Unticking a cheat no longer writes old bytes into a game loaded again**: a byte the game
