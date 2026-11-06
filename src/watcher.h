@@ -69,7 +69,7 @@ class xWatcher : public QDialog {
 		void setRegs(const xRegBunch&);
 		void setupRegs(const xRegBunch&);
 		int setupKey = -1;		// the numbers and Split pairs setupRegs() was done for
-		const void* regCore = nullptr;	// the CPU layoutRegs() was done for
+		const cpuCore* regCore = nullptr;	// the CPU layoutRegs() was done for
 		void layoutRegs(CPU*);
 		void placeRegs(const xRegBunch&);
 

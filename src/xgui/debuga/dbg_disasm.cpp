@@ -33,8 +33,6 @@ static xAdr dasm_xadr(Computer* comp, int adr, int access = MEM_VIEW_PC) {
 	return xadr;
 }
 
-extern int adr_of_reg(CPU* cpu, bool* flag, QString nam);
-
 static int text_width(const QFontMetrics& fm, const QString& str) {
 #if QT_VERSION >= QT_VERSION_CHECK(5,11,0)
 	return fm.horizontalAdvance(str);
@@ -469,17 +467,16 @@ int dasmCode(Computer* comp, int adr, dasmData& drow) {
 
 // A command as an assembler reads it: in the FFFFh form a number that starts
 // with a letter gets a 0 in front (C9h is a name to it, 0C9h a number). The
-// row's own label and the text in quotes are left alone
+// row's own label and a row of text (DB "...") are left alone
 QString dasm_export(const dasmData& drow) {
-	if (drow.fmt != CPU_NUM_H) return drow.command;
+	if ((drow.fmt != CPU_NUM_H) || ((drow.flag & 0xf0) == DBG_VIEW_TEXT)) return drow.command;
 	static const QRegularExpression letterHex("(?<![\\w#$])([A-F][0-9A-F]*h)(?!\\w)");
 	QString res = drow.command;
 	QList<int> at;
 	QRegularExpressionMatchIterator it = letterHex.globalMatch(res);
 	while (it.hasNext()) {
 		QRegularExpressionMatch m = it.next();
-		bool quoted = res.left(m.capturedStart(1)).count('"') & 1;
-		if (!quoted && (m.captured(1) != drow.label)) at.prepend(m.capturedStart(1));
+		if (m.captured(1) != drow.label) at.prepend(m.capturedStart(1));
 	}
 	for (int pos : at) res.insert(pos, '0');		// from the end: earlier places stay
 	return res;
@@ -687,71 +684,6 @@ int getPrevAdr(Computer* comp, int adr) {
 	return adr;
 }
 
-int adr_of_reg(CPU* cpu, bool* flag, QString nam) {
-	xRegBunch bch = cpuGetRegs(cpu);
-	int i = 0;
-	int res;
-	nam = nam.toUpper();
-	while ((bch.regs[i].id != REG_EOT) && (QString(bch.regs[i].name).toUpper() != nam))
-		i++;
-	if (bch.regs[i].id == REG_EOT) {
-		*flag = false;
-		res = 0;
-	} else {
-		*flag = true;
-		res = bch.regs[i].value;
-	}
-	return res;
-}
-
-// typed: the debugger's one rule (dbg_read_adr); else bare hex, as the control
-// port has always taken it (emw_network.cpp)
-int str_to_adr(Computer* comp, QString str, bool typed) {
-	bool flag = true;
-	int adr = -1;
-	QStringList lst;
-	int off;
-	int seg;
-	if (str.startsWith(".")) {			// .REG : name of CPU register
-		adr = adr_of_reg(comp->cpu, &flag, str.mid(1));
-	} else if (str.contains(":")) {			// seg:adr (for real mode)
-		lst = str.split(":",X_SkipEmptyParts);
-		if (lst.size() == 2) {
-			off = lst[1].toInt(&flag,16);
-			if (!flag) {
-				off = adr_of_reg(comp->cpu, &flag, lst[1]);
-			}
-			if (flag) {
-				seg = lst[0].toInt(&flag,16);
-				if (flag) {
-					adr = (seg << 4) + off;
-				} else {
-					seg = adr_of_reg(comp->cpu, &flag, lst[0]);
-					if (flag) {
-						adr = (seg << 4) + off;
-					}
-				}
-			}
-		}
-	} else if (typed) {
-		flag = dbg_read_adr(str, &adr);
-	} else if (str.startsWith("#")) {			// #nnnn : hex adr
-		str.replace(0, 1, "0x");
-		adr = str.toInt(&flag, 16);
-	} else if (str.startsWith("0x")) {			// 0xnnnn : hex adr
-		adr = str.toInt(&flag, 16);
-	} else {
-		xAdr xadr = find_label(str);			// NAME : label name
-		if (xadr.type >= 0) {
-			adr = xadr.adr;
-			flag = true;
-		} else {						// other : plain hex
-			adr = str.toInt(&flag, 16);
-		}
-	}
-	if (!flag) adr = -1;
-	return adr;
-}
 
 // convert string val to address (.reg, a number, label)
 int asmAddr(Computer* comp, QVariant val, xAdr xadr) {
@@ -1347,7 +1279,7 @@ void xDisasmTable::copyToCbrd() {
 				work = 0;		// address overfill (FFFF+)
 			if (drow.isequ) {
 				str += drow.aname + ":";
-				str += drow.command;
+				str += dasm_export(drow);
 			} else if (drow.islab) {
 				if (drow.iscom) {
 					str += drow.aname;
@@ -1355,7 +1287,7 @@ void xDisasmTable::copyToCbrd() {
 					str += drow.aname + ":";
 				}
 			} else {
-				str += "\t" + drow.command;
+				str += "\t" + dasm_export(drow);
 			}
 			str += "\n";
 		}

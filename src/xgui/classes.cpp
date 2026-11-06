@@ -21,6 +21,8 @@
 #include <QDebug>
 #include <QToolTip>
 #include <QCursor>
+#include <QTimer>
+#include <QContextMenuEvent>
 #include <QCompleter>
 #include <QStringListModel>
 #include <QAbstractItemView>
@@ -1375,7 +1377,8 @@ class xNumSign : public QObject {
 		QLineEdit* edt;
 		bool bare = false;		// the sign was taken off by hand: no new one
 		bool tip = false;		// the tip is this field's
-		bool pasting = false;		// Ctrl+V, Shift+Ins or the menu: a paste may follow
+		bool pasting = false;		// a paste is on its way: Ctrl+V, Shift+Ins, Paste, middle button, a drop
+		void signPaste();
 		void edited(const QString&);
 		void showTip();
 		void hideTip();
@@ -1387,23 +1390,31 @@ xNumSign::xNumSign(QLineEdit* p):QObject(p) {
 }
 
 // A paste that leaves bare hex digits gets the sign as typing would: 8000
-// pasted over the lot is #8000, not decimal 8000. Only a paste: typed keys
-// have the event filter, and a name being typed (BE of BEG) stays a name
-void xNumSign::edited(const QString& txt) {
-	int fmt = conf.dbg.numfmt;
-	bool digits = pasting && !txt.isEmpty();
-	pasting = false;
-	for (QChar chr : txt)
-		if (!is_hex_char(chr)) digits = false;
-	if (digits && !bare && (fmt != CPU_NUM_DEC) && !edt->property(DBG_NUM_OFF).toBool()) {
-		QString pre, post;
-		dbg_sign(fmt, &pre, &post);
-		int pos = edt->cursorPosition();
-		edt->selectAll();
-		edt->insert(pre + txt + post);		// undoable, as the paste itself
-		edt->setCursorPosition(pos + pre.size());
+// pasted over the lot is #8000, not decimal 8000. Only a paste - typed keys
+// have the event filter - and not a label's name (CAFE). Put in once every
+// slot has heard the paste, so they all hear the text with the sign next
+void xNumSign::edited(const QString&) {
+	if (pasting) {
+		pasting = false;
+		QTimer::singleShot(0, this, &xNumSign::signPaste);
 	}
 	showTip();
+}
+
+void xNumSign::signPaste() {
+	int fmt = conf.dbg.numfmt;
+	QString txt = edt->text();
+	bool digits = !txt.isEmpty();
+	for (QChar chr : txt)
+		if (!is_hex_char(chr)) digits = false;
+	if (!digits || bare || (fmt == CPU_NUM_DEC) || edt->property(DBG_NUM_OFF).toBool()) return;
+	if (find_label(txt).type >= 0) return;
+	QString pre, post;
+	dbg_sign(fmt, &pre, &post);
+	int pos = edt->cursorPosition();
+	edt->selectAll();
+	edt->insert(pre + txt + post);		// undoable, as the paste itself
+	edt->setCursorPosition(pos + pre.size());
 }
 
 xNumSign::~xNumSign() {
@@ -1439,8 +1450,19 @@ void xNumSign::hideTip() {
 bool xNumSign::eventFilter(QObject* obj, QEvent* ev) {
 	if (ev->type() == QEvent::FocusIn) bare = false;
 	if (ev->type() == QEvent::FocusOut) hideTip();
-	if (ev->type() == QEvent::ContextMenu) pasting = true;		// its Paste
-	if ((ev->type() == QEvent::MouseButtonPress) || (ev->type() == QEvent::FocusIn)) pasting = false;
+	if (ev->type() == QEvent::FocusIn) pasting = false;
+	if (ev->type() == QEvent::MouseButtonPress)		// X11's middle button pastes the selection
+		pasting = (static_cast<QMouseEvent*>(ev)->button() == Qt::MiddleButton);
+	if (ev->type() == QEvent::Drop) pasting = true;
+	if ((ev->type() == QEvent::ContextMenu) && qobject_cast<QLineEdit*>(obj)) {
+		// the field's own menu: after its Paste, and no other action, the sign
+		QMenu* menu = static_cast<QLineEdit*>(obj)->createStandardContextMenu();
+		QAction* got = menu->exec(static_cast<QContextMenuEvent*>(ev)->globalPos());
+		if (got && (got->objectName() == "edit-paste"))
+			QTimer::singleShot(0, this, &xNumSign::signPaste);
+		delete menu;
+		return true;
+	}
 	if (ev->type() != QEvent::KeyPress) return false;
 	pasting = static_cast<QKeyEvent*>(ev)->matches(QKeySequence::Paste);
 	QLineEdit* edt = qobject_cast<QLineEdit*>(obj);

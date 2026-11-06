@@ -198,6 +198,9 @@ QString dbg_byte(int);
 QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
 QString dbg_abs_t(int);
 bool is_hex_char(QChar);
+// an address as the listing and the control port take it: .REG, seg:ofs; typed
+// by the one rule and labels, else bare hex as the control port has it
+int str_to_adr(Computer* comp, QString str, bool typed = false);
 QString dbg_port(int port, int mask);	// a port: 7FFD or FE by its mask, in the form picked
 QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
 int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal
