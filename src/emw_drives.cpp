@@ -192,7 +192,7 @@ void MainWin::sideStepIn(int src, int step) {
 }
 
 // The keys: in the slot of the image in use - the tape or the drive the title names, or
-// named last while a side changes in it; none yet, the tape if it is of a set, else drive A
+// named last while a side changes in it; none yet, the tape if it can be stepped, else drive A
 void MainWin::sideStep(int step) {
 	int src = sideSrc;
 	if (sideHeld(src).isEmpty())

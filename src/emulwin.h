@@ -356,7 +356,7 @@ class MainWin : public QWidget {
 		Tape* setTape = nullptr;	// the tape whose set was looked for, and its path then
 		QByteArray setRaw;
 		bool setOn = false;	// and whether a set was looked for at all (Next tape of a set)
-		bool tapeSides = false;	// the deck's tape has others in its set
+		bool tapeSides = false;	// the deck's tape can be stepped by hand (a set, or its archive's list) - not inSet
 		QString sideHeld(int src);
 		QString sideNext(int src, int step, QString* place);
 		void sidePut(int src, const QString& path, const QString& place);
