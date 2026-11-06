@@ -24,6 +24,8 @@ static chState ch_hand_st = {0, -1, 0};
 static QString ch_path;
 static bool ch_picked = false;
 static bool ch_cli = false;		// trainers from the command line in the list
+static QString ch_image;		// the image cheats_pick() was last asked for
+static QString ch_keep;		// the image the command line named the list for
 static std::atomic<int> ch_serial(0);
 
 class chLock {
@@ -59,6 +61,7 @@ static void ch_drop_file(Computer* comp) {
 	ch_path.clear();
 	ch_picked = false;
 	ch_cli = false;
+	ch_keep.clear();
 }
 
 static Computer* ch_comp = NULL;	// the machine the trainers that are on went into
@@ -84,6 +87,11 @@ int cheats_open(const QString& path, bool picked) {
 // Fuse's and Spectaculator's rule, and how every archive with pokes has it:
 // POKES/NAME.POK beside the image, else NAME.pok beside it
 void cheats_pick(const QString& image) {
+	{
+		chLock lock;
+		ch_image = image;
+		if (!ch_keep.isEmpty() && bkm_same(image, ch_keep)) return;	// a reload
+	}
 	QFileInfo inf(image);
 	QString want = inf.completeBaseName() + ".pok";
 	QDir dir = inf.dir();
@@ -110,32 +118,32 @@ void cheats_pick(const QString& image) {
 	}
 }
 
-// The command line's trainers, after a file given there (alone: the list emptied first,
-// so they win over the image's own). Alone they go with the game, as a found file does;
-// after a file they stay with it.
-bool cheats_add(xPokFile* pf, bool alone) {
+// The command line's: its trainers (if any) after a .pok named there, or alone in place
+// of the image's own, and then going with the game as a found file does. Either way the
+// list stays through a reload of the image the command line opened.
+void cheats_add(xPokFile* pf, bool alone) {
 	chLock lock;
-	if (alone) ch_drop_file(ch_comp);
-	int cnt = ch_file.cnt + pf->cnt;
-	if (cnt > ch_file.cap) {
+	if (alone && pf->cnt) {
+		ch_drop_file(ch_comp);
+		ch_file = *pf;
+		ch_state.assign(pf->cnt, chState{0, -1, 0});
+		memset(pf, 0, sizeof(xPokFile));
+		ch_picked = true;
+		ch_cli = true;
+	} else if (pf->cnt) {
+		int cnt = ch_file.cnt + pf->cnt;
 		xTrainer* nl = (xTrainer*)realloc(ch_file.list, cnt * sizeof(xTrainer));
-		if (!nl) {
-			pok_free(pf);
-			ch_changed();		// the list may be gone already
-			return false;
-		}
+		if (!nl) return;		// out of memory: the file's own are left
+		memcpy(nl + ch_file.cnt, pf->list, pf->cnt * sizeof(xTrainer));	// the pokes move with them
 		ch_file.list = nl;
-		ch_file.cap = cnt;
+		ch_file.cnt = ch_file.cap = cnt;
+		ch_state.resize(cnt, chState{0, -1, 0});
+		free(pf->list);
+		memset(pf, 0, sizeof(xPokFile));
+		ch_cli = true;
 	}
-	memcpy(ch_file.list + ch_file.cnt, pf->list, pf->cnt * sizeof(xTrainer));	// the pokes move with them
-	ch_file.cnt = cnt;
-	ch_state.resize(cnt, chState{0, -1, 0});
-	free(pf->list);
-	memset(pf, 0, sizeof(xPokFile));
-	if (alone) ch_picked = true;
-	ch_cli = true;
+	ch_keep = ch_image;
 	ch_changed();
-	return true;
 }
 
 QString cheats_file() {
