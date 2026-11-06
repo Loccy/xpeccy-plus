@@ -813,6 +813,12 @@ bool reloadConfig() {
 	return true;
 }
 
+static std::string cliMachine;
+
+void conf_cli_machine(const char* name) {
+	cliMachine = name ? name : "";
+}
+
 void loadConfig() {
 	std::string soutnam = "NULL";
 	//printf("%s\n",conf.path.confFile);
@@ -1517,14 +1523,19 @@ void loadConfig() {
 	if (schema < 4) conf.tape.flash = 1;	// "fast" was the rom trap alone until it was named flash
 	if (schema < 3) xm_over_migrate();	// a config from before the machine files
 	bool ok = false;
+	// one named on the command line is the only one built: one put up first and
+	// then left would be reset on the way, its disk controller and all
+	std::string cli = conf.running ? std::string() : xm_id_for_name(cliMachine);
 	if (schema < 2) {			// a config from before the machines: bring it across
 		std::string file = oldprf.count(pnm) ? oldprf[pnm] : "xpeccy.conf";
 		ok = xm_migrate(pnm.empty() ? std::string("default") : pnm, file);
 	} else {
 		// a start takes the one Options names; a config read again keeps its own
 		if (!conf.running && start_this()) macwant = conf.macStartId;
+		if (!cli.empty()) macwant = cli;
 		ok = xm_set(macwant);
 	}
+	if (!ok && !cli.empty()) ok = xm_set(cli);
 	if (!ok) {
 		xlog(XLG_CONF, XLL_WARN, "no machine to start, taking the first one");
 		if (xm_list().isEmpty() || !xm_set(xm_list().first().id)) {
