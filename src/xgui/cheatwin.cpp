@@ -27,6 +27,7 @@ xCheatWin::xCheatWin(QWidget* p) : QDialog(p) {
 	setWindowIcon(QIcon(":/images/cheats.png"));
 	serial = -1;
 	rzx = false;
+	labGen = 0;
 
 	labFile = new xElideLabel;
 	labFile->setObjectName("cheatFile");
@@ -287,11 +288,6 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 	fill();
 }
 
-static QString cw_lab_key() {
-	xLabelSet* set = conf.curlabset;
-	return set ? QString("%0 %1").arg(set->name).arg(set->list.size()) : QString();
-}
-
 // a label (from the command line) first, and where it is now if it was found
 static QString cw_poke_text(const xPoke& pk, const QString& lab, bool placed) {
 	QString where = QString("%0 #%1").arg(pk.adr).arg(pk.adr, 4, 16, QChar('0')).toUpper();
@@ -305,7 +301,7 @@ static QString cw_poke_text(const xPoke& pk, const QString& lab, bool placed) {
 
 void xCheatWin::fill() {
 	serial = cheats_serial();
-	labKey = cw_lab_key();
+	labGen = labels_gen();
 	QString path = cheats_file();
 	QString name = QFileInfo(path).fileName();
 	if (cheats_cli())
@@ -379,7 +375,7 @@ void xCheatWin::fill() {
 
 void xCheatWin::upd() {
 	if (!isVisible()) return;
-	if ((serial != cheats_serial()) || (rzx != (bool)conf.zx->rzx.play) || (labKey != cw_lab_key())) {
+	if ((serial != cheats_serial()) || (rzx != (bool)conf.zx->rzx.play) || (labGen != labels_gen())) {
 		if (!conf.zx->rzx.play && rzx) note(QString());
 		fill();
 	}

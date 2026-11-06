@@ -60,6 +60,11 @@ static int ch_resolve(Computer* comp, xTrainer* tr, const chState* st, QString* 
 		const xPokeLabel& lb = st->labs[i];
 		if (lb.name.isEmpty()) continue;
 		xAdr xa = find_label_cell(lb.name);
+		if ((xa.type < 0) && (lb.num >= 0)) {
+			tr->pokes[i].bank = 8;
+			tr->pokes[i].adr = lb.num;
+			continue;
+		}
 		if (xa.type < 0) {
 			if (miss) *miss = lb.name;
 			return CHT_NO_LABEL;
@@ -86,7 +91,8 @@ static int ch_resolve(Computer* comp, xTrainer* tr, const chState* st, QString* 
 		xPoke* pk = &tr->pokes[i];
 		if (abs < 0x20000) {
 			pk->bank = abs >> 14;
-			pk->adr = byCpu ? cpu : (0xc000 | (abs & 0x3fff));	// shown as the CPU sees it
+			// the page's own offset, in the CPU's 16K slot for the window
+			pk->adr = (byCpu ? (cpu & 0xc000) : 0xc000) | (abs & 0x3fff);
 		} else if (byCpu) {
 			pk->bank = 8;
 			pk->adr = cpu;

@@ -21,6 +21,7 @@ enum {
 struct xPokeLabel {
 	QString name;		// empty: the poke's own address
 	int off;
+	int num = -1;		// it reads as a number too ("each" is #EAC): that, when not loaded
 };
 typedef QList<QList<xPokeLabel>> xPokeLabels;		// a list a trainer, an item a poke
 

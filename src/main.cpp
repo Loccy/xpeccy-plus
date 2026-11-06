@@ -449,15 +449,16 @@ static void cli_poke(const QString& arg, xPokFile* pf, xPokeLabels* labs) {
 			page = str_num(pg[0], &ok);
 			ok &= (page < 8);
 		}
-		// a label loaded wins over a number, as in the debugger: "each" reads as #EAC too;
-		// one not loaded is a label only if it is not a number. A label has its own page
-		if (ok && (pg.size() == 1) && cli_poke_label(num[0], &lb) && (find_label_cell(lb.name).type >= 0)) {
-			adr = 0;
-		} else if (ok) {
-			lb = xPokeLabel{QString(), 0};
-			adr = str_num(num[0], &ok);
-			ok &= (adr <= 0xffff);
-			if (!ok && (pg.size() == 1)) ok = cli_poke_label(num[0], &lb);
+		// ADR: a number, a label, or both ("each" is #EAC too) - then the label wins when it
+		// is loaded at the tick, as in the debugger. A label has its own page
+		if (ok) {
+			bool isNum;
+			adr = str_num(num[0], &isNum);
+			isNum &= (adr <= 0xffff);
+			bool isLab = (pg.size() == 1) && cli_poke_label(num[0], &lb);
+			if (!isLab) lb = xPokeLabel{QString(), 0};
+			lb.num = (isLab && isNum) ? adr : -1;
+			ok = isNum || isLab;
 		}
 		if (ok && (num[1].trimmed() != "?")) {
 			val = str_num(num[1], &ok);
@@ -469,7 +470,7 @@ static void cli_poke(const QString& arg, xPokFile* pf, xPokeLabels* labs) {
 		}
 		if (ok && pok_add_poke(tr, page, adr, val, org)) {
 			labs->last().append(lb);
-			if (!lb.name.isEmpty() && (find_label_cell(lb.name).type < 0))
+			if (!lb.name.isEmpty() && (lb.num < 0) && (find_label_cell(lb.name).type < 0))
 				cli_warn(QString("--poke: no label %0 loaded now").arg(lb.name));
 			continue;
 		}
