@@ -82,21 +82,23 @@ forms, picked by **Numbers** on the **Debugger** page of **Options**:
 | `FFFFh` | `8000h` | `C9h` |
 | `65535` | `32768` | `201` |
 
-The button at the right of the toolbar shows the form, as `#FF` or `255`. A click on it
+The button at the right of the toolbar shows the base, **HEX** or **DEC**. A click on it
 switches between hex in the form picked and decimal, and so does Ctrl+Shift+H
 (**Decimal numbers** in [Debugger keys](hotkeys.md#debugger-keys)). The choice is kept
 between sessions.
 
-An address takes five characters in any form, `00056` in decimal, so the columns stay
-put. The numbers in commands are not padded: `LD A,201`, `JR 13986`, `RST 56`.
+An address takes five characters in any form, so the columns stay put: in decimal it is
+padded with spaces, never zeros, `   56`. The numbers in commands are not padded:
+`LD A,201`, `JR 13986`, `RST 56`.
 
 The addresses in the other panels follow the switch too: **DUMP**, **REG-DUMP**, the
 disk dump of the **FDD** panel, **STACK** (its words as well), the **Breakpoints** and
 **Labels List** lists, the **Watcher**, the **Heat map**, and the address and length
 fields of **Save dump**, **Load dump**, **Fill...**, **Sprite scanner** and the **Screen**
 panel. A page number in front of an address stays hex, as **MEMMAP** shows it:
-`05:#0123` or `05:00291`. The bytes of the listing and the dumps, the registers, the ports
-and the panels of the hardware stay hex.
+`05:#0123` or `05:  291`. The registers of the **CPU** panel and the **Watcher** follow it
+as well (see [CPU panel](debugger-cpu.md)). The bytes of the listing and the dumps, the
+ports and the panels of the hardware stay hex.
 
 ### Typing a number
 
@@ -124,16 +126,18 @@ The fields of **Save dump**, **Load dump**, **Fill...**, **Sprite scanner** and 
 front of the digits switches such a field to decimal, `#` or `$` back to hex, and X either
 way.
 
-While you type an address, a tip under the field shows what it is: the number in decimal,
-hex and binary, then where it is in memory now and its label:
+While you type an address, a tip under the field shows what it is: its label, if it has
+one, then the number in hex, decimal and binary:
 
 ```
-23732 -> #5CB4, 0101 1100 1011 0100
-RAM:05:#1CB4  P_RAMT
+P_RAMT
+HEX: #5CB4
+DEC: 23732
+BIN: 01011100 10110100
 ```
 
 Rest the mouse on an address of the listing, or on a number or a label in a command, for
-the same tip.
+the same tip, over the number.
 
 ## Moving around
 
@@ -416,7 +420,7 @@ The marks, the labels and the comments are kept together in a memory map file: s
 | {icon}`arrGreen` **Trace** | running the program step by step, see [Debugger](debugger.md) |
 | {icon}`other` **Tools** | **Search**, **Fill...**, **Sprite scanner** (see [DUMP panel](debugger-memory.md)), **Keyboard**, **Watcher** |
 | {icon}`settings` **Options** | how the listing looks and works, see below |
-| `#FF` or `255` | hex or decimal numbers, see [Hex or decimal](#hex-or-decimal) |
+| **HEX** or **DEC** | hex or decimal numbers, see [Hex or decimal](#hex-or-decimal) |
 | {icon}`refresh` (circular arrows) | **Reload snapshot & labels** |
 | {icon}`floppy` (floppy disk) | **Disasm to file**, **Load dump**, **Save dump**, **Load map**, **Save map** |
 

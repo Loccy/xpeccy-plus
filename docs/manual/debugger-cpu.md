@@ -13,12 +13,18 @@ A register that changed in the last step is marked in the **Changed** color of t
 **Debugger** page of **Options**. With **Split pairs** on, only the byte that changed is
 marked: after an instruction that changes only A, only the A half of AF lights up.
 
+The values are hex or decimal, as the Debugger's other numbers (see
+[Hex or decimal](debugger-code.md#hex-or-decimal)). In decimal a pair is two numbers with
+**Split pairs** on, a byte each, as `  1 255` for HL = 511, and each lights up on its own;
+with **Split pairs** off it is one number, `  511`.
+
 ## Changing registers
 
 ```{index} register; changing
 ```
 
-Click a value and type over it in hex. The change takes effect at once. In a value field:
+Click a value and type over it, in hex or in decimal as it is shown. The change takes
+effect at once. In a value field:
 
 - Up and Down, or the mouse wheel, add or subtract 1;
 - PgUp and PgDn add or subtract 256;
@@ -47,6 +53,7 @@ the corner of a title bar shows that the panel has such a menu.
 - **2 columns** - two on a line, each beside its pair: AF beside AF', PC beside SP.
 - **Wide** - a column for each kind: AF, BC, DE, HL; the alternate set; PC, SP, IX, IY; and
   IR, IM, IFF1, IFF2. The flags are one more column beside them, under the title **Flags**.
-- **Split pairs** - mark only the byte that changed, as above. On by default.
+- **Split pairs** - mark only the byte that changed, as above, and in decimal write a pair
+  as two numbers. On by default.
 
 ![The CPU panel in the Wide layout](images/dbg-cpu-wide.png)

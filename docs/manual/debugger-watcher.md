@@ -9,7 +9,7 @@ The **Watcher** window shows the registers and some places in memory, and follow
 while the machine runs. Open it with **Tools > Watcher** in the main window, or
 **Watcher** under the {icon}`other` **Tools** button over the listing.
 
-1. **CPU** - the registers.
+1. **CPU** - the registers, hex or decimal as in the [CPU panel](debugger-cpu.md).
 2. **MEMORY** - the watches, two rows each.
 3. The four memory banks, from `#0000` to `#C000`: ROM or RAM, and the page.
 

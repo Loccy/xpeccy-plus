@@ -68,8 +68,8 @@ the machine has in its memory at the moment.
 ```{index} Custom POKEs, POKE; custom
 ```
 
-Type an address and a value, as BASIC's `POKE` takes them: in decimal on the **dec** row, or
-in hex on the **hex** row under it. Typing in one fills in the other. The row without the
+Type an address and a value, as BASIC's `POKE` takes them: in decimal on the **DEC** row, or
+in hex on the **HEX** row under it. Typing in one fills in the other. The row without the
 cursor is dimmed.
 
 Enter in **Address** goes on to **Value**. Enter in **Value** pokes the byte, moves the

@@ -19,8 +19,9 @@ save it to a file and load it back. Which memory pages the CPU sees is in the
 1. **View** - **CPU**, **RAM**, **ROM** or **DIV**, and for the last three the page and its
    address.
 2. **Bytes per row** - **Auto**, **8/row**, **12/row** or **16/row**.
-3. **Code page** - **WIN1251**, **CP866** or **KOI8R**: how bytes from 128 to 255 show as
-   letters in the text column.
+3. **Code page** - **ASCII** (the default), **WIN1251**, **CP866** or **KOI8R**: how bytes
+   show in the text column. **ASCII** shows the characters from 32 to 126 and a dot for the
+   rest; the other three show bytes from 128 to 255 as Cyrillic letters.
 4. **Dump** - the address, the bytes in groups of four, and the same bytes as text.
 5. **Scrollbar** - drag it to move through memory.
 
