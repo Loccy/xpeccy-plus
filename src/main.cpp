@@ -438,7 +438,7 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 			ok &= (org <= 255);
 		}
 		if (ok && pok_add_poke(tr, page, adr, val, org)) continue;
-		if (!ok) cli_warn(QString("--poke: not a poke: %0").arg(one));
+		cli_warn(ok ? QString("--poke: out of memory") : QString("--poke: not a poke: %0").arg(one));
 		pok_trainer_free(tr);
 		pf->cnt--;
 		return;

@@ -87,7 +87,8 @@ int pok_peek(struct Computer* comp, int bank, int adr);
 int pok_check(struct Computer* comp, const xTrainer* tr);
 // val stands for 256 in the file. Nothing is written unless every poke has a place.
 int pok_apply(struct Computer* comp, xTrainer* tr, int val);
-void pok_undo(struct Computer* comp, xTrainer* tr);
+// the saved bytes back where the poke's value still is; val as for pok_apply
+void pok_undo(struct Computer* comp, xTrainer* tr, int val);
 int pok_where(struct Computer* comp, const xTrainer* tr, int val);
 // one poke more for a trainer made by hand, written at once
 int pok_poke(struct Computer* comp, xTrainer* tr, int bank, int adr, int val);

@@ -52,7 +52,7 @@ static xTrainer* ch_trainer(int idx, chState** st) {
 static void ch_drop_file(Computer* comp) {
 	for (int i = 0; i < ch_file.cnt; i++) {
 		if (ch_state[i].on && comp) {
-			pok_undo(comp, &ch_file.list[i]);
+			pok_undo(comp, &ch_file.list[i], ch_state[i].val);
 			rzx_rec_touch();
 		}
 	}
@@ -66,19 +66,15 @@ static void ch_drop_file(Computer* comp) {
 
 static Computer* ch_comp = NULL;	// the machine the trainers that are on went into
 
-// every cheat off, bytes back, the list kept
+// every cheat off, bytes back, the list kept; a mismatch found was against the old game
 static void ch_all_back() {
-	bool any = ch_hand_st.on;
-	if (any && ch_comp) pok_undo(ch_comp, &ch_hand);
+	if (ch_hand_st.on && ch_comp) pok_undo(ch_comp, &ch_hand, 0);
 	ch_hand_st.on = 0;
 	for (int i = 0; i < ch_file.cnt; i++) {
-		if (!ch_state[i].on) continue;
-		if (ch_comp) pok_undo(ch_comp, &ch_file.list[i]);
+		if (ch_state[i].on && ch_comp) pok_undo(ch_comp, &ch_file.list[i], ch_state[i].val);
 		ch_state[i].on = 0;
 		ch_state[i].mismatch = 0;
-		any = true;
 	}
-	if (!any) return;
 	rzx_rec_touch();
 	ch_changed();
 }
@@ -198,7 +194,7 @@ void cheats_clear() {
 	chLock lock;
 	ch_drop_file(ch_comp);
 	if (ch_hand_st.on && ch_comp) {
-		pok_undo(ch_comp, &ch_hand);
+		pok_undo(ch_comp, &ch_hand, 0);
 		rzx_rec_touch();
 	}
 	pok_trainer_free(&ch_hand);
@@ -226,7 +222,7 @@ int cheats_set(Computer* comp, int idx, bool on, bool force) {
 		if (res != POK_FITS) return res;
 		ch_comp = comp;
 	} else {
-		pok_undo(comp, tr);
+		pok_undo(comp, tr, st->val);
 	}
 	st->on = on;
 	rzx_rec_touch();
@@ -263,7 +259,7 @@ int cheats_hand_poke(Computer* comp, int adr, int val) {
 void cheats_hand_clear(Computer* comp) {
 	chLock lock;
 	if (ch_hand_st.on && !comp->rzx.play) {
-		pok_undo(comp, &ch_hand);
+		pok_undo(comp, &ch_hand, 0);
 		rzx_rec_touch();
 	}
 	pok_trainer_free(&ch_hand);

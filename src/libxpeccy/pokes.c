@@ -220,15 +220,16 @@ int pok_apply(Computer* comp, xTrainer* tr, int val) {
 	return POK_FITS;
 }
 
-// backwards, so an address poked twice gets its first saved byte last
-void pok_undo(Computer* comp, xTrainer* tr) {
+// backwards, so an address poked twice gets its first saved byte last. Only where the
+// poke's value still is: a byte the game changed since, or loaded again, is its own.
+void pok_undo(Computer* comp, xTrainer* tr, int val) {
 	int i, err;
 	vid_outside_write(comp->vid);
 	for (i = tr->cnt - 1; i >= 0; i--) {
 		xPoke* pk = &tr->pokes[i];
 		if (pk->saved < 0) continue;
 		unsigned char* p = pk_byte(comp, pk->bank, pk->adr, &err);
-		if (p) *p = pk->saved;
+		if (p && (*p == pk_val(pk, val))) *p = pk->saved;
 		pk->saved = -1;
 	}
 	x_input_bump();
