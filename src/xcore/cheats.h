@@ -20,8 +20,9 @@ enum {
 // trainer is ticked, so a rebuilt program's labels move it
 struct xPokeLabel {
 	QString name;		// empty: the poke's own address
-	int off;
+	int off = 0;
 	int num = -1;		// it reads as a number too ("each" is #EAC): that, when not loaded
+	QString text;		// as typed, "lives+#10"
 };
 typedef QList<QList<xPokeLabel>> xPokeLabels;		// a list a trainer, an item a poke
 
@@ -55,8 +56,8 @@ bool cheats_cli();		// the list has the command line's trainers
 void cheats_clear();		// off (bytes back) and gone, the hand list too
 
 // on/off with the bytes back; a known org that is not in memory gives POK_MISMATCH and
-// nothing goes in unless forced. idx -1 = the hand list.
-int cheats_set(Computer*, int idx, bool on, bool force);
+// nothing goes in unless forced. idx -1 = the hand list. miss: the label for CHT_NO_LABEL
+int cheats_set(Computer*, int idx, bool on, bool force, QString* miss = nullptr);
 void cheats_set_value(int idx, int val);
 // one more poke by hand at a cpu address, the hand list turned on
 int cheats_hand_poke(Computer*, int adr, int val);

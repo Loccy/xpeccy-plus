@@ -264,7 +264,8 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 	if (col != CW_CHECK) return;
 	if (!on && ask && (it->data(CW_VALUE, Qt::UserRole + 1).toInt() < 0) && !askValue(idx, name))
 		return;
-	int res = cheats_set(conf.zx, idx, !on, false);
+	QString miss;
+	int res = cheats_set(conf.zx, idx, !on, false, &miss);
 	if (res == POK_MISMATCH) {
 		QString q = QString("\"%0\" does not match this release: the bytes it expects to change are not in memory.\n\n"
 			"Poke anyway?").arg(name);
@@ -277,12 +278,9 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 		case CHT_RZX: note("An RZX is playing: nothing goes in while it plays."); break;
 		case POK_NO_PAGE: note(QString("\"%0\" pokes a 128K page this machine does not have.").arg(name)); break;
 		case POK_NO_RAM: note(QString("\"%0\" pokes where this machine has no RAM now.").arg(name)); break;
-		case CHT_NO_LABEL: {
-			QList<xCheatRow> rows = cheats_rows(conf.zx);		// the label as it is missed now
-			QString lab = ((idx >= 0) && (idx < rows.size())) ? rows[idx].miss : QString();
-			note(QString("\"%0\" pokes at the label %1, which the labels loaded do not have.").arg(name, lab));
+		case CHT_NO_LABEL:
+			note(QString("\"%0\" pokes at the label %1, which the labels loaded do not have.").arg(name, miss));
 			break;
-		}
 		default: note(QString()); break;
 	}
 	fill();

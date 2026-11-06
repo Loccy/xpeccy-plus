@@ -49,11 +49,8 @@ static xTrainer* ch_trainer(int idx, chState** st) {
 	return &ch_file.list[idx];
 }
 
-// A trainer's labels to places, while it is off (one that is on stays where it went).
-// A label paged in counts its offset as the CPU does (#7FFE+4 is #8002, whatever page
-// that is); one paged out stays in its page. The place is a 128K page and the address in
-// it, as a .pok has it, or past those pages (the Next, a Pentagon 1024) the CPU address.
-// CHT_NO_LABEL with the name, or POK_NO_RAM.
+// A trainer's labels to places, only while it is off: one that is on stays where it went.
+// The offset counts as the CPU's when the label is paged in (#7FFE+4 is #8002), else in its page.
 static int ch_resolve(Computer* comp, xTrainer* tr, const chState* st, QString* miss) {
 	if (st->on) return POK_FITS;
 	for (int i = 0; (i < st->labs.size()) && (i < tr->cnt); i++) {
@@ -161,12 +158,8 @@ int cheats_open(const QString& path, bool picked) {
 	return POK_OK;
 }
 
-// Fuse's and Spectaculator's rule, and how every archive with pokes has it:
-// POKES/NAME.POK beside the image, else NAME.pok beside it
-// The game's image read again (Reload, Recent, a mount): every cheat off with its bytes
-// back, as memory is still the one they went into - a snapshot forgot them before it
-// loaded, and a tape is not loaded yet. Then the list the command line named for this
-// image stays.
+// The same image again (Reload, Recent, a mount): every cheat off, bytes back (memory is
+// still theirs); the image the command line opened keeps the list it named.
 void cheats_pick(const QString& image) {
 	QString was;
 	QString keep;
@@ -181,6 +174,8 @@ void cheats_pick(const QString& image) {
 		ch_all_back();
 	}
 	if (!keep.isEmpty() && bkm_same(image, keep)) return;
+	// Fuse's and Spectaculator's rule, and how every archive with pokes has it:
+	// POKES/NAME.POK beside the image, else NAME.pok beside it
 	QFileInfo inf(image);
 	QString want = inf.completeBaseName() + ".pok";
 	QDir dir = inf.dir();
@@ -270,7 +265,7 @@ void cheats_clear() {
 	ch_changed();
 }
 
-int cheats_set(Computer* comp, int idx, bool on, bool force) {
+int cheats_set(Computer* comp, int idx, bool on, bool force, QString* miss) {
 	chLock lock;
 	chState* st;
 	xTrainer* tr = ch_trainer(idx, &st);
@@ -278,7 +273,7 @@ int cheats_set(Computer* comp, int idx, bool on, bool force) {
 	if (on && tr->ask && (st->val < 0)) return POK_FITS;	// the window asks for the value first
 	if (comp->rzx.play) return CHT_RZX;
 	if (on) {
-		int res = ch_resolve(comp, tr, st, NULL);
+		int res = ch_resolve(comp, tr, st, miss);
 		if (res != POK_FITS) return res;
 		res = pok_check(comp, tr);
 		if (res == POK_MISMATCH) {
@@ -358,9 +353,7 @@ static xCheatRow ch_row(Computer* comp, xTrainer* tr, const chState* st) {
 	}
 	for (int i = 0; i < tr->cnt; i++) {
 		r.pokes.append(tr->pokes[i]);
-		const xPokeLabel lb = (i < st->labs.size()) ? st->labs[i] : xPokeLabel{QString(), 0};
-		r.labs.append(lb.name.isEmpty() ? QString() : !lb.off ? lb.name
-			: QString("%0%1%2").arg(lb.name, (lb.off < 0) ? "-" : "+").arg(qAbs(lb.off)));
+		r.labs.append((i < st->labs.size()) ? st->labs[i].text : QString());
 	}
 	return r;
 }

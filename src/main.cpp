@@ -400,15 +400,16 @@ static bool cli_poke_label(const QString& txt, xPokeLabel* lb) {
 	int at = -1;
 	for (int i = 1; (i < s.size()) && (at < 0); i++)
 		if ((s[i] == '+') || (s[i] == '-')) at = i;
-	lb->name = (at < 0) ? s : s.left(at).trimmed();
-	lb->off = 0;
-	if (lb->name.isEmpty() || !(lb->name[0].isLetter() || QString("_.@").contains(lb->name[0])))
+	QString name = (at < 0) ? s : s.left(at).trimmed();
+	if (name.isEmpty() || !(name[0].isLetter() || QString("_.@").contains(name[0])))
 		return false;
-	if (at < 0) return true;
-	bool ok;
-	int n = str_num(s.mid(at + 1), &ok);
-	lb->off = (s[at] == '-') ? -n : n;
-	return ok && (n <= 0xffff);
+	bool ok = true;
+	int n = (at < 0) ? 0 : str_num(s.mid(at + 1), &ok);
+	if (!ok || (n > 0xffff)) return false;
+	lb->name = name;
+	lb->off = ((at >= 0) && (s[at] == '-')) ? -n : n;
+	lb->text = s;
+	return true;
 }
 
 // --poke [NAME=]POKE[:POKE...], POKE = [PAGE/]ADR,VAL[,ORG]: one trainer, as a .pok has
@@ -442,7 +443,7 @@ static void cli_poke(const QString& arg, xPokFile* pf, xPokeLabels* labs) {
 		int adr = 0;
 		int val = 256;		// ? = the user gives it
 		int org = 0;
-		xPokeLabel lb = {QString(), 0};
+		xPokeLabel lb;
 		bool ok = (pg.size() <= 2) && (num.size() >= 2) && (num.size() <= 3);
 		// str_num takes digits only: no sign, nothing over an int
 		if (ok && (pg.size() == 2)) {
@@ -456,7 +457,6 @@ static void cli_poke(const QString& arg, xPokFile* pf, xPokeLabels* labs) {
 			adr = str_num(num[0], &isNum);
 			isNum &= (adr <= 0xffff);
 			bool isLab = (pg.size() == 1) && cli_poke_label(num[0], &lb);
-			if (!isLab) lb = xPokeLabel{QString(), 0};
 			lb.num = (isLab && isNum) ? adr : -1;
 			ok = isNum || isLab;
 		}
