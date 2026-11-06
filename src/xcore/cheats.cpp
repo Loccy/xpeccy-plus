@@ -15,6 +15,7 @@ struct chState {
 	int on;
 	int val;
 	int mismatch;
+	QList<xPokeLabel> labs;		// the command line's labels, a poke each
 };
 
 static xPokFile ch_file = {0, 0, NULL};
@@ -46,6 +47,29 @@ static xTrainer* ch_trainer(int idx, chState** st) {
 	if (idx >= ch_file.cnt) return NULL;
 	*st = &ch_state[idx];
 	return &ch_file.list[idx];
+}
+
+// A trainer's labels to places, while it is off (one that is on stays where it went):
+// RAM as a 128K page and the address in it. CHT_NO_LABEL with the name, or POK_NO_RAM
+// for a label not in the first 128K of RAM.
+static int ch_resolve(xTrainer* tr, const chState* st, QString* miss) {
+	if (st->on) return POK_FITS;
+	for (int i = 0; (i < st->labs.size()) && (i < tr->cnt); i++) {
+		const xPokeLabel& lb = st->labs[i];
+		if (lb.name.isEmpty()) continue;
+		xAdr xa = find_label_cell(lb.name);
+		if (xa.type < 0) {
+			if (miss) *miss = lb.name;
+			return CHT_NO_LABEL;
+		}
+		int abs = xa.abs + lb.off;
+		if ((xa.type != MEM_RAM) || (abs < 0) || (abs >= 0x20000)) return POK_NO_RAM;
+		// the window shows where the CPU sees it now, if it does; the page's own bits count
+		int cpu = conf.zx ? comp_find_xadr(conf.zx, MEM_RAM, abs, MEM_VIEW_READ) : -1;
+		tr->pokes[i].bank = abs >> 14;
+		tr->pokes[i].adr = (cpu >= 0) ? cpu : (0xc000 | (abs & 0x3fff));
+	}
+	return POK_FITS;
 }
 
 // the file's trainers off, bytes back, and the file gone
@@ -155,9 +179,11 @@ void cheats_pick(const QString& image) {
 // The command line's: its trainers (if any) after a .pok named there, or alone in place
 // of the image's own, and then going with the game as a found file does. Either way the
 // list stays through a reload of the image the command line opened. false = out of memory
-bool cheats_add(xPokFile* pf, bool alone, const QString& image) {
+bool cheats_add(xPokFile* pf, const xPokeLabels& labs, bool alone, const QString& image) {
 	chLock lock;
 	bool ok = true;
+	int from = alone ? 0 : ch_file.cnt;
+	int cnt = pf->cnt;
 	if (alone) {
 		ch_drop_file(ch_comp);
 		ch_file = *pf;
@@ -179,6 +205,8 @@ bool cheats_add(xPokFile* pf, bool alone, const QString& image) {
 			ch_cli = true;
 		}
 	}
+	for (int i = 0; ok && (i < cnt) && (i < labs.size()); i++)
+		ch_state[from + i].labs = labs[i];
 	ch_keep = image;
 	ch_changed();
 	return ok;
@@ -219,7 +247,9 @@ int cheats_set(Computer* comp, int idx, bool on, bool force) {
 	if (on && tr->ask && (st->val < 0)) return POK_FITS;	// the window asks for the value first
 	if (comp->rzx.play) return CHT_RZX;
 	if (on) {
-		int res = pok_check(comp, tr);
+		int res = ch_resolve(tr, st, NULL);
+		if (res != POK_FITS) return res;
+		res = pok_check(comp, tr);
 		if (res == POK_MISMATCH) {
 			st->mismatch = 1;
 			ch_changed();
@@ -276,7 +306,7 @@ void cheats_hand_clear(Computer* comp) {
 	ch_changed();
 }
 
-static xCheatRow ch_row(Computer* comp, const xTrainer* tr, const chState* st) {
+static xCheatRow ch_row(Computer* comp, xTrainer* tr, const chState* st) {
 	xCheatRow r;
 	r.name = QString::fromLatin1(tr->name);
 	r.on = st->on;
@@ -284,8 +314,9 @@ static xCheatRow ch_row(Computer* comp, const xTrainer* tr, const chState* st) {
 	r.line = tr->line;
 	r.ask = tr->ask;
 	r.val = st->val;
-	int res = tr->why ? POK_FITS : pok_check(comp, tr);
-	if (res == POK_NO_PAGE || res == POK_NO_RAM) {
+	int res = tr->why ? POK_FITS : ch_resolve(tr, st, &r.miss);
+	if ((res == POK_FITS) && !tr->why) res = pok_check(comp, tr);
+	if (res == POK_NO_PAGE || res == POK_NO_RAM || res == CHT_NO_LABEL) {
 		r.mark = res;
 	} else if (st->mismatch) {
 		r.mark = POK_MISMATCH;
@@ -294,8 +325,12 @@ static xCheatRow ch_row(Computer* comp, const xTrainer* tr, const chState* st) {
 		for (int i = 0; i < tr->cnt; i++)
 			if (tr->pokes[i].org) r.mark = POK_FITS;
 	}
-	for (int i = 0; i < tr->cnt; i++)
+	for (int i = 0; i < tr->cnt; i++) {
 		r.pokes.append(tr->pokes[i]);
+		const xPokeLabel lb = (i < st->labs.size()) ? st->labs[i] : xPokeLabel{QString(), 0};
+		r.labs.append(lb.name.isEmpty() ? QString() : !lb.off ? lb.name
+			: QString("%0%1%2").arg(lb.name, (lb.off < 0) ? "-" : "+").arg(qAbs(lb.off)));
+	}
 	return r;
 }
 

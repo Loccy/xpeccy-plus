@@ -276,14 +276,20 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 		case CHT_RZX: note("An RZX is playing: nothing goes in while it plays."); break;
 		case POK_NO_PAGE: note(QString("\"%0\" pokes a 128K page this machine does not have.").arg(name)); break;
 		case POK_NO_RAM: note(QString("\"%0\" pokes where this machine has no RAM now.").arg(name)); break;
+		case CHT_NO_LABEL:
+			note(QString("\"%0\" pokes at the label %1, which the labels loaded do not have.")
+				.arg(name, it->data(CW_NOTE, Qt::UserRole).toString()));
+			break;
 		default: note(QString()); break;
 	}
 	fill();
 }
 
-static QString cw_poke_text(const xPoke& pk) {
+// a label (from the command line) first, and where it is now if it was found
+static QString cw_poke_text(const xPoke& pk, const QString& lab, bool placed) {
 	QString where = QString("%0 #%1").arg(pk.adr).arg(pk.adr, 4, 16, QChar('0')).toUpper();
 	if (!(pk.bank & 8)) where = QString("page %0: %1").arg(pk.bank & 7).arg(where);
+	if (!lab.isEmpty()) where = placed ? QString("%0 (%1)").arg(lab, where) : lab;
 	QString val = (pk.val > 255) ? QString("?") : QString::number(pk.val);
 	QString txt = QString("%0 = %1").arg(where, val);
 	if (pk.org) txt += QString("  (was %0)").arg(pk.org);
@@ -333,6 +339,7 @@ void xCheatWin::fill() {
 				case POK_UNCHECKED: mark = "cannot check"; col = grey; break;
 				case POK_NO_PAGE: mark = "needs 128K"; col = grey; break;
 				case POK_NO_RAM: mark = "no RAM there"; col = grey; break;
+				case CHT_NO_LABEL: mark = QString("no label %0").arg(r.miss); col = grey; break;
 			}
 		}
 		if (!mark.isEmpty()) {
@@ -341,11 +348,12 @@ void xCheatWin::fill() {
 		}
 		if (r.mark == POK_UNCHECKED)
 			it->setToolTip(CW_NOTE, "The file has no original bytes for it to compare");
-		if (r.why || (r.mark == POK_NO_PAGE) || (r.mark == POK_NO_RAM))
+		it->setData(CW_NOTE, Qt::UserRole, r.miss);
+		if (r.why || (r.mark == POK_NO_PAGE) || (r.mark == POK_NO_RAM) || (r.mark == CHT_NO_LABEL))
 			it->setForeground(CW_NAME, grey);
-		foreach(const xPoke& pk, r.pokes) {
+		for (int k = 0; k < r.pokes.size(); k++) {
 			QTreeWidgetItem* sub = new QTreeWidgetItem(it);
-			sub->setText(CW_NAME, cw_poke_text(pk));
+			sub->setText(CW_NAME, cw_poke_text(r.pokes[k], r.labs.value(k), r.mark != CHT_NO_LABEL));
 			sub->setForeground(CW_NAME, grey);
 		}
 		tree->addTopLevelItem(it);

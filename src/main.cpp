@@ -104,7 +104,8 @@ void help() {
 	printf("--autostart\t\tstart the media given here, whatever the Auto-run option says\n");
 	printf("--no-autostart\t\tjust mount the media given here, don't start it\n");
 	printf("--poke LIST\t\ta trainer for the Cheats window, unticked: [NAME=]POKE[:POKE...],\n");
-	printf("\t\t\tPOKE = [PAGE/]ADR,VAL[,ORG], VAL may be ? (asked when ticked). Repeat for more\n");
+	printf("\t\t\tPOKE = [PAGE/]ADR,VAL[,ORG], VAL may be ? (asked when ticked), ADR a label\n");
+	printf("\t\t\t(+N/-N), placed when ticked. Repeat for more\n");
 	printf("--log\t\t\twrite a log file to logs/<date>/ beside the binary\n");
 	printf("--no-log\t\tno log file, whatever the options say\n");
 	printf("--log-console\t\talso write the log to stderr\n");
@@ -392,10 +393,28 @@ static bool cli_num(const char* opt, const char* val, int* res) {
 	return ok;
 }
 
+// ADR as a label, LABEL+N or LABEL-N: a SjASMPlus name starts with a letter, _ . or @
+// and has no + or - in it. false: not one
+static bool cli_poke_label(const QString& txt, xPokeLabel* lb) {
+	QString s = txt.trimmed();
+	int at = -1;
+	for (int i = 1; (i < s.size()) && (at < 0); i++)
+		if ((s[i] == '+') || (s[i] == '-')) at = i;
+	lb->name = (at < 0) ? s : s.left(at).trimmed();
+	lb->off = 0;
+	if (lb->name.isEmpty() || !(lb->name[0].isLetter() || QString("_.@").contains(lb->name[0])))
+		return false;
+	if (at < 0) return true;
+	bool ok;
+	int n = str_num(s.mid(at + 1), &ok);
+	lb->off = (s[at] == '-') ? -n : n;
+	return ok;
+}
+
 // --poke [NAME=]POKE[:POKE...], POKE = [PAGE/]ADR,VAL[,ORG]: one trainer, as a .pok has
-// it (ORG 0 = not known). A bad POKE leaves the whole trainer out: half of one can crash
-// the game.
-static void cli_poke(const QString& arg, xPokFile* pf) {
+// it (ORG 0 = not known); ADR may be a label, placed when the trainer is ticked. A bad
+// POKE leaves the whole trainer out: half of one can crash the game.
+static void cli_poke(const QString& arg, xPokFile* pf, xPokeLabels* labs) {
 	int eq = arg.lastIndexOf('=');
 	QString list = arg.mid(eq + 1);
 	QString name = (eq < 0) ? QString() : arg.left(eq).trimmed();
@@ -415,6 +434,7 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 		return;
 	}
 	xTrainer* tr = &pf->list[pf->cnt - 1];
+	labs->append(QList<xPokeLabel>());
 	foreach(QString one, pokes) {
 		QStringList pg = one.split('/');
 		QStringList num = pg.last().split(',');
@@ -422,6 +442,7 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 		int adr = 0;
 		int val = 256;		// ? = the user gives it
 		int org = 0;
+		xPokeLabel lb = {QString(), 0};
 		bool ok = (pg.size() <= 2) && (num.size() >= 2) && (num.size() <= 3);
 		// str_num takes digits only: no sign, nothing over an int
 		if (ok && (pg.size() == 2)) {
@@ -431,6 +452,7 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 		if (ok) {
 			adr = str_num(num[0], &ok);
 			ok &= (adr <= 0xffff);
+			if (!ok && (pg.size() == 1)) ok = cli_poke_label(num[0], &lb);	// a label has its own page
 		}
 		if (ok && (num[1].trimmed() != "?")) {
 			val = str_num(num[1], &ok);
@@ -440,10 +462,16 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 			org = str_num(num[2], &ok);
 			ok &= (org <= 255);
 		}
-		if (ok && pok_add_poke(tr, page, adr, val, org)) continue;
+		if (ok && pok_add_poke(tr, page, adr, val, org)) {
+			labs->last().append(lb);
+			if (!lb.name.isEmpty() && (find_label_cell(lb.name).type < 0))
+				cli_warn(QString("--poke: no label %0 loaded now").arg(lb.name));
+			continue;
+		}
 		cli_warn(ok ? QString("--poke: out of memory") : QString("--poke: not a poke: %0").arg(one));
 		pok_trainer_free(tr);
 		pf->cnt--;
+		labs->removeLast();
 		return;
 	}
 }
@@ -452,9 +480,10 @@ static void cli_poke(const QString& arg, xPokFile* pf) {
 static void cli_cheats(MainWin& mwin) {
 	bool own = !cliPok.isEmpty() && mwin.openCheats(cliPok);
 	xPokFile pf = {0, 0, NULL};
+	xPokeLabels labs;
 	foreach(QString arg, cliPokes)
-		cli_poke(arg, &pf);
-	if ((own || pf.cnt) && !cheats_add(&pf, !own, cliImage))
+		cli_poke(arg, &pf, &labs);
+	if ((own || pf.cnt) && !cheats_add(&pf, labs, !own, cliImage))
 		cli_warn("--poke: out of memory, no trainers taken");
 	pok_free(&pf);
 }
