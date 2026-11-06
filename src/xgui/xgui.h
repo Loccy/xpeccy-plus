@@ -80,6 +80,7 @@ class xHexSpin : public QLineEdit {
 		int chgMask;		// bytes changed by the last setValue, bit 0 = the lowest
 		bool isblank;		// holding nothing, with XHS_BLANK
 		bool fixing = false;	// putting back a text that was refused: not a new one
+		int fmtSeen = -1;	// the debugger's numbers numFmt() last set
 		int hsflag;
 		int base;
 		int value;
@@ -228,9 +229,13 @@ void dbg_num_field(QLineEdit*);
 // what a number is: hex, decimal and binary, a line each; for an address (or a
 // word, which may be one) the label there above them. name: the label it was typed as
 QString dbg_num_tip(int val, bool adr, const QString& name = QString(), bool label = true);
-// the tip just shown moved over (or under) a rectangle of a widget: over a
-// number pointed at, under a field being typed into; the other side at a screen edge
-void dbg_place_tip(QWidget* wid, const QRect& at, bool above);
+// a number's tip at a rectangle of a widget, nothing: hidden. above: over a
+// number pointed at, gone when the mouse leaves it; else under a field being
+// typed into, there until hidden. The other side at a screen edge
+void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above);
+// a register's field (XHS_NUMS) for its size and flags (xRegister): its range,
+// the debugger's base, Split pairs and the width those make
+void reg_field_setup(xHexSpin* fld, int size, int flag);
 // what a register that is no number is for (IM, IFF1, IFF2), empty for the rest
 QString dbg_reg_tip(const QString& name);
 

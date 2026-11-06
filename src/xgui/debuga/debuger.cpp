@@ -55,6 +55,8 @@ int tmpcnt = 0;
 int getRFIData(QComboBox*);
 void setRFIndex(QComboBox*, QVariant, int);
 int dasmSome(Computer*, int, dasmData&);
+int dasmSomeFmt(Computer*, int, dasmData&, int fmt);
+QString dasm_export(const dasmData&);
 
 // trace type
 enum {
@@ -150,7 +152,7 @@ static void markMenuHeader(QWidget* wid, int gap = 0) {
 // The debugger's numbers: hex in the form Options picked, or decimal. The
 // button names the base shown now; every window shown is redrawn.
 void DebugWin::toggleNumFmt() {
-	conf.dbg.numfmt = (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : CPU_NUM_DEC;
+	dbg_set_numfmt((conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : CPU_NUM_DEC);
 	showNumFmt();
 }
 
@@ -850,6 +852,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	connect(dui.aSaveToD,SIGNAL(triggered()),this,SLOT(saveDumpToD()));
 	connect(dui.leStart,SIGNAL(valueChanged(int)),this,SLOT(dmpLimChanged()));
 	connect(dui.leEnd,SIGNAL(valueChanged(int)),this,SLOT(dmpLimChanged()));
+	connect(dui.leEnd, &QLineEdit::editingFinished, this, &DebugWin::dmpLimChanged);
 	connect(dui.leLen,SIGNAL(valueChanged(int)),this,SLOT(dmpLenChanged()));
 	connect(dui.cbSource,SIGNAL(currentIndexChanged(int)),this,SLOT(dmpSourceChanged()));
 	connect(dui.sbPage,SIGNAL(valueChanged(int)),this,SLOT(dmpPageChanged()));
@@ -1248,7 +1251,7 @@ void DebugWin::customEvent(QEvent* ev) {
 	switch(ev->type()) {
 		case DBG_EVENT_STEP:
 			if ((traceType == DBG_TRACE_LOG) && logfile.isOpen()) {
-				dasmSome(comp, pcadr, tracemnm);
+				dasmSomeFmt(comp, pcadr, tracemnm, CPU_NUM_HASH);	// the log keeps one form
 				tracestr = "\"";			// to avoid numbers conversion, like 3e4->3000
 				tracestr.append(gethexword(pcadr));
 				tracestr.append("\"|");
@@ -1637,23 +1640,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		dbgRegLabs[cnt]->setProperty("regid", b->regs[cnt].id);
 		dbgRegLabs[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
 		dbgRegBits[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
-		int mx;
-		switch(b->regs[cnt].size) {
-			case REG_2: mx = 2; break;
-			case REG_BYTE: mx = 0xff; break;
-			case REG_24: mx = 0xffffff; break;
-			case REG_32: mx = 0x7fffffff; break;	// the field and the register value are int
-			default: mx = 0xffff; break;
-		}
-		dbgRegEdit[cnt]->setMax(mx);
-		// A register with a type of its own - the counter, the stack pointer, the
-		// flags, a segment - is one number. The rest are bytes that move on their
-		// own, so a changed one can light just the byte that moved; in decimal
-		// they are a number a byte then, which makes the field wider: set it
-		// before it is measured
-		dbgRegEdit[cnt]->numFmt();	// hidden ones too: a shown one would move only now
-		dbgRegEdit[cnt]->setSplit(conf.dbg.regsplit && !(b->regs[cnt].flag & REG_TYPE_M));
-		dbgRegEdit[cnt]->refitWidth();	// a word is as wide as a split pair: PC too
+		reg_field_setup(dbgRegEdit[cnt], b->regs[cnt].size, b->regs[cnt].flag);	// before it is measured
 		if (dbgRegLabs[cnt]->sizeHint().width() > labw) labw = dbgRegLabs[cnt]->sizeHint().width();
 		if (dbgRegEdit[cnt]->minimumWidth() > fldw) fldw = dbgRegEdit[cnt]->minimumWidth();
 		cnt++;
@@ -2409,7 +2396,7 @@ void DebugWin::saveDasm() {
 					work = 0;		// address overfill (FFFF+)
 				if (drow.isequ) {
 					strm << drow.aname << ":";
-					strm << drow.command;
+					strm << dasm_export(drow);
 				} else if (drow.islab) {
 					if (drow.iscom) {
 						strm << drow.aname;
@@ -2417,7 +2404,7 @@ void DebugWin::saveDasm() {
 						strm << drow.aname << ":";
 					}
 				} else {
-					strm << "\t" << drow.command;
+					strm << "\t" << dasm_export(drow);
 				}
 				strm << "\n";
 			}
@@ -2864,7 +2851,12 @@ void DebugWin::dmpLimChanged() {
 	if (dmpBusy) return;
 	int start = dui.leStart->getValue();
 	int end = dui.leEnd->getValue();
-	if (end < start) end = start;
+	if (end < start) {
+		// an End being typed passes below Start on its way (the 4 of 40000): it is
+		// pulled up when it is left, not under the caret
+		if (dui.leEnd->hasFocus()) return;
+		end = start;
+	}
 	int len = end - start + 1;
 	dmpBusy = true;
 	int pos = dui.leEnd->cursorPosition();
@@ -2910,7 +2902,7 @@ void DebugWin::dmpFileName(QString* name, int* start) {
 	int area = getRFIData(dui.cbSource);
 	int ofs = dui.leStart->getValue();
 	if (area == CELL_NONE) {
-		*name = QString::number(ofs, 16).toUpper().rightJustified(4, '0');	// hex, whatever the field shows
+		*name = gethexword(ofs);	// hex, whatever the field shows
 		*start = ofs;
 		return;
 	}

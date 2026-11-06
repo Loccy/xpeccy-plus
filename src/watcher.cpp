@@ -59,26 +59,22 @@ void xWatcher::fitColumns() {
 
 // the registers as the debugger shows them: its base, and a pair lit (or, in
 // decimal, written) byte by byte with Split pairs
+// the fields as the debugger has them; again only when its numbers or Split
+// pairs moved - every frame would repolish them and put the caret back to 0
+void xWatcher::setupRegs(const xRegBunch& regs) {
+	setupKey = conf.dbg.numfmt * 2 + conf.dbg.regsplit;
+	for (int i = 0; (i < regValues.size()) && (regs.regs[i].id != REG_EOT); i++)
+		reg_field_setup(regValues[i], regs.regs[i].size, regs.regs[i].flag);
+}
+
 void xWatcher::setRegs(const xRegBunch& regs) {
+	if (setupKey != conf.dbg.numfmt * 2 + conf.dbg.regsplit) setupRegs(regs);
 	for (int i = 0; (i < regValues.size()) && (regs.regs[i].id != REG_EOT); i++) {
-		int mx;
-		switch (regs.regs[i].size) {
-			case REG_2: mx = 2; break;
-			case REG_BIT: mx = 1; break;
-			case REG_BYTE: mx = 0xff; break;
-			case REG_24: mx = 0xffffff; break;
-			case REG_32: mx = 0x7fffffff; break;
-			default: mx = 0xffff; break;
-		}
 		if (regs.regs[i].size == REG_BIT) {
 			regBits[i]->setChecked(regs.regs[i].value);
-			continue;
+		} else {
+			regValues[i]->setValue(regs.regs[i].value);
 		}
-		regValues[i]->setMax(mx);
-		regValues[i]->numFmt();
-		regValues[i]->setSplit(conf.dbg.regsplit && !(regs.regs[i].flag & REG_TYPE_M));
-		regValues[i]->refitWidth();	// a word as wide as a split pair, as in the debugger
-		regValues[i]->setValue(regs.regs[i].value);
 	}
 }
 
@@ -89,8 +85,7 @@ xWatcher::xWatcher(QWidget* p):QDialog(p) {
 	ui.wchMemTab->setModel(model);
 	ui.wchMemTab->addAction(ui.actAddWatcher);
 	ui.wchMemTab->addAction(ui.actDelWatcher);
-	// it is never scrolled across: a moment of being too narrow (the registers
-	// beside it growing, decimal) would leave it scrolled, its left side cut off
+	// never scrolled across: a moment too narrow would leave its left side cut off
 	QScrollBar* hsb = ui.wchMemTab->horizontalScrollBar();
 	connect(hsb, &QScrollBar::valueChanged, this, [hsb](int v) {
 		if (v != 0) hsb->setValue(0);
@@ -176,6 +171,7 @@ void xWatcher::show() {
 
 	xRegBunch regs = cpuGetRegs(conf.zx->cpu);
 	placeRegs(regs);
+	setupRegs(regs);
 	int work = 1;
 	for(int i = 0; i < 32; i++) {
 		if (work) {

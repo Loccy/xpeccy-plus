@@ -187,13 +187,20 @@ QString gethex6(int);
 QString gethexint(int);
 
 // numbers as the debugger shows them, in conf.dbg.numfmt (CPU_NUM_*)
+int dbg_hexfmt();		// the hex form picked, decimal shown or not
+void dbg_set_numfmt(int);	// the form shown; a hex one is remembered as the hex form too
+void dbg_sign(int fmt, QString* pre, QString* post);	// the hex sign of a form: # $ or h
+QString dbg_num_in(int val, int hexDigits, int fmt, int decDigits = 0);
 QString dbg_num(int val, int hexDigits, int decDigits = 0);	// decDigits 0: not padded
 QString dbg_adr(int);		// a 16-bit address: five characters in every form, for a column
-QString dbg_adr_t(int);		// the same in a line of text or a field: decimal not padded
-QString dbg_word(int);
+QString dbg_word(int);		// a word, an address in a line of text or a field
 QString dbg_byte(int);
 QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
 QString dbg_abs_t(int);
+bool is_hex_char(QChar);
+// an address as the listing takes it (dbg_disasm.cpp); typed: by the one rule and
+// labels, else bare hex as the control port has it
+int str_to_adr(Computer* comp, QString str, bool typed = false);
 QString dbg_port(int port, int mask);	// a port: 7FFD or FE by its mask, in the form picked
 QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
 int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal

@@ -67,6 +67,8 @@ class xWatcher : public QDialog {
 		int getCurRow();
 		void fitColumns();
 		void setRegs(const xRegBunch&);
+		void setupRegs(const xRegBunch&);
+		int setupKey = -1;		// the numbers and Split pairs setupRegs() was done for
 		void placeRegs(const xRegBunch&);
 
 		QDialog* newWch;

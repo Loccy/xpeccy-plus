@@ -230,7 +230,7 @@ QVariant xDumpModel::data(const QModelIndex& idx, int role) const {
 			if (col == 0) {
 				if (mode != XVIEW_CPU)
 					adr = dump_page_ofs(conf.zx, dump_view_area(mode), adr);
-				res = dbg_adr_t(adr);
+				res = dbg_word(adr);
 			} else if (col == 17) {
 				// no edit
 			} else {
@@ -266,7 +266,6 @@ Qt::ItemFlags xDumpModel::flags(const QModelIndex& idx) const {
 	return res;
 }
 
-extern int str_to_adr(Computer* comp, QString str, bool typed);
 
 bool xDumpModel::setData(const QModelIndex& idx, const QVariant& val, int role) {
 	if (!idx.isValid()) return false;

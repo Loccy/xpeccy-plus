@@ -33,9 +33,9 @@ QString brkGetString(xBrkPoint brk) {
 	QString res;
 	switch(brk.type) {
 		case BRK_CPUADR:
-			res = QString("CPU:%0").arg(dbg_adr_t(brk.adr));
+			res = QString("CPU:%0").arg(dbg_word(brk.adr));
 			if (brk.eadr > brk.adr) {
-				res.append(QString("-%0").arg(dbg_adr_t(brk.eadr)));
+				res.append(QString("-%0").arg(dbg_word(brk.eadr)));
 			}
 			break;
 		case BRK_IOPORT:
@@ -60,7 +60,7 @@ QString brkGetString(xBrkPoint brk) {
 			break;
 		}
 		case BRK_MEMEXT:
-			res = QString("EXT:%0 [%1:%2]").arg(dbg_num(brk.adr, 6)).arg(gethexbyte(brk.adr >> 14)).arg(dbg_adr_t(brk.adr & 0x3fff));
+			res = QString("EXT:%0 [%1:%2]").arg(dbg_num(brk.adr, 6)).arg(gethexbyte(brk.adr >> 14)).arg(dbg_word(brk.adr & 0x3fff));
 			break;
 		case BRK_IRQ:
 			res = QString("IRQ");
@@ -370,10 +370,10 @@ static int brk_base_area(int type) {
 
 // One address field as the type reads it. A cpu address is a number by the
 // debugger's one rule (dbg_read_adr) or a label; a port a number by the same
-// rule (its mask is read by readRange). A cell is an offset in the page of the page field, page:offset (the
-// page in hex, or an area's token: ROM0, DIV3), a label, or a cpu address - which
-// brings the cell mapped there now, when it is the kind of memory the type
-// watches. *cell is that cell, -1 when the field gave an offset alone
+// rule (readRange reads its mask). A cell is an offset in the page of the page
+// field, page:offset (the page in hex, or an area's token: ROM0, DIV3), a
+// label, or a cpu address - which brings the cell mapped there now, when it is
+// the kind of memory the type watches. *cell is that cell, -1 for an offset alone
 bool xBrkManager::readAdr(QString txt, int* adr, int* cell) {
 	int type = curType();
 	int val;
@@ -529,17 +529,17 @@ void xBrkManager::chaAdr() {
 		res = err;
 	} else {
 		if (brk.type == BRK_CPUADR) {
-			res = dbg_adr_t(brk.adr);
-			if (brk.eadr > brk.adr) res.append("-").append(dbg_adr_t(brk.eadr));
+			res = dbg_word(brk.adr);
+			if (brk.eadr > brk.adr) res.append("-").append(dbg_word(brk.eadr));
 		} else {
 			int ofs;
 			res = QString("%0 %1").arg(brk_cell_name(brk.type)).arg(cell_view_text(brk_mem_type(brk.type), brk.adr));
 			if (brk.eadr > brk.adr) {
 				cell_page_text(brk_mem_type(brk.type), brk.eadr, &ofs);
-				res.append("-").append(dbg_adr_t(ofs));
+				res.append("-").append(dbg_word(ofs));
 			}
 			int cpu = comp_find_xadr(conf.zx, brk_mem_type(brk.type), brk.adr, MEM_VIEW_READ);
-			res.append((cpu < 0) ? QString(", not mapped now") : QString(", at %0 now").arg(dbg_adr_t(cpu)));
+			res.append((cpu < 0) ? QString(", not mapped now") : QString(", at %0 now").arg(dbg_word(cpu)));
 		}
 		QString lab = brk_label(brk.type, brk.adr);
 		if (!lab.isEmpty()) res.append(QString(", %0").arg(lab));
@@ -653,10 +653,10 @@ void xBrkManager::condHelp() {
 static QString brk_adr_text(int type, int abs) {
 	QString lab = brk_label(type, abs);
 	if (!lab.isEmpty()) return lab;
-	if (!brk_is_cell(type)) return dbg_adr_t(abs);
+	if (!brk_is_cell(type)) return dbg_word(abs);
 	// an offset in the page field's page, or page:offset for any other area
 	xCell c = comp_cell(conf.zx, brk_mem_type(type), abs);
-	return (c.area == brk_base_area(type)) ? dbg_adr_t(c.ofs) : cell_view_text(brk_mem_type(type), abs);
+	return (c.area == brk_base_area(type)) ? dbg_word(c.ofs) : cell_view_text(brk_mem_type(type), abs);
 }
 
 void xBrkManager::edit(xBrkPoint* sbrk) {

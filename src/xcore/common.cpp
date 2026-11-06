@@ -110,34 +110,46 @@ QString gethexbyte(int num) {
 
 // The debugger's numbers. An address keeps five characters in every form
 // (#8000, $8000, 8000h, 32768), so a column holds either: a decimal one is
-// padded with spaces, never zeros. A value is not padded in decimal, as an
-// assembler writes it.
+// padded with spaces, never zeros. A value is not padded in decimal.
 
-static QString num_text(int val, int hexDigits, int decDigits, int fmt) {
+int dbg_hexfmt() {
+	return (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : conf.dbg.numfmt;
+}
+
+void dbg_set_numfmt(int fmt) {
+	conf.dbg.numfmt = fmt;
+	if (fmt != CPU_NUM_DEC) conf.dbg.hexfmt = fmt;
+}
+
+void dbg_sign(int fmt, QString* pre, QString* post) {
+	pre->clear();
+	post->clear();
+	switch (fmt) {
+		case CPU_NUM_DEC: break;
+		case CPU_NUM_H: *post = "h"; break;
+		case CPU_NUM_DOLLAR: *pre = "$"; break;
+		default: *pre = "#"; break;
+	}
+}
+
+QString dbg_num_in(int val, int hexDigits, int fmt, int decDigits) {
 	if (fmt == CPU_NUM_DEC)
 		return QString::number(val).rightJustified(decDigits, ' ');
-	QString res = formbufword(val).rightJustified(hexDigits, '0');
-	switch (fmt) {
-		case CPU_NUM_DOLLAR: return res.prepend('$');
-		case CPU_NUM_H: return res.append('h');
-	}
-	return res.prepend('#');
+	QString pre, post;
+	dbg_sign(fmt, &pre, &post);
+	return pre + formbufword(val).rightJustified(hexDigits, '0') + post;
 }
 
 QString dbg_num(int val, int hexDigits, int decDigits) {
-	return num_text(val, hexDigits, decDigits, conf.dbg.numfmt);
+	return dbg_num_in(val, hexDigits, conf.dbg.numfmt, decDigits);
 }
 
 QString dbg_hex(int val, int digits) {
-	return num_text(val, digits, 0, (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : conf.dbg.numfmt);
+	return dbg_num_in(val, digits, dbg_hexfmt());
 }
 
 QString dbg_adr(int adr) {
 	return dbg_num(adr & 0xffff, 4, 5);
-}
-
-QString dbg_adr_t(int adr) {
-	return dbg_num(adr & 0xffff, 4);
 }
 
 QString dbg_word(int val) {
@@ -152,38 +164,18 @@ QString dbg_abs(int adr) {
 	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr(adr);
 }
 
-// a port as the debugger shows it: four hex digits for a full one, two for one
-// decoded by its low byte; decimal as it is
+QString dbg_abs_t(int adr) {
+	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_word(adr);
+}
+
+// a port: four hex digits for a full one, two for one decoded by its low byte
 QString dbg_port(int port, int mask) {
 	return dbg_num(port & 0xffff, (mask > 0xff) ? 4 : 2);
 }
 
-QString dbg_abs_t(int adr) {
-	return (adr > 0xffff) ? dbg_num(adr, 6) : dbg_adr_t(adr);
-}
-
-// One rule for a number typed into the debugger: a hex sign - #, $ or 0x in
-// front, h behind - makes it hex, none decimal; a leading zero is not octal
-int dbg_num_parse(QString str, bool* ok) {
-	str = str.trimmed();
-	bool hex = true;
-	if (str.startsWith('#') || str.startsWith('$')) {
-		str.remove(0, 1);
-	} else if (str.startsWith("0x", Qt::CaseInsensitive)) {
-		str.remove(0, 2);
-	} else if ((str.size() > 1) && str.endsWith('h', Qt::CaseInsensitive)) {
-		str.chop(1);
-	} else {
-		hex = false;
-	}
-	bool good = !str.isEmpty();
-	for (QChar chr : str) {
-		int c = chr.toLower().unicode();
-		if (!(((c >= '0') && (c <= '9')) || (hex && (c >= 'a') && (c <= 'f')))) good = false;
-	}
-	int val = good ? str.toInt(&good, hex ? 16 : 10) : 0;
-	if (ok) *ok = good;
-	return good ? val : 0;
+bool is_hex_char(QChar chr) {
+	int c = chr.toLower().unicode();
+	return ((c >= '0') && (c <= '9')) || ((c >= 'a') && (c <= 'f'));
 }
 
 // what a typed text is once its hex sign is taken off: "#START" -> "START",
@@ -194,6 +186,21 @@ QString dbg_num_unsign(QString str) {
 	if (str.startsWith("0x", Qt::CaseInsensitive)) return str.mid(2);
 	if ((str.size() > 1) && str.endsWith('h', Qt::CaseInsensitive)) str.chop(1);
 	return str;
+}
+
+// One rule for a number typed into the debugger: a hex sign - #, $ or 0x in
+// front, h behind - makes it hex, none decimal; a leading zero is not octal
+int dbg_num_parse(QString str, bool* ok) {
+	str = str.trimmed();
+	QString dig = dbg_num_unsign(str);
+	bool hex = (dig != str);
+	bool good = !dig.isEmpty();
+	for (QChar chr : dig) {
+		if (hex ? !is_hex_char(chr) : ((chr < QChar('0')) || (chr > QChar('9')))) good = false;
+	}
+	int val = good ? dig.toInt(&good, hex ? 16 : 10) : 0;
+	if (ok) *ok = good;
+	return good ? val : 0;
 }
 
 // A typed address: a label, a number by the one rule, or a label behind a
@@ -340,15 +347,9 @@ QString shot_dir() {
 	return QDir::homePath();
 }
 
-// a number typed by the user: #, $ and 0x are hex, everything else decimal -
-// a leading zero is not octal
+// a number typed by the user, by the debugger's one rule
 int str_num(QString str, bool* ok) {
-	str = str.trimmed();
-	if (str.startsWith("#") || str.startsWith("$"))
-		return str.mid(1).toInt(ok, 16);
-	if (str.startsWith("0x", Qt::CaseInsensitive))
-		return str.mid(2).toInt(ok, 16);
-	return str.toInt(ok, 10);
+	return dbg_num_parse(str, ok);
 }
 
 bool str2bool(std::string v) {

@@ -20,6 +20,7 @@
 #include <QFontMetrics>
 #include <QDebug>
 #include <QToolTip>
+#include <QCursor>
 #include <QCompleter>
 #include <QStringListModel>
 #include <QAbstractItemView>
@@ -192,27 +193,22 @@ void xHexSpin::setBase(int b) {
 	redraw();			// other digits even at the same width
 }
 
-// XHS_ADDR: an address field in the debugger's numbers - base 10, or base 16
-// with the sign of the hex form beside the digits. The sign is not text but a
-// margin painted in: the digits keep their mask, and Backspace in front of them
-// takes the sign off (decimal then), as in the other address fields; # or $
-// puts it back, and so does X, as in any field that switches
+// XHS_ADDR / XHS_NUMS: the base the debugger shows; an address's sign is a
+// painted margin (Backspace in front of the digits: decimal, # or $: hex)
 void xHexSpin::numFmt() {
 	if (!(hsflag & (XHS_ADDR | XHS_NUMS))) return;
-	setBase((conf.dbg.numfmt == CPU_NUM_DEC) ? 10 : 16);
+	int b = (conf.dbg.numfmt == CPU_NUM_DEC) ? 10 : 16;
+	int key = conf.dbg.numfmt * 16 + conf.dbg.hexfmt;
+	if ((b == base) && (key == fmtSeen)) return;		// base and sign as they are
+	fmtSeen = key;
+	setBase(b);
 }
 
 void xHexSpin::updateSign() {
 	sgnPre.clear();
 	sgnPost.clear();
-	if ((hsflag & XHS_ADDR) && (base == 16)) {
-		int fmt = (conf.dbg.numfmt == CPU_NUM_DEC) ? conf.dbg.hexfmt : conf.dbg.numfmt;
-		if (fmt == CPU_NUM_H) {
-			sgnPost = "h";
-		} else {
-			sgnPre = (fmt == CPU_NUM_DOLLAR) ? "$" : "#";
-		}
-	}
+	if ((hsflag & XHS_ADDR) && (base == 16))
+		dbg_sign(dbg_hexfmt(), &sgnPre, &sgnPost);
 	QFontMetrics fm(font());
 	setTextMargins(fm.horizontalAdvance(sgnPre), 0, fm.horizontalAdvance(sgnPost), 0);
 }
@@ -357,8 +353,9 @@ void xHexSpin::updatePal() {
 	} else {
 		str = p ? p->styleSheet() : ""; // getStyleString("dbg.input.bg", "dbg.input.txt");
 	}
-	if (p) setFont(p->font());
-	setStyleSheet(str);
+	// only what moved: either one repolishes the field, and this runs on every value
+	if (p && (font() != p->font())) setFont(p->font());
+	if (styleSheet() != str) setStyleSheet(str);
 #else
 	QPalette pal;
 	if (chgMask) {
@@ -404,10 +401,7 @@ void xHexSpin::setValue(int nval) {
 void xHexSpin::paintEvent(QPaintEvent* ev) {
 	QLineEdit::paintEvent(ev);
 	if (!isblank && (!sgnPre.isEmpty() || !sgnPost.isEmpty())) {		// dashes are no number
-		// the sign beside the digits, wherever the alignment puts them; the
-		// margins it has are kept free of text by setTextMargins
-		// where QLineEdit puts its text: the style's contents rect, less the
-		// text margins and its own two pixels a side
+		// the sign in the margins setTextMargins keeps, by QLineEdit's text rect
 		QFontMetrics fm = fontMetrics();
 		QMargins mg = textMargins();
 		QStyleOptionFrame opt;
@@ -436,10 +430,7 @@ void xHexSpin::paintEvent(QPaintEvent* ev) {
 	QRect cr = contentsRect();
 	int tw = fm.horizontalAdvance(txt);
 	int x0 = cr.x() + (cr.width() - tw) / 2;
-	// what the field leaves either side of its text, frame and padding: a
-	// decimal byte gets the same in its own box, so the halves read as two
-	// fields as wide as one of a byte (IM), the digits standing as far from
-	// the right of each
+	// each decimal byte gets the field's own frame and padding, as wide as IM
 	int padL = x0;
 	int padR = width() - (x0 + tw);
 	int spw = sp ? fm.horizontalAdvance(QString(sp, ' ')) : 0;
@@ -514,9 +505,7 @@ void xHexSpin::decTextChange(const QString& txt) {
 			if (!chr.isDigit() || (chr.unicode() > '9')) good = false;
 	}
 	if (!good) {
-		// back to the value as it is written: the last good text may be another
-		// base's, or a value out of a range turned upside down (-1) - neither
-		// reads back, and putting either in again would come back here for ever
+		// back to the value's own text, once: the last good one may not read back
 		int pos = cursorPosition();
 		fixing = true;
 		setText(numText(value));
@@ -1279,18 +1268,9 @@ QWidget* xItemDelegate::createEditor(QWidget* par, const QStyleOptionViewItem&, 
 	return edt;
 }
 
-// The debugger's address fields. In a hex form a number is written with its
-// sign, and typing keeps it: select all and type C000, it is #C000. Only
-// Backspace or Delete on the sign itself takes it off - the number is decimal
-// then, and stays so until the field is left; clearing the whole field takes it
-// too. A first character that is no hex digit (a label, .HL, ;comment) goes in
-// alone, and a letter past F drops the sign of a name begun with A-F: #BE, G,
-// BEG. In decimal nothing is added; # or $ typed first makes it hex.
-
-static bool is_hex_char(QChar chr) {
-	int c = chr.toLower().unicode();
-	return ((c >= '0') && (c <= '9')) || ((c >= 'a') && (c <= 'f'));
-}
+// The debugger's address fields. In a hex form typing keeps the sign (select
+// all, type C000: #C000); Backspace or Delete on it takes it off, decimal then.
+// A label or a letter past F goes in without it. In decimal nothing is added.
 
 QString dbg_num_tip(int val, bool adr, const QString& name, bool label) {
 	val &= 0xffff;
@@ -1312,6 +1292,24 @@ QString dbg_num_tip(int val, bool adr, const QString& name, bool label) {
 	return res;
 }
 
+void reg_field_setup(xHexSpin* fld, int size, int flag) {
+	int mx;
+	switch (size) {
+		case REG_BIT: mx = 1; break;
+		case REG_2: mx = 2; break;
+		case REG_BYTE: mx = 0xff; break;
+		case REG_24: mx = 0xffffff; break;
+		case REG_32: mx = 0x7fffffff; break;	// the field and the register value are int
+		default: mx = 0xffff; break;
+	}
+	fld->setMax(mx);
+	fld->numFmt();
+	// a register with a type of its own (PC, SP, F, a segment) is one number;
+	// the rest are bytes that move on their own
+	fld->setSplit(conf.dbg.regsplit && !(flag & REG_TYPE_M));
+	fld->refitWidth();
+}
+
 QString dbg_reg_tip(const QString& name) {
 	if (name == "IM")
 		return "Interrupt mode, set by IM 0, IM 1 or IM 2.\n"
@@ -1328,8 +1326,19 @@ QString dbg_reg_tip(const QString& name) {
 	return QString();
 }
 
-void dbg_place_tip(QWidget* wid, const QRect& at, bool above) {
+// Qt puts a tip off by the size of the mouse cursor from where it is given:
+// it is moved once shown
+void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above) {
+	if (text.isEmpty()) {
+		QToolTip::hideText();
+		return;
+	}
 	QRect r(wid->mapToGlobal(at.topLeft()), at.size());
+	if (above) {
+		QToolTip::showText(QCursor::pos(), text, wid, at);
+	} else {
+		QToolTip::showText(r.bottomLeft(), text, wid, QRect(), 3600000);
+	}
 	QScreen* sc = QGuiApplication::screenAt(r.center());
 	QRect scr = (sc ? sc : QGuiApplication::primaryScreen())->availableGeometry();
 	foreach(QWidget* tip, QApplication::topLevelWidgets()) {
@@ -1366,22 +1375,38 @@ class xNumSign : public QObject {
 		QLineEdit* edt;
 		bool bare = false;		// the sign was taken off by hand: no new one
 		bool tip = false;		// the tip is this field's
+		void edited(const QString&);
 		void showTip();
 		void hideTip();
 };
 
 xNumSign::xNumSign(QLineEdit* p):QObject(p) {
 	edt = p;
-	connect(edt, &QLineEdit::textEdited, this, &xNumSign::showTip);
+	connect(edt, &QLineEdit::textEdited, this, &xNumSign::edited);
+}
+
+// A paste that leaves bare hex digits gets the sign as typing would: 8000
+// pasted over the lot is #8000, not decimal 8000
+void xNumSign::edited(const QString& txt) {
+	int fmt = conf.dbg.numfmt;
+	bool digits = !txt.isEmpty();
+	for (QChar chr : txt)
+		if (!is_hex_char(chr)) digits = false;
+	if (digits && !bare && (fmt != CPU_NUM_DEC) && !edt->property(DBG_NUM_OFF).toBool()) {
+		QString pre, post;
+		dbg_sign(fmt, &pre, &post);
+		int pos = edt->cursorPosition();
+		edt->setText(pre + txt + post);
+		edt->setCursorPosition(pos + pre.size());
+	}
+	showTip();
 }
 
 xNumSign::~xNumSign() {
 	hideTip();
 }
 
-// The tip goes right under the field, or over it at the bottom of the screen:
-// clear of the text being typed. Qt puts a tip off by the size of the mouse
-// cursor, from wherever it is given, so it is moved once shown.
+// the tip under the field, clear of the text being typed
 void xNumSign::showTip() {
 	QString txt;
 	if (!edt->hasFocus() || edt->property(DBG_NUM_OFF).toBool()) {
@@ -1397,9 +1422,8 @@ void xNumSign::showTip() {
 		hideTip();
 		return;
 	}
-	QToolTip::showText(edt->mapToGlobal(QPoint(0, edt->height() + 2)), txt, edt, QRect(), 3600000);
+	dbg_show_tip(edt, edt->rect(), txt, false);
 	tip = true;
-	dbg_place_tip(edt, edt->rect(), false);
 }
 
 void xNumSign::hideTip() {
@@ -1454,13 +1478,11 @@ bool xNumSign::eventFilter(QObject* obj, QEvent* ev) {
 	if (!hasSign) {
 		// a field that is all typed over starts with the sign
 		if (bare || !digit || (start > 0) || (end < txt.size())) return false;
+		QString pre, post;
+		dbg_sign(fmt, &pre, &post);
 		edt->del();
-		if (fmt == CPU_NUM_H) {
-			edt->insert("h");
-			edt->setCursorPosition(0);
-		} else {
-			edt->insert((fmt == CPU_NUM_DOLLAR) ? "$" : "#");
-		}
+		edt->insert(pre + post);
+		edt->setCursorPosition(pre.size());
 		return false;			// the key itself goes in after it
 	}
 	if (edt->hasSelectedText()) {

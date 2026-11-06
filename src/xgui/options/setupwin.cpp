@@ -1678,9 +1678,7 @@ void SetupWin::applyGlobal() {
 	conf.dbg.dmsize = ui.sbTextSize->value();
 	// the step is 2, but a typed-in value can still land odd
 	conf.dbg.stackofs = ui.sbDbgStackOfs->value() & ~1;
-	conf.dbg.numfmt = ui.cbDbgNumbers->currentData().toInt();
-	if (conf.dbg.numfmt != CPU_NUM_DEC)
-		conf.dbg.hexfmt = conf.dbg.numfmt;
+	dbg_set_numfmt(ui.cbDbgNumbers->currentData().toInt());
 	conf.dbg.font = dbgfnt;
 	conf.dbg.showports = ui.cbDbgPorts->isChecked() ? 1 : 0;
 	conf.dbg.showsig = ui.cbDbgSignals->isChecked() ? 1 : 0;

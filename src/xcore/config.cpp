@@ -1157,14 +1157,11 @@ void loadConfig() {
 					if (pnam == "labels.image") conf.dbg.imglabels = arg.b;
 					if (pnam == "dim.address") conf.dbg.dimadr = arg.b;
 					if (pnam == "dim.opcodes") conf.dbg.dimops = arg.b;
-					if ((pnam == "numbers") && (dbg_numfmt_parse(pval) >= 0)) {
-						conf.dbg.numfmt = dbg_numfmt_parse(pval);
-						if (conf.dbg.numfmt != CPU_NUM_DEC)
-							conf.dbg.hexfmt = conf.dbg.numfmt;
+					if ((pnam == "numbers") || (pnam == "numbers.hex")) {
+						int fmt = dbg_numfmt_parse(pval);
+						if ((pnam == "numbers") && (fmt >= 0)) dbg_set_numfmt(fmt);
+						if ((pnam == "numbers.hex") && (fmt >= 0) && (fmt != CPU_NUM_DEC)) conf.dbg.hexfmt = fmt;
 					}
-					if ((pnam == "numbers.hex") && (dbg_numfmt_parse(pval) >= 0)
-							&& (dbg_numfmt_parse(pval) != CPU_NUM_DEC))
-						conf.dbg.hexfmt = dbg_numfmt_parse(pval);
 					if (pnam == "syntax.colors") conf.dbg.synhl = arg.b;
 					if (pnam == "block.separator") conf.dbg.blocksep = arg.b;
 					if (pnam == "show.memmap") conf.dbg.showmmap = arg.b;

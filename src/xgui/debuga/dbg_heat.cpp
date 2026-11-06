@@ -362,7 +362,7 @@ QString xHeatView::cellName(int type, int abs, int withOfs) const {
 	xCell c = comp_cell(comp, type, abs);
 	if (c.area == CELL_NONE) return "---";
 	QString name = (c.area == CELL_RAM) ? QString("RAM%0").arg(c.page) : QString(cell_token(c, buf));
-	if (withOfs) name += QString(" %0").arg(dbg_adr_t(c.ofs));
+	if (withOfs) name += QString(" %0").arg(dbg_word(c.ofs));
 	return name;
 }
 
@@ -522,7 +522,7 @@ void xHeatView::paintBlocks(QPainter& pnt, QRgb none, const QColor& gnd) {
 		QRect head(bx, g.all.top() - g.hh, bw, g.hh);
 		pnt.fillRect(head, hbg);
 		QString page = blkName(blk, bytes);
-		name = QString("%0 %1").arg(dbg_adr_t(blk * bytes)).arg(page);
+		name = QString("%0 %1").arg(dbg_word(blk * bytes)).arg(page);
 		if (fm.horizontalAdvance(name) > bw) name = page;
 		if (fm.horizontalAdvance(name) <= bw) {
 			pnt.setPen(htx);
@@ -775,7 +775,7 @@ void xHeatView::mouseMoveEvent(QMouseEvent* ev) {
 			return;
 		}
 		comp_cell_xadr(comp, st.area, st.page, off, &type, &abs);
-		emit s_cell(QString("%0-%1").arg(cellName(type, abs, 1)).arg(dbg_adr_t(off + HEAT_GROUP - 1)),
+		emit s_cell(QString("%0-%1").arg(cellName(type, abs, 1)).arg(dbg_word(off + HEAT_GROUP - 1)),
 			heat_sum(comp, type, abs));
 		return;
 	}
@@ -790,8 +790,8 @@ void xHeatView::mouseMoveEvent(QMouseEvent* ev) {
 		// every number in the readout is written as the listing writes it,
 		// the way the block headings are. a block cell covers a group of
 		// bytes: name the whole of it
-		QString adr = blockView() ? QString("%0-%1").arg(dbg_adr_t(off)).arg(dbg_adr_t(off + HEAT_GROUP - 1))
-			: dbg_adr_t(off);
+		QString adr = blockView() ? QString("%0-%1").arg(dbg_word(off)).arg(dbg_word(off + HEAT_GROUP - 1))
+			: dbg_word(off);
 		str = QString("%0  %1").arg(adr).arg(cellName(xadr.type, xadr.abs, 1));
 	} else {
 		int type, base;
