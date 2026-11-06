@@ -40,7 +40,7 @@ The **Watcher Editor** has:
 {icon}`checkbox` **OK** accepts the watch only when the expression is right. The first row
 of a watch shows its type and expression, and its value as an address, written as the
 Debugger's addresses are (see [Hex or decimal](debugger-code.md#hex-or-decimal)); the second row the
-16 bytes that start at that address. `??` means the expression cannot be worked out at the moment.
+16 bytes that start at that address, in groups of four. `??` means the expression cannot be worked out at the moment.
 
 On the Next, a label in a **CPU addr** watch follows MMU paging. If its page is not mapped,
 the watch shows `??`; a **RAM addr** watch still reads the label's own RAM page.

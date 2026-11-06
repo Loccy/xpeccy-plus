@@ -17,7 +17,7 @@ The values are hex or decimal, as the Debugger's other numbers (see
 [Hex or decimal](debugger-code.md#hex-or-decimal)). In decimal a pair is two numbers with
 **Split pairs** on, a byte each in a field of its own, as `  1 | 255` for HL = 511, and each
 lights up on its own; with **Split pairs** off it is one number, `  511`. PC and SP are as
-wide as a pair, and IM as one byte of it.
+wide as a pair, and IM as one byte of it; every number stands at the right of its field.
 
 Rest the mouse on **IM**, **IFF1** or **IFF2** for what it is.
 
