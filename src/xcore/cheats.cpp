@@ -1,4 +1,6 @@
 #include <atomic>
+#include <stdlib.h>
+#include <string.h>
 #include <vector>
 
 #include <QDir>
@@ -21,6 +23,7 @@ static xTrainer ch_hand;
 static chState ch_hand_st = {0, -1, 0};
 static QString ch_path;
 static bool ch_picked = false;
+static bool ch_cli = false;		// trainers from the command line in the list
 static std::atomic<int> ch_serial(0);
 
 class chLock {
@@ -55,6 +58,7 @@ static void ch_drop_file(Computer* comp) {
 	ch_state.clear();
 	ch_path.clear();
 	ch_picked = false;
+	ch_cli = false;
 }
 
 static Computer* ch_comp = NULL;	// the machine the trainers that are on went into
@@ -106,6 +110,32 @@ void cheats_pick(const QString& image) {
 	}
 }
 
+// The command line's trainers, after a file given there (alone: the list emptied first,
+// so they win over the image's own). They go with the game, as a found file does.
+bool cheats_add(xPokFile* pf, bool alone) {
+	chLock lock;
+	if (alone) ch_drop_file(ch_comp);
+	int cnt = ch_file.cnt + pf->cnt;
+	if (cnt > ch_file.cap) {
+		xTrainer* nl = (xTrainer*)realloc(ch_file.list, cnt * sizeof(xTrainer));
+		if (!nl) {
+			pok_free(pf);
+			return false;
+		}
+		ch_file.list = nl;
+		ch_file.cap = cnt;
+	}
+	memcpy(ch_file.list + ch_file.cnt, pf->list, pf->cnt * sizeof(xTrainer));	// the pokes move with them
+	ch_file.cnt = cnt;
+	ch_state.resize(cnt, chState{0, -1, 0});
+	free(pf->list);
+	memset(pf, 0, sizeof(xPokFile));
+	ch_picked = true;
+	ch_cli = true;
+	ch_changed();
+	return true;
+}
+
 QString cheats_file() {
 	chLock lock;
 	return ch_path;
@@ -114,6 +144,11 @@ QString cheats_file() {
 bool cheats_picked() {
 	chLock lock;
 	return ch_picked;
+}
+
+bool cheats_cli() {
+	chLock lock;
+	return ch_cli;
 }
 
 void cheats_clear() {

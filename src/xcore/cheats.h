@@ -32,8 +32,12 @@ struct xCheatRow {
 int cheats_open(const QString& path, bool picked);
 // after an image opened: POKES/<name>.pok or <name>.pok beside it, any case
 void cheats_pick(const QString& image);
+// trainers built from the command line, taken over: after what is in the list, or in
+// place of it (alone). false = out of memory
+bool cheats_add(xPokFile* pf, bool alone);
 QString cheats_file();
 bool cheats_picked();
+bool cheats_cli();		// the list has the command line's trainers
 void cheats_clear();		// off (bytes back) and gone, the hand list too
 
 // on/off with the bytes back; a known org that is not in memory gives POK_MISMATCH and

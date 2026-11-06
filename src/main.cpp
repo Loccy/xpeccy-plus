@@ -103,6 +103,8 @@ void help() {
 	printf("--confdir DIR\t\tChange config directory\n");
 	printf("--autostart\t\tstart the media given here, whatever the Auto-run option says\n");
 	printf("--no-autostart\t\tjust mount the media given here, don't start it\n");
+	printf("--poke LIST\t\ta trainer for the Cheats window, unticked: [NAME=]POKE[:POKE...],\n");
+	printf("\t\t\tPOKE = [PAGE/]ADR,VAL[,ORG], VAL ? = asked when ticked. Repeat for more\n");
 	printf("--log\t\t\twrite a log file to logs/<date>/ beside the binary\n");
 	printf("--no-log\t\tno log file, whatever the options say\n");
 	printf("--log-console\t\talso write the log to stderr\n");
@@ -313,13 +315,15 @@ static void open_pending(xApp& app, MainWin& mwin) {
 	app.pendingFile.clear();
 }
 
+static QString cliPok;		// a .pok named on the command line, opened once every image is in
+
 // A file on the command line: the machine it wants first, unless the command
 // line names the machine itself.
 // An archive: its first image, as it would be opened bare.
 static void open_cli_file(MainWin& mwin, const char* name, int drv, int run, bool pinned) {
 	QString path = QString::fromLocal8Bit(name);
 	if (file_is_pok(path)) {
-		mwin.openCheats(path);
+		cliPok = path;
 		return;
 	}
 	if (arc_bare(path)) {
@@ -381,6 +385,64 @@ static bool cli_num(const char* opt, const char* val, int* res) {
 	*res = str_num(QString::fromLocal8Bit(val), &ok);
 	if (!ok) cli_warn(QString("%0: not a number: %1").arg(opt, QString::fromLocal8Bit(val)));
 	return ok;
+}
+
+// --poke [NAME=]POKE[:POKE...], POKE = [PAGE/]ADR,VAL[,ORG]: one trainer, as a .pok has
+// it. A bad POKE leaves the whole trainer out: half of one can crash the game.
+static void cli_poke(const QString& arg, xPokFile* pf) {
+	int eq = arg.lastIndexOf('=');
+	QString list = arg.mid(eq + 1);
+	QString name = arg.left(qMax(eq, 0)).trimmed();
+	if (name.isEmpty()) name = list;		// no name: the pokes themselves
+	if (name.size() > POK_NAME_MAX) name = name.left(POK_NAME_MAX - 3) + "...";
+	QByteArray nam = name.toLatin1();		// what the window reads a .pok's names as
+	if (!pok_add_trainer(pf, nam.constData(), nam.size())) return;
+	xTrainer* tr = &pf->list[pf->cnt - 1];
+	foreach(QString one, list.split(':')) {
+		QStringList pg = one.split('/');
+		QStringList num = pg.last().split(',');
+		int page = 8;
+		int adr = -1;
+		int val = -1;
+		int org = 0;
+		bool ok = (pg.size() <= 2) && (num.size() >= 2) && (num.size() <= 3);
+		if (ok && (pg.size() == 2)) {
+			page = str_num(pg[0], &ok);
+			ok &= (page >= 0) && (page < 8);
+		}
+		if (ok) {
+			adr = str_num(num[0], &ok);
+			ok &= (adr >= 0) && (adr <= 0xffff);
+		}
+		if (ok) {
+			val = (num[1].trimmed() == "?") ? 256 : str_num(num[1], &ok);
+			ok &= (val >= 0) && (val <= 256);
+		}
+		if (ok && (num.size() == 3)) {
+			org = str_num(num[2], &ok);
+			ok &= (org >= 0) && (org <= 255);
+		}
+		if (!ok) {
+			cli_warn(QString("--poke: not a poke: %0").arg(one));
+		} else if (pok_add_poke(tr, page, adr, val, org)) {
+			continue;
+		}
+		pok_trainer_free(tr);
+		pf->cnt--;
+		return;
+	}
+}
+
+// Cheats from the command line, once the images are in: a .pok named there wins over
+// the image's own whatever the order, and --poke's trainers come after it - or in place
+// of the image's own when no .pok is named.
+static void cli_cheats(MainWin& mwin, const QStringList& pokes) {
+	bool own = !cliPok.isEmpty() && mwin.openCheats(cliPok);
+	xPokFile pf = {0, 0, NULL};
+	foreach(QString arg, pokes)
+		cli_poke(arg, &pf);
+	if (pf.cnt) cheats_add(&pf, !own);
+	pok_free(&pf);
 }
 
 // for apple users
@@ -766,6 +828,7 @@ int main(int ac,char** av) {
 	// --bp and --brk, in their order: set once the labels are known, as a
 	// label may come after them or from an image's own .labels
 	QList<QPair<QString, QString>> brkArgs;
+	QStringList pokeArgs;		// --poke, into the Cheats window once the images are in
 	int bnFrames = 0;
 	int bnSkip = 0;
 	int bnFull = 0;
@@ -917,6 +980,8 @@ int main(int ac,char** av) {
 			} else if (!strcmp(parg,"--bp") || !strcmp(parg,"--brk")) {
 				brkArgs.append(qMakePair(QString(parg), QString::fromLocal8Bit(av[i])));
 				i++;
+			} else if (!strcmp(parg,"--poke")) {
+				pokeArgs.append(QString::fromLocal8Bit(av[i++]));
 			} else if (!strcmp(parg,"--brk-log")) {
 				brk_trace_to(QString::fromLocal8Bit(av[i++]));
 			} else if (!strcmp(parg,"-l") || !strcmp(parg,"--labels")) {
@@ -991,6 +1056,7 @@ int main(int ac,char** av) {
 	// labels named on the command line win over an image's own
 	if (!conf.labpath.isEmpty())
 		setLabelSet(QFileInfo(conf.labpath).fileName());
+	cli_cheats(mwin, pokeArgs);		// and so do cheats
 	for (const QPair<QString, QString>& arg : brkArgs) {
 		if (arg.first == "--bp") {
 			bool ok = true;

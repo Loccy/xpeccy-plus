@@ -6,7 +6,7 @@
 
 // reading
 
-static int pk_add_trainer(xPokFile* pf, const char* name, int len) {
+int pok_add_trainer(xPokFile* pf, const char* name, int len) {
 	if (pf->cnt == pf->cap) {
 		int cap = pf->cap ? pf->cap * 2 : 16;
 		xTrainer* nl = (xTrainer*)realloc(pf->list, cap * sizeof(xTrainer));
@@ -24,7 +24,7 @@ static int pk_add_trainer(xPokFile* pf, const char* name, int len) {
 	return 1;
 }
 
-static int pk_add_poke(xTrainer* tr, int bank, int adr, int val, int org) {
+int pok_add_poke(xTrainer* tr, int bank, int adr, int val, int org) {
 	if (tr->cnt == tr->cap) {
 		int cap = tr->cap ? tr->cap * 2 : 8;
 		xPoke* np = (xPoke*)realloc(tr->pokes, cap * sizeof(xPoke));
@@ -88,7 +88,7 @@ int pok_parse(const char* buf, size_t len, xPokFile* pf) {
 		if (key == 'Y') break;
 		if (key == 'N') {
 			if (cur) pk_spoil(cur, cur->cnt ? POK_BAD_OPEN : POK_BAD_EMPTY, line - 1);
-			if (!pk_add_trainer(pf, s + 1, (int)(e - s - 1))) {pok_free(pf); return POK_ERR_MEM;}
+			if (!pok_add_trainer(pf, s + 1, (int)(e - s - 1))) {pok_free(pf); return POK_ERR_MEM;}
 			cur = &pf->list[pf->cnt - 1];
 		} else if (key == 'M' || key == 'Z') {
 			if (!cur) continue;		// outside a trainer: not a poke of any
@@ -97,7 +97,7 @@ int pok_parse(const char* buf, size_t len, xPokFile* pf) {
 				pk_spoil(cur, POK_BAD_LINE, line);
 			} else if (n[0] > 255 || n[1] > 0xffff || n[2] > 256 || n[3] > 255) {
 				pk_spoil(cur, POK_BAD_RANGE, line);
-			} else if (!pk_add_poke(cur, n[0], n[1], n[2], n[3])) {
+			} else if (!pok_add_poke(cur, n[0], n[1], n[2], n[3])) {
 				pok_free(pf);
 				return POK_ERR_MEM;
 			}
@@ -262,7 +262,7 @@ int pok_where(Computer* comp, const xTrainer* tr, int val) {
 int pok_poke(Computer* comp, xTrainer* tr, int bank, int adr, int val) {
 	int err;
 	if (!pk_byte(comp, bank, adr, &err)) return err;
-	if (!pk_add_poke(tr, bank, adr, val & 0xff, 0)) return POK_NO_RAM;
+	if (!pok_add_poke(tr, bank, adr, val & 0xff, 0)) return POK_NO_RAM;
 	pk_write(comp, &tr->pokes[tr->cnt - 1], 0);
 	return POK_FITS;
 }

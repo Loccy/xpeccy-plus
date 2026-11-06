@@ -293,8 +293,12 @@ static QString cw_poke_text(const xPoke& pk) {
 void xCheatWin::fill() {
 	serial = cheats_serial();
 	QString path = cheats_file();
-	labFile->setFull(path.isEmpty() ? QString("No .pok file") :
-		QFileInfo(path).fileName() + (cheats_picked() ? "  (found beside the image)" : ""));
+	QString name = QFileInfo(path).fileName();
+	if (cheats_cli())
+		labFile->setFull(path.isEmpty() ? QString("Command line") : name + " + command line");
+	else
+		labFile->setFull(path.isEmpty() ? QString("No .pok file") :
+			name + (cheats_picked() ? "  (found beside the image)" : ""));
 	labFile->setToolTip(QDir::toNativeSeparators(path));
 	QList<xCheatRow> rows = cheats_rows(conf.zx);
 	int count = cheats_count();
