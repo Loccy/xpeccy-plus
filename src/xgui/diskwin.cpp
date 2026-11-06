@@ -307,7 +307,9 @@ void xDiskWin::fillDrive(Floppy* flp) {
 // stepped to
 void xDiskWin::fillSides() {
 	int drv = drive();
-	QByteArray key = QByteArray::number(drv);
+	DiskIF* dif = conf.zx->dif;
+	QByteArray key = QByteArray(conf.macId.c_str()) + '|' + QByteArray::number(drv) + '|'
+		+ QByteArray::number(dif->type) + (dif->out ? "|out" : "|in");
 	for (int i = 0; i < 4; i++) {
 		Floppy* flp = conf.zx->dif->flp[i];
 		key += '|';

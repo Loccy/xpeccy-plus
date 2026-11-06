@@ -2135,6 +2135,8 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 			return;
 		}
 		hold();
+		++mountGen;		// a mount still being read would land over this
+		mountPath.clear();
 		QByteArray loc = fpath.toLocal8Bit();
 		bool medium = file_is_medium(comp, fpath, id);
 		// the pause does not wait for the cycle, and a snapshot resets the machine
@@ -4104,9 +4106,8 @@ void MainWin::watchMedia() {
 
 // Another tape in the deck: whether it has a next one in its set, which auto play asks
 // for at its end (Rewind at end). The folder is read once a tape; the flag shares its
-// word with the ones the emulation sets, so it is written under the lock. With Next tape
-// of a set off, no tape is one: it starts over as a lone one does, though the Tape
-// Player's buttons still step its set.
+// word with the ones the emulation sets, so it is written under the lock.
+// With Next tape of a set off no tape is of a set; the Tape Player still steps it.
 void MainWin::watchTapeSet(Computer* comp) {
 	Tape* tap = comp->tape;
 	const QByteArray raw(tap->path ? tap->path : "");
@@ -4201,7 +4202,7 @@ void MainWin::tapeNext() {
 	}
 	if (!done) return;
 	game_tape_next(now, next);
-	// its place in the set, "side B": the OSD letters are ASCII, a file name may not be
+	// its place in the set (media_next_side), "side B"
 	setMessage(QString(" tape: %0 ").arg(place));
 	emit s_tape_upd(tap);
 }

@@ -43,7 +43,8 @@ TapeWin::TapeWin(QWidget *par):QDialog(par) {
 	connect(ui.tbPrevTape, &QToolButton::released, this, [this]() {if (side) side(-1);});
 	connect(ui.tbNextTape, &QToolButton::released, this, [this]() {if (side) side(1);});
 	// Next tape of a set, as Options has it: autoreverse on a deck
-	connect(ui.tbAutoRev, &QToolButton::clicked, this, [](bool on) {conf.tape.setNext = on ? 1 : 0;});
+	connect(ui.tbAutoRev, SIGNAL(clicked(bool)), this, SLOT(setOptions()));
+	connect(ui.cbRewind, &QCheckBox::toggled, ui.tbAutoRev, &QWidget::setEnabled);
 }
 
 void TapeWin::show() {
@@ -209,13 +210,14 @@ void TapeWin::doExport() {
 	file_errors(err);
 }
 
-// the three options are the same ones the Tape page of Options has, and they
+// the four options are the same ones the Tape page of Options has, and they
 // take effect where they are set - this window has no Apply
 
 void TapeWin::setOptions() {
 	conf.tape.autostart = ui.cbAuto->isChecked() ? 1 : 0;
 	conf.tape.fast = ui.cbFast->isChecked() ? 1 : 0;
 	conf.tape.rewind = ui.cbRewind->isChecked() ? 1 : 0;
+	conf.tape.setNext = ui.tbAutoRev->isChecked() ? 1 : 0;
 	tape_apply_options(conf.zx->tape);
 }
 

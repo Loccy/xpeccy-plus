@@ -1532,6 +1532,11 @@ static QString side_pick(Computer* comp, const QList<xSibling>& set, int cur, co
 	return take.first().path;
 }
 
+// the place k steps on from me among n, round past either end
+static int ring(int me, int k, int n) {
+	return (((me + k) % n) + n) % n;
+}
+
 // An archive's images in its own order, an image a place, as the menus list them: the
 // one step places on from the one at path, empty when the archive holds one
 static QString arc_next(Computer* comp, const QString& path, int id, int drv, int step, const QStringList& skip,
@@ -1543,11 +1548,11 @@ static QString arc_next(Computer* comp, const QString& path, int id, int drv, in
 	const int me = int(names.indexOf(entry));
 	if ((n < 2) || (me < 0)) return QString();
 	for (int k = 1; k < n; k++) {
-		const int i = (((me + k * step) % n) + n) % n;
+		const int i = ring(me, k * step, n);
 		const QString res = arc_join(archive, names[i]);
 		if (path_in(skip, res)) continue;
 		if (place) {
-			// the OSD letters are ASCII, a name may not be
+			// the OSD letters are ASCII, a name may not be: then its number
 			const QString name = QFileInfo(names[i]).fileName();
 			bool ascii = true;
 			for (const QChar c : name) ascii = ascii && (c.unicode() >= 0x20) && (c.unicode() < 0x7f);
@@ -1575,7 +1580,7 @@ QString media_next_side(Computer* comp, const QString& path, int id, int drv, co
 	const int me = int(values.indexOf(sib_value_of(set[cur].name)));
 	// step places on, round past either end; a place with every file skipped is passed
 	for (int k = 1; k < n; k++) {
-		const QString next = values[(((me + k * step) % n) + n) % n];
+		const QString next = values[ring(me, k * step, n)];
 		const QString res = side_pick(comp, set, cur, next, id, drv, path, seen, skip);
 		if (res.isEmpty()) continue;
 		if (place) *place = place_text(next);

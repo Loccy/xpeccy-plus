@@ -196,13 +196,13 @@ void MainWin::sideStepIn(int src, int step) {
 void MainWin::sideStep(int step) {
 	int src = sideSrc;
 	if (sideHeld(src).isEmpty())
-		src = sideNext(MEDIA_TAPE, step, nullptr).isEmpty() ? 0 : MEDIA_TAPE;
+		src = tapeSides ? MEDIA_TAPE : 0;
 	sideStepIn(src, step);
 }
 
 void MainWin::sidePut(int src, const QString& path, const QString& place) {
 	sideSrc = src;
-	// its place in the set, "side B": the OSD letters are ASCII, a file name may not be
+	// its place in the set (media_next_side), "side B"
 	if (src == MEDIA_TAPE) {
 		if (conf.zx->tape->on) tapStateChanged(TW_STATE, TWS_STOP);
 		openMedia(path, FG_TAPE, -1, AR_MOUNT, true, true, QString(" tape: %0 ").arg(place));

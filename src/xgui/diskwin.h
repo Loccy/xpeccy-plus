@@ -51,7 +51,7 @@ class xDiskWin : public QDialog {
 		QToolButton* btnEject;
 		QToolButton* btnPrev;
 		QToolButton* btnNext;
-		QByteArray sidesKey;	// the drive shown and what all the drives held when its set was looked for
+		QByteArray sidesKey;	// the machine, its drives and what they held when the set was looked for
 		void fillSides();
 		QCheckBox* protect;
 		xDiskCatTable* list;
