@@ -21,14 +21,18 @@ before that point is upstream's history and is not repeated here.
   tape then starts over at its end, for a game that loads its levels from side B again and again.
 - **Decimal numbers in the Debugger**: addresses, and the numbers in the listing's
   commands, as `#FFFF`, `$FFFF`, `FFFFh` or `65535` (Options > Debugger > **Numbers**); a
-  button on the listing's toolbar and Ctrl+Shift+H switch hex and decimal. A typed number is
-  hex with a sign and decimal without, and a tip shows it in decimal, hex and binary.
+  button on the listing's toolbar and Ctrl+Shift+H switch hex and decimal, the registers
+  included. A typed number is hex with a sign and decimal without, and a tip shows it in hex,
+  decimal and binary.
 
 ### Changed
 
 - **The Debugger's addresses carry their hex sign, `#8000`**, and a number typed into an
   address field is decimal unless it has one (`#`, `$`, `0x` or `h`). The fields open with
   the sign, so typing over the digits stays hex. In conditions a leading 0 is no longer octal.
+- **The DUMP panel's text column is plain ASCII by default**; WIN1251, CP866 and KOI8R are
+  still in its list.
+- **The Watcher uses the Debugger's font**, and its byte columns keep their width.
 - **The ZX Spectrum Next runs much faster, with the same picture and sound**: games and demos
   20-50 % faster, and up to 1.7 times in the Windows builds, which are now laid out by a
   profile of real programs - the other machines gain 6-14 % there too.
