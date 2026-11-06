@@ -315,9 +315,11 @@ static void open_pending(xApp& app, MainWin& mwin) {
 	app.pendingFile.clear();
 }
 
-// a .pok and the --poke options named on the command line, taken once every image is in
+// a .pok and the --poke options named on the command line, taken once every image is in,
+// for the game's image opened there
 static QString cliPok;
 static QStringList cliPokes;
+static QString cliImage;
 
 // A file on the command line: the machine it wants first, unless the command
 // line names the machine itself.
@@ -341,6 +343,7 @@ static void open_cli_file(MainWin& mwin, const char* name, int drv, int run, boo
 	if (drv < 1) {
 		mwin.padGame(path);
 		cheats_pick(path);
+		cliImage = path;
 	}
 	media_opened(path, FG_ALL, drv, run, pinned);
 }
@@ -448,7 +451,8 @@ static void cli_cheats(MainWin& mwin) {
 	xPokFile pf = {0, 0, NULL};
 	foreach(QString arg, cliPokes)
 		cli_poke(arg, &pf);
-	if (own || pf.cnt) cheats_add(&pf, !own);
+	if ((own || pf.cnt) && !cheats_add(&pf, !own, cliImage))
+		cli_warn("--poke: out of memory, no trainers taken");
 	pok_free(&pf);
 }
 

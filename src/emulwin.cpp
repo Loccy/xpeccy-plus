@@ -2254,11 +2254,8 @@ bool MainWin::drivesBack() {
 bool MainWin::reloadMedia() {
 	xMediaOpen last = media_last_open();
 	bool named = labels_named_on();
-	// the image is read again, a mounted tape too: when the cheats went in is not known
-	if (!last.path.isEmpty()) {
-		cheats_forget();
+	if (!last.path.isEmpty())
 		openMedia(last.path, last.id, last.drv, last.run, last.pinned);
-	}
 	if (!conf.labpath.isEmpty() && (named || last.path.isEmpty()))
 		loadLabels(conf.labpath.toLocal8Bit().data());
 	return !last.path.isEmpty() || !conf.labpath.isEmpty();

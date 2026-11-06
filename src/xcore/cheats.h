@@ -30,10 +30,11 @@ struct xCheatRow {
 // open a .pok: 0, else the reader's POK_ERR_* (-1 can't read the file). picked = found
 // beside an image, which an image without one drops again
 int cheats_open(const QString& path, bool picked);
-// after an image opened: POKES/<name>.pok or <name>.pok beside it, any case
+// after an image opened: POKES/<name>.pok or <name>.pok beside it, any case; the same
+// image again turns every cheat off, bytes back
 void cheats_pick(const QString& image);
-// the command line's trainers, taken over (see cheats.cpp)
-void cheats_add(xPokFile* pf, bool alone);
+// the command line's trainers, taken over, for the image it opened (see cheats.cpp)
+bool cheats_add(xPokFile* pf, bool alone, const QString& image);
 QString cheats_file();
 bool cheats_picked();
 bool cheats_cli();		// the list has the command line's trainers
