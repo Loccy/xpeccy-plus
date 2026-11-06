@@ -54,9 +54,6 @@ int tmpcnt = 0;
 
 int getRFIData(QComboBox*);
 void setRFIndex(QComboBox*, QVariant, int);
-int dasmSome(Computer*, int, dasmData&);
-int dasmSomeFmt(Computer*, int, dasmData&, int fmt);
-QString dasm_export(const dasmData&);
 
 // trace type
 enum {
@@ -852,7 +849,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	connect(dui.aSaveToD,SIGNAL(triggered()),this,SLOT(saveDumpToD()));
 	connect(dui.leStart,SIGNAL(valueChanged(int)),this,SLOT(dmpLimChanged()));
 	connect(dui.leEnd,SIGNAL(valueChanged(int)),this,SLOT(dmpLimChanged()));
-	connect(dui.leEnd, &QLineEdit::editingFinished, this, &DebugWin::dmpLimChanged);
+	connect(dui.leEnd, &QLineEdit::editingFinished, this, [this]() { dmpLimits(true); });
 	connect(dui.leLen,SIGNAL(valueChanged(int)),this,SLOT(dmpLenChanged()));
 	connect(dui.cbSource,SIGNAL(currentIndexChanged(int)),this,SLOT(dmpSourceChanged()));
 	connect(dui.sbPage,SIGNAL(valueChanged(int)),this,SLOT(dmpPageChanged()));
@@ -1251,7 +1248,7 @@ void DebugWin::customEvent(QEvent* ev) {
 	switch(ev->type()) {
 		case DBG_EVENT_STEP:
 			if ((traceType == DBG_TRACE_LOG) && logfile.isOpen()) {
-				dasmSomeFmt(comp, pcadr, tracemnm, CPU_NUM_HASH);	// the log keeps one form
+				dasmSome(comp, pcadr, tracemnm, CPU_NUM_HASH);	// the log keeps one form
 				tracestr = "\"";			// to avoid numbers conversion, like 3e4->3000
 				tracestr.append(gethexword(pcadr));
 				tracestr.append("\"|");
@@ -2848,13 +2845,17 @@ void DebugWin::dmpRange(bool reset) {
 }
 
 void DebugWin::dmpLimChanged() {
+	dmpLimits(false);
+}
+
+// final: Enter, the field left, or a save - an End below Start is pulled up
+// then, not while it is typed (the 4 of 40000)
+void DebugWin::dmpLimits(bool final) {
 	if (dmpBusy) return;
 	int start = dui.leStart->getValue();
 	int end = dui.leEnd->getValue();
 	if (end < start) {
-		// an End being typed passes below Start on its way (the 4 of 40000): it is
-		// pulled up when it is left, not under the caret
-		if (dui.leEnd->hasFocus()) return;
+		if (!final && dui.leEnd->hasFocus()) return;
 		end = start;
 	}
 	int len = end - start + 1;
@@ -2881,6 +2882,7 @@ void DebugWin::dmpLenChanged() {
 }
 
 QByteArray DebugWin::getDumpData() {
+	dmpLimits(true);		// a save button takes no focus: End may still be below Start
 	int area = getRFIData(dui.cbSource);
 	int page = dui.sbPage->value();
 	int adr = dui.leStart->getValue();

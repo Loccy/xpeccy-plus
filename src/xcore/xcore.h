@@ -180,7 +180,7 @@ void x_user_reset(Computer*, int);
 void x_state_replaced();		// under emu_lock
 void x_media_replaced();		// under emu_lock
 int unreal_num(QString, bool*);		// #/$/0x hex, 0 octal, else decimal
-int str_num(QString, bool*);		// #/$/0x hex, else decimal (no octal)
+int str_num(QString, bool*);		// by dbg_num_parse: #/$/0x or h behind hex, else decimal
 QString getPortString(int, int);
 bool parsePort(const QString&, int*, int*);
 QString gethex6(int);
@@ -198,9 +198,6 @@ QString dbg_byte(int);
 QString dbg_abs(int);		// an address past 16 bits too: six hex digits then
 QString dbg_abs_t(int);
 bool is_hex_char(QChar);
-// an address as the listing takes it (dbg_disasm.cpp); typed: by the one rule and
-// labels, else bare hex as the control port has it
-int str_to_adr(Computer* comp, QString str, bool typed = false);
 QString dbg_port(int port, int mask);	// a port: 7FFD or FE by its mask, in the form picked
 QString dbg_hex(int val, int digits);	// hex in the form picked, decimal or not
 int dbg_num_parse(QString, bool* ok);	// #/$/0x or h behind: hex; else decimal, no octal

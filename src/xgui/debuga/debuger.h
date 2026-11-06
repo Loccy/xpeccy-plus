@@ -285,6 +285,7 @@ class DebugWin : public QMainWindow {
 		void chDumpFile();
 		void dmpStartOpen();
 		void dmpLimChanged();
+		void dmpLimits(bool final);
 		void dmpLenChanged();
 		void saveDumpBin();
 		void saveDumpHobeta();

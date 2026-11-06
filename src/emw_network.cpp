@@ -1,5 +1,6 @@
 #include "emulwin.h"
 #include "filer.h"
+#include "xgui/debuga/dbg_disasm.h"
 #include "libxpeccy/filetypes/filetypes.h"
 
 #include <algorithm>

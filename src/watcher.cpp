@@ -168,8 +168,15 @@ void xWatcher::placeRegs(const xRegBunch& regs) {
 }
 
 void xWatcher::show() {
+	layoutRegs(conf.zx->cpu);
+	updateStyle();			// the font may have been read after this window was made
+	QDialog::show();
+}
 
-	xRegBunch regs = cpuGetRegs(conf.zx->cpu);
+// the CPU's registers: names, places, fields; again when another CPU comes
+void xWatcher::layoutRegs(CPU* cpu) {
+	regCore = cpu->core;
+	xRegBunch regs = cpuGetRegs(cpu);
 	placeRegs(regs);
 	setupRegs(regs);
 	int work = 1;
@@ -195,8 +202,6 @@ void xWatcher::show() {
 		}
 	}
 	setRegs(regs);
-	updateStyle();			// the font may have been read after this window was made
-	QDialog::show();
 }
 
 QString getBankType(int type) {
@@ -219,7 +224,7 @@ void xWatcher::fillFields(Computer* comp) {
 	if (!isVisible()) return;
 	if (comp == NULL) return;
 	model->comp = comp;
-
+	if (comp->cpu->core != regCore) layoutRegs(comp->cpu);
 	setRegs(cpuGetRegs(comp->cpu));
 	ui.wchBank0->setText(getBankName(comp->mem->map[0x00]));
 	ui.wchBank1->setText(getBankName(comp->mem->map[0x40]));

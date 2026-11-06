@@ -31,6 +31,7 @@ typedef struct {
 	int oadr;			// word operand like nn : jp nn; ld hl,(nn)
 	int flag;			// address cell flags
 	int oflag;			// opcode flag
+	int fmt;			// the form of its numbers (CPU_NUM_*): the debugger's, # for the trace log
 	QString aname;			// label/segment/address
 	QString bytes;			// all bytes inside command
 	QString command;		// command with replaced addr->label
@@ -133,6 +134,11 @@ class xDasmSyntax : public QStyledItemDelegate {
 };
 
 QList<dasmData> getDisasm(Computer*, int&);
+int dasmSome(Computer*, int adr, dasmData&, int fmt = -1);	// fmt -1: the debugger's form
+// an address as the listing takes it; typed: by the one rule and labels, else
+// bare hex as the control port has it
+int str_to_adr(Computer* comp, QString str, bool typed = false);
+QString dasm_export(const dasmData&);
 bool is_block_end(const dasmData&);
 bool dasm_ends_block(const QList<dasmData>&);
 bool dasm_has_separator(const QList<dasmData>&);

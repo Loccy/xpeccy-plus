@@ -268,25 +268,17 @@ static int dasm_access(Computer* comp, int adr) {
 	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_PC;
 }
 
-// the form the listing's numbers take: the debugger's, or the one dasmSomeFmt
-// asks for (the trace log keeps #, whatever is shown)
-static int dasmFmt = -1;
-
-static int dasm_fmt() {
-	return (dasmFmt < 0) ? conf.dbg.numfmt : dasmFmt;
+static QString dasm_word(int val, int fmt) {
+	return dbg_num_in(val & 0xffff, 4, fmt);
 }
 
-static QString dasm_word(int val) {
-	return dbg_num_in(val & 0xffff, 4, dasm_fmt());
+static QString dasm_byte(int val, int fmt) {
+	return dbg_num_in(val & 0xff, 2, fmt);
 }
 
-static QString dasm_byte(int val) {
-	return dbg_num_in(val & 0xff, 2, dasm_fmt());
-}
-
-static xMnem dasm_mnem(Computer* comp, int adr, char* buf, QByteArray* bytes = NULL) {
+static xMnem dasm_mnem(Computer* comp, int adr, char* buf, int fmt, QByteArray* bytes = NULL) {
 	if (!dasm_is_pc(comp, adr)) {
-		xMnem mn = cpuDisasmFmt(comp->cpu, adr, buf, dasmrd, comp, dasm_fmt());
+		xMnem mn = cpuDisasmFmt(comp->cpu, adr, buf, dasmrd, comp, fmt);
 		if (bytes) {
 			bytes->resize(mn.len);
 			for (int i = 0; i < mn.len; i++) (*bytes)[i] = dasmrd(adr + i, comp);
@@ -294,11 +286,11 @@ static xMnem dasm_mnem(Computer* comp, int adr, char* buf, QByteArray* bytes = N
 		return mn;
 	}
 	unsigned char code[16];
-	xMnem mn = compDisasmFmt(comp, adr, buf, bytes ? code : NULL, sizeof(code), dasm_fmt());
+	xMnem mn = compDisasmFmt(comp, adr, buf, bytes ? code : NULL, sizeof(code), fmt);
 	if (bytes) {
 		bytes->resize(mn.len);
 		if (mn.len > (int)sizeof(code)) {
-			compDisasmFmt(comp, adr, buf, (unsigned char*)bytes->data(), bytes->size(), dasm_fmt());
+			compDisasmFmt(comp, adr, buf, (unsigned char*)bytes->data(), bytes->size(), fmt);
 		} else {
 			memcpy(bytes->data(), code, mn.len);
 		}
@@ -361,10 +353,10 @@ void placeLabel(Computer* comp, dasmData& drow) {
 		} else {
 			mn.len = 8;					// default seek range
 			if ((drow.flag & 0xf0) == DBG_VIEW_CODE) {	// for code - size of opcode only
-				mn = dasm_mnem(comp, drow.oadr - shift, NULL);
+				mn = dasm_mnem(comp, drow.oadr - shift, NULL, drow.fmt);
 			}
 			if (shift < mn.len) {
-				replace_number(drow.command, dasm_word(drow.oadr),
+				replace_number(drow.command, dasm_word(drow.oadr, drow.fmt),
 					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
 			}
@@ -375,12 +367,12 @@ void placeLabel(Computer* comp, dasmData& drow) {
 
 int dasmByte(Computer* comp, int adr, dasmData& drow) {
 	int len = 1;
-	drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp)));
+	drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt));
 	adr++;
 	unsigned char fl = getBrk(comp, adr);
 	xAdr xadr = dasm_xadr(comp, adr);
 	while ((len < conf.dbg.dbsize) && (fl == DBG_VIEW_BYTE) && find_label(xadr).isEmpty()) {
-		drow.command.append(QString(",%0").arg(dasm_byte(dasmrd(adr, comp))));
+		drow.command.append(QString(",%0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt)));
 		len++;
 		adr++;
 		fl = getBrk(comp, adr);
@@ -393,14 +385,14 @@ int dasmWord(Computer* comp, int adr, dasmData& drow) {
 	int len = 2;
 	int word = dasmrd(adr, comp);
 	word |= (dasmrd(adr + 1, comp) << 8);
-	drow.command = QString("DW %0").arg(dasm_word(word));
+	drow.command = QString("DW %0").arg(dasm_word(word, drow.fmt));
 	adr += 2;
 	unsigned char fl = getBrk(comp, adr);
 	xAdr xadr = dasm_xadr(comp, adr);
 	while ((len < conf.dbg.dwsize * 2) && (fl == DBG_VIEW_WORD) && find_label(xadr).isEmpty()) {
 		word = dasmrd(adr, comp);
 		word |= (dasmrd(adr + 1, comp) << 8);
-		drow.command.append(QString(",%0").arg(dasm_word(word)));
+		drow.command.append(QString(",%0").arg(dasm_word(word, drow.fmt)));
 		adr += 2;
 		len += 2;
 		fl = getBrk(comp, adr);
@@ -414,7 +406,7 @@ int dasmAddr(Computer* comp, int adr, dasmData& drow) {
 	int word = dasmrd(adr, comp);
 	word |= (dasmrd(adr + 1, comp) << 8);
 	drow.oadr = word;
-	drow.command = QString("DW %0").arg(dasm_word(word));
+	drow.command = QString("DW %0").arg(dasm_word(word, drow.fmt));
 	placeLabel(comp, drow);
 	return len;
 }
@@ -435,7 +427,7 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 		// the cpu address points in it too, and they are not the cell's
 		drow.flag = (getBrk(comp, adr) & 0x0f) | DBG_VIEW_BYTE;
 		clen = 1;
-		drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp)));
+		drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt));
 	} else {
 		drow.command.append("\"");
 	}
@@ -445,11 +437,11 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 int dasmCode(Computer* comp, int adr, dasmData& drow) {
 	char buf[1024];
 	QByteArray bytes;
-	xMnem mnm = dasm_mnem(comp, adr, buf, &bytes);
+	xMnem mnm = dasm_mnem(comp, adr, buf, drow.fmt, &bytes);
 	for (unsigned char byte : bytes) drow.bytes.append(gethexbyte(byte));
 	drow.command = QString(buf).toUpper();
 	static const QRegularExpression hexSuffix("(?<![\\w#$])([0-9A-F]+)H(?!\\w)");
-	if (dasm_fmt() == CPU_NUM_H)	// the sign stays small: C9h, not C9H
+	if (drow.fmt == CPU_NUM_H)	// the sign stays small: C9h, not C9H
 		drow.command.replace(hexSuffix, "\\1h");
 	drow.oadr = mnm.oadr;
 	drow.oflag = mnm.flag;
@@ -477,34 +469,26 @@ int dasmCode(Computer* comp, int adr, dasmData& drow) {
 
 // A command as an assembler reads it: in the FFFFh form a number that starts
 // with a letter gets a 0 in front (C9h is a name to it, 0C9h a number). The
-// row's own label is left alone, whatever it looks like
+// row's own label and the text in quotes are left alone
 QString dasm_export(const dasmData& drow) {
-	if (dasm_fmt() != CPU_NUM_H) return drow.command;
+	if (drow.fmt != CPU_NUM_H) return drow.command;
 	static const QRegularExpression letterHex("(?<![\\w#$])([A-F][0-9A-F]*h)(?!\\w)");
 	QString res = drow.command;
-	QRegularExpressionMatchIterator it = letterHex.globalMatch(res);
 	QList<int> at;
+	QRegularExpressionMatchIterator it = letterHex.globalMatch(res);
 	while (it.hasNext()) {
 		QRegularExpressionMatch m = it.next();
-		if (m.captured(1) != drow.label) at.prepend(m.capturedStart(1));
+		bool quoted = res.left(m.capturedStart(1)).count('"') & 1;
+		if (!quoted && (m.captured(1) != drow.label)) at.prepend(m.capturedStart(1));
 	}
 	for (int pos : at) res.insert(pos, '0');		// from the end: earlier places stay
 	return res;
 }
 
-int dasmSome(Computer*, int, dasmData&);
-
-int dasmSomeFmt(Computer* comp, int adr, dasmData& drow, int fmt) {
-	int was = dasmFmt;
-	dasmFmt = fmt;
-	int len = dasmSome(comp, adr, drow);
-	dasmFmt = was;
-	return len;
-}
-
 // adr is bus value
-int dasmSome(Computer* comp, int adr, dasmData& drow) {
+int dasmSome(Computer* comp, int adr, dasmData& drow, int fmt) {
 	int clen = 0;
+	drow.fmt = (fmt < 0) ? conf.dbg.numfmt : fmt;
 	drow.label.clear();
 	drow.bytes.clear();
 	drow.adr = adr;
@@ -529,6 +513,7 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 	xAdr xadr;
 	int oadr = adr;
 	drow.adr = adr;
+	drow.fmt = conf.dbg.numfmt;	// the label rows before dasmSome() sets it
 	drow.oflag = 0;
 	drow.ispc = 0;
 	drow.issel = 0;
@@ -664,7 +649,7 @@ int xDisasmModel::update_lst() {
 	int i;
 	Computer* comp = conf.zx;
 	int pc = cpu_get_pc(comp->cpu);
-	xMnem mnm = dasm_mnem(comp, pc, NULL);
+	xMnem mnm = dasm_mnem(comp, pc, NULL, conf.dbg.numfmt);
 	if (mnm.cond && mnm.met) {
 		for (i = 0; i < dasm.size(); i++) {
 			if ((dasm[i].adr == mnm.oadr) && (mnm.oadr != pc)) {

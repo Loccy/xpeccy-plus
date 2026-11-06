@@ -1375,6 +1375,7 @@ class xNumSign : public QObject {
 		QLineEdit* edt;
 		bool bare = false;		// the sign was taken off by hand: no new one
 		bool tip = false;		// the tip is this field's
+		bool pasting = false;		// Ctrl+V, Shift+Ins or the menu: a paste may follow
 		void edited(const QString&);
 		void showTip();
 		void hideTip();
@@ -1386,17 +1387,20 @@ xNumSign::xNumSign(QLineEdit* p):QObject(p) {
 }
 
 // A paste that leaves bare hex digits gets the sign as typing would: 8000
-// pasted over the lot is #8000, not decimal 8000
+// pasted over the lot is #8000, not decimal 8000. Only a paste: typed keys
+// have the event filter, and a name being typed (BE of BEG) stays a name
 void xNumSign::edited(const QString& txt) {
 	int fmt = conf.dbg.numfmt;
-	bool digits = !txt.isEmpty();
+	bool digits = pasting && !txt.isEmpty();
+	pasting = false;
 	for (QChar chr : txt)
 		if (!is_hex_char(chr)) digits = false;
 	if (digits && !bare && (fmt != CPU_NUM_DEC) && !edt->property(DBG_NUM_OFF).toBool()) {
 		QString pre, post;
 		dbg_sign(fmt, &pre, &post);
 		int pos = edt->cursorPosition();
-		edt->setText(pre + txt + post);
+		edt->selectAll();
+		edt->insert(pre + txt + post);		// undoable, as the paste itself
 		edt->setCursorPosition(pos + pre.size());
 	}
 	showTip();
@@ -1435,7 +1439,10 @@ void xNumSign::hideTip() {
 bool xNumSign::eventFilter(QObject* obj, QEvent* ev) {
 	if (ev->type() == QEvent::FocusIn) bare = false;
 	if (ev->type() == QEvent::FocusOut) hideTip();
+	if (ev->type() == QEvent::ContextMenu) pasting = true;		// its Paste
+	if ((ev->type() == QEvent::MouseButtonPress) || (ev->type() == QEvent::FocusIn)) pasting = false;
 	if (ev->type() != QEvent::KeyPress) return false;
+	pasting = static_cast<QKeyEvent*>(ev)->matches(QKeySequence::Paste);
 	QLineEdit* edt = qobject_cast<QLineEdit*>(obj);
 	int fmt = conf.dbg.numfmt;
 	if (!edt || (fmt == CPU_NUM_DEC) || edt->property(DBG_NUM_OFF).toBool()) return false;
