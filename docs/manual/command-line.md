@@ -78,6 +78,50 @@ xpeccy-plus -m pent game.trd
 xpeccy-plus --disk b data.trd --disk a boot.trd
 ```
 
+## Cheats
+
+```{index} command line; cheats, --poke, .pok; command line
+```
+
+A cheat file (`.pok`) named here goes into the [Cheats](cheats.md) window, which opens
+with it. It takes the place of the image's own cheat file, whichever of the two comes
+first.
+
+`--poke LIST` puts a trainer into the window without a file, for a program that starts
+Xpeccy+ with a game and keeps its pokes itself. The trainer is not ticked, as a cheat
+file's trainers are not: tick it once the game has loaded.
+
+```
+--poke [NAME=]POKE[:POKE...]
+```
+
+- `POKE` is `ADR,VAL`: the address and the byte to write there, 0 to 255. A `?` for the
+  byte asks for it when the trainer is ticked.
+- `PAGE/ADR,VAL` writes into a 128K memory page, 0 to 7, at that address in the page.
+- `ADR,VAL,ORG` adds the byte the game has there, so the window can tell whether the game
+  in memory is the one the poke is for. `0` means it is not known, as in a cheat file.
+- `NAME=` names the trainer. Without it the trainer is named by its pokes.
+- `ADR` can be a label, also as `LABEL+N` or `LABEL-N`: from `-l` or the image's own
+  labels; a loaded label wins over a hex number spelled the same, such as `each`. The label
+  carries its page, so no `PAGE/` goes before it. Its address is looked up each time the
+  trainer is ticked, so after you rebuild your program and **File > Reload** it, the poke
+  goes where the label is now. A label that is not loaded is named in the trainer's row,
+  and the trainer cannot be ticked.
+
+Give `--poke` once for each trainer: all the pokes of one `--poke` are ticked together.
+The trainers come after those of a cheat file named on the command line; without one, they
+take the place of the image's own cheat file, and go when another game is opened. Numbers
+are written as in the [debugging options](#debugging). A poke that cannot be read is
+named in the message over the picture and in the log, and its `--poke` is left out.
+
+**File > Reload** of the image named here keeps the cheats named with it, with nothing
+ticked.
+
+```
+xpeccy-plus game.tap --poke "Infinite lives=35899,0" --poke 1/49152,0:1/49153,0
+xpeccy-plus -l game.lab game.tap --poke "Lives=lives,9" --poke "No check=check+2,0"
+```
+
 ## Window
 
 ```{index} -s, --size, --fullscreen, -r, --ratio, -n, --noflick, --style, --no-gl, --no-update-check

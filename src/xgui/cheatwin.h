@@ -35,6 +35,7 @@ class xCheatWin : public QDialog {
 		QList<QWidget*> hexSide;
 		int serial;
 		bool rzx;
+		unsigned labGen;		// the labels in effect when filled: a label poke's place moves with them
 		void fill();
 		void onClick(QTreeWidgetItem*, int);
 		bool askValue(int idx, const QString& name);

@@ -27,6 +27,7 @@ xCheatWin::xCheatWin(QWidget* p) : QDialog(p) {
 	setWindowIcon(QIcon(":/images/cheats.png"));
 	serial = -1;
 	rzx = false;
+	labGen = 0;
 
 	labFile = new xElideLabel;
 	labFile->setObjectName("cheatFile");
@@ -263,7 +264,8 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 	if (col != CW_CHECK) return;
 	if (!on && ask && (it->data(CW_VALUE, Qt::UserRole + 1).toInt() < 0) && !askValue(idx, name))
 		return;
-	int res = cheats_set(conf.zx, idx, !on, false);
+	QString miss;
+	int res = cheats_set(conf.zx, idx, !on, false, &miss);
 	if (res == POK_MISMATCH) {
 		QString q = QString("\"%0\" does not match this release: the bytes it expects to change are not in memory.\n\n"
 			"Poke anyway?").arg(name);
@@ -276,14 +278,19 @@ void xCheatWin::onClick(QTreeWidgetItem* it, int col) {
 		case CHT_RZX: note("An RZX is playing: nothing goes in while it plays."); break;
 		case POK_NO_PAGE: note(QString("\"%0\" pokes a 128K page this machine does not have.").arg(name)); break;
 		case POK_NO_RAM: note(QString("\"%0\" pokes where this machine has no RAM now.").arg(name)); break;
+		case CHT_NO_LABEL:
+			note(QString("\"%0\" pokes at the label %1, which the labels loaded do not have.").arg(name, miss));
+			break;
 		default: note(QString()); break;
 	}
 	fill();
 }
 
-static QString cw_poke_text(const xPoke& pk) {
+// a label (from the command line) first, and where it is now if it was found
+static QString cw_poke_text(const xPoke& pk, const QString& lab, bool placed) {
 	QString where = QString("%0 #%1").arg(pk.adr).arg(pk.adr, 4, 16, QChar('0')).toUpper();
 	if (!(pk.bank & 8)) where = QString("page %0: %1").arg(pk.bank & 7).arg(where);
+	if (!lab.isEmpty()) where = placed ? QString("%0 (%1)").arg(lab, where) : lab;
 	QString val = (pk.val > 255) ? QString("?") : QString::number(pk.val);
 	QString txt = QString("%0 = %1").arg(where, val);
 	if (pk.org) txt += QString("  (was %0)").arg(pk.org);
@@ -292,9 +299,14 @@ static QString cw_poke_text(const xPoke& pk) {
 
 void xCheatWin::fill() {
 	serial = cheats_serial();
+	labGen = labels_gen();
 	QString path = cheats_file();
-	labFile->setFull(path.isEmpty() ? QString("No .pok file") :
-		QFileInfo(path).fileName() + (cheats_picked() ? "  (found beside the image)" : ""));
+	QString name = QFileInfo(path).fileName();
+	if (cheats_cli())
+		labFile->setFull(path.isEmpty() ? QString("Command line") : name + " + command line");
+	else
+		labFile->setFull(path.isEmpty() ? QString("No .pok file") :
+			name + (cheats_picked() ? "  (found beside the image)" : ""));
 	labFile->setToolTip(QDir::toNativeSeparators(path));
 	QList<xCheatRow> rows = cheats_rows(conf.zx);
 	int count = cheats_count();
@@ -329,6 +341,7 @@ void xCheatWin::fill() {
 				case POK_UNCHECKED: mark = "cannot check"; col = grey; break;
 				case POK_NO_PAGE: mark = "needs 128K"; col = grey; break;
 				case POK_NO_RAM: mark = "no RAM there"; col = grey; break;
+				case CHT_NO_LABEL: mark = QString("no label %0").arg(r.miss); col = grey; break;
 			}
 		}
 		if (!mark.isEmpty()) {
@@ -337,11 +350,12 @@ void xCheatWin::fill() {
 		}
 		if (r.mark == POK_UNCHECKED)
 			it->setToolTip(CW_NOTE, "The file has no original bytes for it to compare");
-		if (r.why || (r.mark == POK_NO_PAGE) || (r.mark == POK_NO_RAM))
+		if (r.why || (r.mark == POK_NO_PAGE) || (r.mark == POK_NO_RAM) || (r.mark == CHT_NO_LABEL))
 			it->setForeground(CW_NAME, grey);
-		foreach(const xPoke& pk, r.pokes) {
+		for (int k = 0; k < r.pokes.size(); k++) {
 			QTreeWidgetItem* sub = new QTreeWidgetItem(it);
-			sub->setText(CW_NAME, cw_poke_text(pk));
+			sub->setText(CW_NAME, cw_poke_text(r.pokes[k], r.labs.value(k),
+				(r.mark != CHT_NO_LABEL) && (r.mark != POK_NO_RAM)));
 			sub->setForeground(CW_NAME, grey);
 		}
 		tree->addTopLevelItem(it);
@@ -359,7 +373,7 @@ void xCheatWin::fill() {
 
 void xCheatWin::upd() {
 	if (!isVisible()) return;
-	if ((serial != cheats_serial()) || (rzx != (bool)conf.zx->rzx.play)) {
+	if ((serial != cheats_serial()) || (rzx != (bool)conf.zx->rzx.play) || (labGen != labels_gen())) {
 		if (!conf.zx->rzx.play && rzx) note(QString());
 		fill();
 	}

@@ -290,8 +290,11 @@ void xWatcher::edtWatcher() {
 xWatchModel::xWatchModel() {
 }
 
+// The last cell is the corner, not one past it: Qt 6 repaints only the cells of the
+// range, and a corner outside the table left the bytes as they were drawn first.
 void xWatchModel::update() {
-	emit QAbstractItemModel::dataChanged(index(0, 0), index(rowCount(), columnCount()));
+	if (!rowCount()) return;
+	emit QAbstractItemModel::dataChanged(index(0, 0), index(rowCount() - 1, columnCount() - 1));
 }
 
 QModelIndex xWatchModel::index(int row, int col, const QModelIndex&) const {
@@ -311,16 +314,6 @@ int xWatchModel::columnCount(const QModelIndex&) const {
 	return WCH_BYTES + 1;		// and an empty one after them that takes the slack
 }
 
-void xWatchModel::insertRow(int row, const QModelIndex& idx) {
-	emit beginInsertRows(idx,row,row);
-	emit endInsertRows();
-}
-
-void xWatchModel::removeRow(int row, const QModelIndex& idx) {
-	emit beginRemoveRows(idx,row*2,row*2+1);
-	emit endRemoveRows();
-}
-
 int xWatchModel::getItemCount() {
 	return explist.size();
 }
@@ -333,9 +326,11 @@ void xWatchModel::addItem(int type, QString exp) {
 	xWatchItem itm;
 	itm.type = type;
 	itm.exp = exp;
+	// a watch is two rows, said before they are there
+	int row = explist.size() * 2;
+	beginInsertRows(QModelIndex(), row, row + 1);
 	explist.append(itm);
-	insertRow(explist.size() - 1);
-	insertRow(explist.size() - 1);
+	endInsertRows();
 }
 
 void xWatchModel::setItem(int idx, int type, QString exp) {
@@ -345,14 +340,14 @@ void xWatchModel::setItem(int idx, int type, QString exp) {
 	itm.type = type;
 	itm.exp = exp;
 	explist[idx] = itm;
-	emit QAbstractItemModel::dataChanged(index(idx, 0), index(idx, columnCount()));
+	emit QAbstractItemModel::dataChanged(index(idx * 2, 0), index(idx * 2 + 1, columnCount() - 1));	// its two rows
 }
 
 void xWatchModel::delItem(int idx) {
-	if (idx < explist.size()) {
-		explist.removeAt(idx);
-		removeRow(idx);
-	}
+	if ((idx < 0) || (idx >= explist.size())) return;
+	beginRemoveRows(QModelIndex(), idx * 2, idx * 2 + 1);
+	explist.removeAt(idx);
+	endRemoveRows();
 }
 
 QVariant xWatchModel::data(const QModelIndex& idx, int role) const {

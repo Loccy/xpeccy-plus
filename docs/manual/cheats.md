@@ -33,6 +33,10 @@ name. The file goes into the window with nothing ticked, and the window says
 window again; a file you opened yourself stays, and so does the game's own when you pick
 another side of it from its list.
 
+A program that starts Xpeccy+ with a game can also hand its trainers over on the command
+line, with no file (see [Cheats](command-line.md#cheats)). The window then says
+**Command line**, and the trainers stay with the game as its own cheat file would.
+
 A file that is not a cheat file at all is refused with a message.
 
 ## Turning a trainer on
@@ -41,7 +45,8 @@ A file that is not a cheat file at all is refused with a message.
 ```
 
 Tick a trainer to poke it into the machine. Untick it, and the bytes it changed are put
-back as they were.
+back as they were. A byte the game has changed since, or loaded again, stays as the game
+has it.
 
 Some trainers ask for a value, such as the number of lives. A **?** in the **Value**
 column marks them: ticking one asks for the number, from 0 to 255 (`#` for hex). Click the
@@ -88,8 +93,12 @@ it, with the cheat file.
 ```{index} Cheats; reset, Cheats; Rewind, Cheats; RZX
 ```
 
-A reset, opening a file, a machine switch, **Quick Load** and **Undo Quick Load** turn every
-cheat off and write nothing back: the memory they changed is gone. The cheat file stays in the window.
+A reset, opening another file, a machine switch, **Quick Load** and **Undo Quick Load** turn
+every cheat off and write nothing back: the memory they changed is gone. The cheat file
+stays in the window.
+
+Opening the game's tape or disk again, by **File > Reload** or any other way, turns every
+cheat off and puts their bytes back first, before the game is loaded again.
 
 **Rewind** keeps cheats on: a trainer whose bytes are back to the originals after going
 back in time is poked again. One whose bytes are something else goes off.

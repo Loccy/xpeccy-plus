@@ -44,8 +44,6 @@ class xWatchModel : public QAbstractItemModel {
 		int columnCount(const QModelIndex& = QModelIndex()) const;
 		QVariant data(const QModelIndex&, int = Qt::DisplayRole) const;
 //		QVariant headerData(int, Qt::Orientation, int = Qt::DisplayRole) const;
-		void insertRow(int, const QModelIndex& = QModelIndex());
-		void removeRow(int, const QModelIndex& = QModelIndex());
 };
 
 class xWatcher : public QDialog {

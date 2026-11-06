@@ -132,17 +132,17 @@ static void test_48(void) {
 	printf("fits: check=%d", pok_check(comp, tr));
 	printf(" apply=%d", pok_apply(comp, tr, 0));
 	printf(" byte=%d where=%d", cpu_rd(comp, 55877), pok_where(comp, tr, 0));
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 0);
 	printf(" undo byte=%d\n", cpu_rd(comp, 55877));
 	cpu_wr(comp, 55877, 17);
 	printf("other release: check=%d", pok_check(comp, tr));
 	pok_apply(comp, tr, 0);
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 0);
 	printf(" forced and undone byte=%d\n", cpu_rd(comp, 55877));
 	cpu_wr(comp, 55877, 127);
 	printf("already poked: check=%d", pok_check(comp, tr));
 	pok_apply(comp, tr, 0);
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 0);
 	printf(" undo byte=%d\n", cpu_rd(comp, 55877));
 	pok_free(&pf);
 
@@ -150,14 +150,14 @@ static void test_48(void) {
 	printf("no org: check=%d", pok_check(comp, tr));
 	pok_apply(comp, tr, 99);
 	printf(" 256 as 99: #8000=%d where=%d\n", cpu_rd(comp, 0x8000), pok_where(comp, tr, 99));
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 99);
 	pok_free(&pf);
 
 	tr = one(&pf, "NPages\nM 5 16384 1 0\nM 2 32768 2 0\nZ 0 58813 3 0\n");
 	printf("pages 5/2/0: check=%d", pok_check(comp, tr));
 	pok_apply(comp, tr, 0);
 	printf(" #4000=%d #8000=%d 58813=%d\n", cpu_rd(comp, 0x4000), cpu_rd(comp, 0x8000), cpu_rd(comp, 58813));
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 0);
 	pok_free(&pf);
 
 	tr = one(&pf, "NPage 7\nM 8 40000 9 0\nZ 7 49152 1 0\n");
@@ -171,7 +171,7 @@ static void test_48(void) {
 	cpu_wr(comp, 50006, 77);
 	pok_apply(comp, tr, 0);
 	printf("twice: 50006=%d where=%d", cpu_rd(comp, 50006), pok_where(comp, tr, 0));
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 0);
 	printf(" undo 50006=%d\n", cpu_rd(comp, 50006));
 
 	pok_apply(comp, tr, 0);
@@ -184,13 +184,22 @@ static void test_48(void) {
 	printf(" changed where=%d\n", pok_where(comp, tr, 0));
 	pok_free(&pf);
 
+	tr = one(&pf, "NGame\nM 8 50010 1 0\nZ 8 50011 2 0\n");
+	cpu_wr(comp, 50010, 30);
+	cpu_wr(comp, 50011, 31);
+	pok_apply(comp, tr, 0);
+	cpu_wr(comp, 50010, 99);		// the game wrote there, or was loaded again
+	pok_undo(comp, tr, 0);
+	printf("changed since: undo 50010=%d 50011=%d\n", cpu_rd(comp, 50010), cpu_rd(comp, 50011));
+	pok_free(&pf);
+
 	xTrainer hand;
 	memset(&hand, 0, sizeof(hand));
 	for (int i = 0; i < 4; i++) cpu_wr(comp, 40000 + i, 10 + i);
 	for (int i = 0; i < 4; i++) pok_poke(comp, &hand, 8, 40000 + i, 200 + i);
 	printf("by hand: rom=%d", pok_poke(comp, &hand, 8, 0x100, 1));
 	for (int i = 0; i < 4; i++) printf(" %d", cpu_rd(comp, 40000 + i));
-	pok_undo(comp, &hand);
+	pok_undo(comp, &hand, 0);
 	printf(" undo");
 	for (int i = 0; i < 4; i++) printf(" %d", cpu_rd(comp, 40000 + i));
 	printf("\n");
@@ -212,7 +221,7 @@ static void test_128(void) {
 	comp->p7FFD = 0;
 	comp->hw->mapMem(comp);
 	printf("page 0 in: cpu 58813=%d where=%d", cpu_rd(comp, 58813), pok_where(comp, tr, 0));
-	pok_undo(comp, tr);
+	pok_undo(comp, tr, 0);
 	printf(" undo page0=%d\n", page_rd(comp, 0, 58813));
 	pok_free(&pf);
 	compDestroy(comp);

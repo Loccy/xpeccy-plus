@@ -77,13 +77,18 @@ struct Computer;
 int pok_parse(const char* buf, size_t len, xPokFile* pf);
 void pok_free(xPokFile* pf);
 void pok_trainer_free(xTrainer* tr);
+// building one by hand, as the reader does: 0 = out of memory. The name is cut to
+// POK_NAME_MAX, trailing blanks off; the new trainer is pf->list[pf->cnt - 1].
+int pok_add_trainer(xPokFile* pf, const char* name, int len);
+int pok_add_poke(xTrainer* tr, int bank, int adr, int val, int org);
 
 // the byte a poke goes to, -1 if it has no place on this machine now
 int pok_peek(struct Computer* comp, int bank, int adr);
 int pok_check(struct Computer* comp, const xTrainer* tr);
 // val stands for 256 in the file. Nothing is written unless every poke has a place.
 int pok_apply(struct Computer* comp, xTrainer* tr, int val);
-void pok_undo(struct Computer* comp, xTrainer* tr);
+// the saved bytes back where the poke's value still is; val as for pok_apply
+void pok_undo(struct Computer* comp, xTrainer* tr, int val);
 int pok_where(struct Computer* comp, const xTrainer* tr, int val);
 // one poke more for a trainer made by hand, written at once
 int pok_poke(struct Computer* comp, xTrainer* tr, int bank, int adr, int val);
