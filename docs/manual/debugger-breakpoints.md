@@ -193,17 +193,20 @@ is what the span has measured so far.
 ```{index} breakpoint; address
 ```
 
-The **Address** fields take a hex number, with or without `#`, `$` or `0x` in front, or a
-label name. A label takes priority over a number written the same way: if there is a label
-`BEEF`, `BEEF` is that label and `#BEEF` the number.
+The **Address** fields take a number - hex with a sign, `#8000`, `$8000`, `0x8000` or
+`8000h`, decimal without one, `32768` - or a label name (see
+[Typing a number](debugger-code.md#typing-a-number)). A label takes priority over a number
+written the same way: if there is a label `BEEFh`, `BEEFh` is that label and `#BEEF` the
+number. A port and its mask are hex, with no sign.
 
 ![A RAM cell in the editor](images/dbg-brk-editor-cell.png)
 
 A cell of RAM, ROM or the slot can be given in four ways:
 
 - an offset in the page, `0000` to `3FFF` (`1FFF` for an 8K page), with the page in **Page**;
-- the page and the offset together, `05:1800`. The page is hex here, while **Page** counts
-  in decimal. Memory with a name of its own takes the name instead: `ROM0:0038`, `DIV3:0010`;
+- the page and the offset together, `05:#1800`. The page is hex here, while **Page** counts
+  in decimal; the offset is a number as above, and a sign in front of the page counts for it
+  too: `#05:1800`. Memory with a name of its own takes the name instead: `ROM0:0038`, `DIV3:0010`;
 - a CPU address past the page size, such as `5800`: the cell is the one mapped there now,
   and **Page** changes to that cell's page. This works when the memory there is of the kind
   that **Type** names; otherwise the address is taken as an offset in **Page**;
@@ -291,8 +294,7 @@ to be 0. A word in memory is read low byte first, as the Z80 reads it.
 | `A`, `HL`, `BC'`... | a CPU register, see below |
 | a name | a label: its address |
 | `1234` | a decimal number |
-| `0x1234`, `#1234` | a hex number |
-| `0123` | an octal number: a leading zero, as in C |
+| `0x1234`, `#1234`, `$1234`, `1234h` | a hex number |
 | `'A'` | the code of a character |
 | `M(x)` | the byte at x |
 | `[x]` | the word at x |
@@ -304,11 +306,13 @@ second set (`A'`, `B'`...); the pairs `AF`, `BC`, `DE`, `HL`, `AF'`, `BC'`, `DE'
 `IFF1`, `IFF2`. Register names can be typed in either case; label names cannot.
 
 A name is looked up first as a register, then as one of the variables below, then as a
-label. So a label that has the name of a register cannot be reached by its name.
+label, and last as hex with an `h` behind, as `C9h`. So a label that has the name of a
+register cannot be reached by its name.
 
-A number without a prefix is decimal: `100` is a hundred, `0x100` and `#100` are 256,
-`0100` is 64. A bare `FF` is therefore not a number but a name, so hex always needs its
-prefix.
+A number without a sign is decimal: `100` is a hundred, `0x100`, `#100`, `$100` and `100h`
+are 256, and `0100` is a hundred too - a leading zero means nothing. A bare `FF` is
+therefore not a number but a name, so hex always needs its sign. The rule is the one the
+address fields have: see [Typing a number](debugger-code.md#typing-a-number).
 
 ### Variables
 

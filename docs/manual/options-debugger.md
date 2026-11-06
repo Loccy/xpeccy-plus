@@ -7,7 +7,7 @@
 
 The font, the colors and what the Debugger shows.
 
-```{index} Debugger; font, Debugger; colors, State info, DB in row, DW in row, Max text length
+```{index} Debugger; font, Debugger; colors, State info, DB in row, DW in row, Max text length, Numbers (Debugger)
 ```
 
 **View**:
@@ -17,6 +17,10 @@ The font, the colors and what the Debugger shows.
 - **DB in row**, **DW in row**, **Max text length** - how many bytes, words or characters
   one line of the listing holds when it shows data instead of code. See
   [Disasm panel](debugger-code.md).
+- **Numbers** - how addresses and the numbers of the listing are written: `#FFFF`,
+  `$FFFF`, `FFFFh` or decimal `65535`. The button on the listing's toolbar and
+  Ctrl+Shift+H switch between hex in the form picked here and decimal. See
+  [Hex or decimal](debugger-code.md#hex-or-decimal).
 - **Stack offset** - where the **STACK** panel starts, from -16 to 16 bytes from SP. See
   [STACK panel](debugger-stack.md).
 

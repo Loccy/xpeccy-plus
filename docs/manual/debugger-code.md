@@ -33,8 +33,9 @@ Each row has four columns:
 | Command | the instruction, or `DB`, `DW` for data |
 | (last) | on the PC row only: the value in memory, or an arrow |
 
-Numbers are hex and start with `#`, as in `LD HL,#5C00`. Where an address has a name, the
-name is shown instead of the number: `CALL print_score`. An address a few bytes into a
+Numbers are hex and start with `#`, as in `LD HL,#5C00`, unless you pick another form: see
+[Hex or decimal](#hex-or-decimal). Where an address has a name, the name is shown instead
+of the number: `CALL print_score`. An address a few bytes into a
 named place is shown as the name plus the offset: `LD A,(table + 2)`.
 
 Some rows are not instructions:
@@ -65,6 +66,74 @@ The last column says more about the instruction at PC:
 - for a conditional jump, call or return whose condition is met, an arrow: down when the
   jump goes to a higher address, up when it goes to a lower one. The row the jump goes to,
   if that row is in view, gets an arrow too.
+
+## Hex or decimal
+
+```{index} hex or decimal, decimal numbers, Numbers (Debugger), Decimal numbers
+```
+
+Addresses, and the numbers in the commands of the listing, are written in one of four
+forms, picked by **Numbers** on the **Debugger** page of **Options**:
+
+| Form | An address | A byte |
+|---|---|---|
+| `#FFFF` | `#8000` | `#C9` |
+| `$FFFF` | `$8000` | `$C9` |
+| `FFFFh` | `8000h` | `C9h` |
+| `65535` | `32768` | `201` |
+
+The button at the right of the toolbar shows the form, as `#FF` or `255`. A click on it
+switches between hex in the form picked and decimal, and so does Ctrl+Shift+H
+(**Decimal numbers** in [Debugger keys](hotkeys.md#debugger-keys)). The choice is kept
+between sessions.
+
+An address takes five characters in any form, `00056` in decimal, so the columns stay
+put. The numbers in commands are not padded: `LD A,201`, `JR 13986`, `RST 56`.
+
+The addresses in the other panels follow the switch too: **DUMP**, **REG-DUMP**, the
+disk dump of the **FDD** panel, **STACK** (its words as well), the **Breakpoints** and
+**Labels List** lists, the **Watcher**, the **Heat map**, and the address and length
+fields of **Save dump**, **Load dump**, **Fill...**, **Sprite scanner** and the **Screen**
+panel. A page number in front of an address stays hex, as **MEMMAP** shows it:
+`05:#0123` or `05:00291`. The bytes of the listing and the dumps, the registers, the ports
+and the panels of the hardware stay hex.
+
+### Typing a number
+
+```{index} number; typing, hex sign
+```
+
+The fields that take an address read a number the same way, whatever the form:
+
+| You type | It is |
+|---|---|
+| `#8000`, `$8000`, `0x8000`, `8000h` | hex |
+| `32768` | decimal |
+| `0100` | decimal 100: a leading zero means nothing |
+| a name | a label |
+
+In a hex form a field opens with its address in that form, `#8000`, and the sign stays
+while you type over the digits: select all and type `C000`, and it is `#C000`. Backspace
+or Delete on the sign itself takes it off, and the number you type then is decimal. In an
+empty field the sign comes with the first digit. A first character that is not a hex
+digit - a label, `.HL`, the `;` of a comment - replaces the lot. In decimal nothing is
+added: type `#` or `$` first for hex.
+
+The fields of **Save dump**, **Load dump**, **Fill...**, **Sprite scanner** and the
+**Screen** panel keep to their digits, and the sign is drawn beside them. Backspace in
+front of the digits switches such a field to decimal, `#` or `$` back to hex, and X either
+way.
+
+While you type an address, a tip under the field shows what it is: the number in decimal,
+hex and binary, then where it is in memory now and its label:
+
+```
+23732 -> #5CB4, 0101 1100 1011 0100
+RAM:05:#1CB4  P_RAMT
+```
+
+Rest the mouse on an address of the listing, or on a number or a label in a command, for
+the same tip.
 
 ## Moving around
 
@@ -110,13 +179,15 @@ The listing scrolls so that the address lands on that row. An address can be:
 
 | You type | It means |
 |---|---|
-| `8000`, `#8000`, `0x8000` | a hex address |
+| `#8000`, `$8000`, `0x8000`, `8000h` | a hex address |
+| `32768` | a decimal address |
 | `print_score` | the address of a label |
 | `@print_score` | the label's address, and never a new label |
 | `.HL` | the address a register holds: `.PC`, `.SP`, `.IX` and so on |
 
-A name that is not a label yet makes a new label instead: see
-[Labels and comments](#labels-and-comments).
+The cell opens with the address in the form the listing shows; how the sign behaves while
+you type is in [Typing a number](#typing-a-number). A name that is not a label yet makes
+a new label instead: see [Labels and comments](#labels-and-comments).
 
 ## Editing
 
@@ -131,7 +202,9 @@ and `05` from the address of the row on.
 
 **Command** - type an instruction, such as `ld a,5` or `call #8010`. It is assembled and
 written at the address of the row, and the cursor goes down to the next row, ready for
-the next instruction. Write hex numbers as `#8010` or `0x8010`: a plain number is decimal.
+the next instruction. Write hex numbers with a sign - `#8010`, `$8010`, `0x8010` or
+`8010h`: a plain number is decimal. A command opens in the form the listing shows, so it
+can be changed as it stands.
 Labels can be used in the instruction, alone or in a sum: `jp loop`, `ld hl,table+2`,
 `ld a,(ix+offset)`. An instruction that cannot be assembled writes nothing, though the
 cursor still moves down: check the row before you go on.
@@ -343,6 +416,7 @@ The marks, the labels and the comments are kept together in a memory map file: s
 | {icon}`arrGreen` **Trace** | running the program step by step, see [Debugger](debugger.md) |
 | {icon}`other` **Tools** | **Search**, **Fill...**, **Sprite scanner** (see [DUMP panel](debugger-memory.md)), **Keyboard**, **Watcher** |
 | {icon}`settings` **Options** | how the listing looks and works, see below |
+| `#FF` or `255` | hex or decimal numbers, see [Hex or decimal](#hex-or-decimal) |
 | {icon}`refresh` (circular arrows) | **Reload snapshot & labels** |
 | {icon}`floppy` (floppy disk) | **Disasm to file**, **Load dump**, **Save dump**, **Load map**, **Save map** |
 

@@ -76,7 +76,9 @@ on a ZX Evolution, 2 MB on the Next - this shows at once where the program lives
 ## The readout
 
 Hold the mouse over a cell to see its address, the page it is in and the offset in that
-page - **#4000-#4003  RAM5 #0000** - and its counts: **Read:**, **Write:**, **Exec:**. Over
+page - **#4000-#4003  RAM5 #0000** - and its counts: **Read:**, **Write:**, **Exec:**. The
+addresses here and in the headings are written as the Debugger's are: see
+[Hex or decimal](debugger-code.md#hex-or-decimal). Over
 the heading of a strip, the counts are the page's. A byte's count stops at 4294967295 and
 then reads **max**; a page's counts go on. In the Debugger, double-click a cell and
 the listing goes there, if the CPU can see that memory now.

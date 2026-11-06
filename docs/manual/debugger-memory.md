@@ -24,7 +24,9 @@ save it to a file and load it back. Which memory pages the CPU sees is in the
 4. **Dump** - the address, the bytes in groups of four, and the same bytes as text.
 5. **Scrollbar** - drag it to move through memory.
 
-The title of the panel shows the address of the byte under the cursor: **DUMP | 00C000**.
+The title of the panel shows the address of the byte under the cursor: **DUMP | #C000**.
+The addresses are in the form picked for the Debugger: see
+[Hex or decimal](debugger-code.md#hex-or-decimal).
 
 In the text column a byte below 32 shows as a dot. **Auto** puts as many groups of four
 bytes on a row as the panel is wide enough for.
@@ -59,8 +61,9 @@ register holds.
 
 To go to an address, double-click the address of any row, or select it and press Enter, and
 type the address to go to. The dump scrolls so that the address lands on that row. An
-address can be hex (`8000`, `#8000`, `0x8000`), a label, or a register with a dot in front,
-as `.HL`. The labels are offered as you type, as in the listing (see
+address can be a number - hex with a sign, `#8000`, `$8000`, `0x8000` or `8000h`, or
+decimal without one, `32768` (see [Typing a number](debugger-code.md#typing-a-number)) -
+a label, or a register with a dot in front, as `.HL`. The labels are offered as you type, as in the listing (see
 [Labels offered as you type](debugger-code.md#labels-offered-as-you-type)).
 
 ### Editing
@@ -242,8 +245,8 @@ the **Disasm** toolbar. Each has a key of its own: see
 The window opens on what the **DUMP** panel shows: **CPU**, or the RAM, ROM or DIV page
 it is on.
 
-Fill in **Start** and **End**, or **Start** and **Length**, in hex: the third field is
-filled in by itself. With **CPU** they are addresses. With any other source they count
+Fill in **Start** and **End**, or **Start** and **Length**, in the Debugger's numbers (see
+[Hex or decimal](debugger-code.md#hex-or-decimal)): the third field is filled in by itself. With **CPU** they are addresses. With any other source they count
 from the start of the page, and may run on into the pages after it, up to the end of that
 memory. Picking another source sets them to one whole page; **Page** 0 with
 **Length** 20000 saves all the RAM of a 128K. Then pick from {icon}`save-as` **Save as...**:
