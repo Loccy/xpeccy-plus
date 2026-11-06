@@ -26,7 +26,7 @@
 int dump_cell_width(const QFontMetrics&);
 
 enum {
-	XCP_850 = 0,	// DOS Western Europe, the PC's of the 80s and 90s
+	XCP_437 = 0,	// the IBM PC's own: the Latin one of the 80s and 90s
 	XCP_1251,
 	XCP_866,
 	XCP_KOI8R
