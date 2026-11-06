@@ -183,7 +183,9 @@ int xstate_safe(Computer* comp) {
 
 int xstate_safe_tape_aside(Computer* comp) {
 	if (!comp || !comp->hw) return 0;
-	if (comp->dif) {
+	// a controller out of the machine gets no time: a command it was left in (a
+	// TR-DOS reset's Restore, then a switch to a machine without one) never moves
+	if (comp->dif && (comp->dif->type != DIF_NONE)) {
 		if (fdc_running(comp->dif->fdc)) return 0;
 	}
 	return 1;
