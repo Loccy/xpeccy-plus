@@ -632,6 +632,7 @@ void xFMPage::offChan(int st) {
 	if (hold || !chip) return;
 	emu_lock();
 	chip->fm_off[channel()] = (st == Qt::Checked);
+	if (conf.zx) conf.zx->sndSeed = 1;	// the chips the sound thread mixes take it too
 	emu_unlock();
 }
 

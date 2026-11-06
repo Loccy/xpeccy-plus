@@ -192,6 +192,13 @@ public:
 		return (int)m_state.size();
 	}
 
+	// another core's packed state (the sound thread's copy of the chip)
+	void load(const void* ptr, int size) {
+		const uint8_t* p = (const uint8_t*)ptr;
+		m_state.assign(p, p + size);
+		unpack();
+	}
+
 	void unpack() {
 		if (m_state.empty()) return;
 		ymfm::ymfm_saved_state ss(m_state, false);
@@ -375,6 +382,7 @@ void ym2203_wr(aymChip* chip, int adr, int val) {
 		chip->reg[chip->curReg] = val;
 		fm->write_data(val);
 	}
+	if (ay_log) ay_log(chip, AYL_WR, adr, val);
 }
 
 int ym2203_rd(aymChip* chip, int adr) {
@@ -396,6 +404,7 @@ void ym2203_poke_reg(aymChip* chip, int reg, int val) {
 	ym2203_flush(chip);
 	chip->reg[reg] = val & 0xff;
 	fm_of(chip)->poke(reg, val);
+	if (ay_log) ay_log(chip, AYL_FMPOKE, reg, val & 0xff);
 }
 
 void ym2203_fm_view(aymChip* chip, fmChan* out) {
@@ -417,6 +426,10 @@ void ym2203_state_pack(aymChip* chip) {
 
 void ym2203_state_unpack(aymChip* chip) {
 	if (chip->fm) ((xfm*)chip->fm)->unpack();
+}
+
+void ym2203_state_load(aymChip* chip, const void* ptr, int size) {
+	fm_of(chip)->load(ptr, size);
 }
 
 }	// extern "C"

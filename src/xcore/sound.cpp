@@ -14,6 +14,7 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
+#include <vector>
 #include <QMutex>
 #include <QWaitCondition>
 
@@ -379,13 +380,14 @@ void snd_q_call(void (*fn)(long long), long long arg) {
 // over with every item), the registers written (ay_log), the tuning; what the mix
 // hears goes over when it changed. A state put back or replaced (Computer.sndSeed)
 // is copied over whole. Run-ahead's frames send nothing: they are thrown away, and
-// TSound.advNs goes back with the state. A chip whose state is not all in its
-// struct (the YM2203's fm half) is not copied: such a machine is mixed here.
+// TSound.advNs goes back with the state. A YM2203's fm half keeps its state outside
+// the struct: it goes over packed, and the copy's chips have cores of their own.
 
 // the copy to start from
 typedef struct {
 	TSound ts;
 	aymChip chip[4];
+	std::vector<unsigned char> fm[4];	// a YM2203's core, packed; empty: the chip has none
 	sndPair (*mix)(sndMix*, sndVolume*);
 } sndSeedCopy;
 
@@ -414,8 +416,6 @@ static aymChip* snd_ts_chip(TSound* ts, int i) {
 static int snd_mirror_fits(Computer* comp) {
 	if (!comp->hw->sndtake || !comp->hw->sndmix) return 0;
 	if (comp->gs->enable || comp->saa->enabled) return 0;
-	for (int i = 0; i < 4; i++)
-		if (snd_ts_chip(comp->ts, i)->type == SND_YM2203) return 0;
 	return 1;
 }
 
@@ -436,6 +436,13 @@ static void snd_mirror_seed(Computer* comp) {
 		// come in this step were due before its end (late), and they count up to
 		// there, not to the end
 		c->chip[i] = *chip;
+		// and its fm core as it stands with it: at that same last flush
+		if (chip->fm) {
+			void* p;
+			ym2203_state_pack(chip);
+			int n = ym2203_state_size(chip, &p);
+			c->fm[i].assign((unsigned char*)p, (unsigned char*)p + n);
+		}
 	}
 	c->mix = comp->hw->sndmix;
 	ts->advNs = 0;
@@ -516,11 +523,21 @@ static void snd_mirror_take_seed(sndSeedCopy* c) {
 	sm.ts = c->ts;
 	aymChip* was[4] = {c->ts.chipA, c->ts.chipB, c->ts.chipC, c->ts.chipD};
 	for (int i = 0; i < 4; i++) {
+		void* own = sm.chip[i].fm;		// the copy's core, never the machine's
 		sm.chip[i] = c->chip[i];
+		sm.chip[i].fm = own;
 		// its ports are the machine's: a write here goes nowhere
 		sm.chip[i].xrd = NULL;
 		sm.chip[i].xwr = NULL;
 		sm.chip[i].xptr = NULL;
+		if (c->fm[i].empty()) {
+			ym2203_free(&sm.chip[i]);
+		} else {
+			ym2203_state_load(&sm.chip[i], c->fm[i].data(), (int)c->fm[i].size());
+			// a core made new sets the status bits: back as the struct came
+			sm.chip[i].reg[0xff] = c->chip[i].reg[0xff];
+			sm.chip[i].wait = c->chip[i].wait;
+		}
 	}
 	sm.ts.chipA = &sm.chip[0];
 	sm.ts.chipB = &sm.chip[1];
@@ -750,8 +767,14 @@ static void snd_do_tok(const sndTok* t) {
 				ay_poke_reg(&sm.chip[t->chip], t->a, t->b);
 			else if (t->what == AYL_ECNT)
 				sm.chip[t->chip].chanE.cnt = t->a;
-			else if (t->what == AYL_WR)
-				ay_wr(&sm.chip[t->chip], t->a, t->b);
+			else if (t->what == AYL_WR)		// through the chip's own: an AY's or a YM2203's
+				sm.chip[t->chip].wr(&sm.chip[t->chip], t->a, t->b);
+			else if (t->what == AYL_FMPOKE)
+				ym2203_poke_reg(&sm.chip[t->chip], t->a, t->b);
+			else if (t->what == AYL_BLK) {		// flushed first, as the machine's was
+				ay_flush(&sm.chip[t->chip]);
+				sm.chip[t->chip].blk_fm = t->a;
+			}
 			break;
 		case SND_T_RETUNE:
 			snd_mirror_time(t->adv);
