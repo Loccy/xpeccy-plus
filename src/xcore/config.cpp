@@ -1529,13 +1529,13 @@ void loadConfig() {
 	if (schema < 2) {			// a config from before the machines: bring it across
 		std::string file = oldprf.count(pnm) ? oldprf[pnm] : "xpeccy.conf";
 		ok = xm_migrate(pnm.empty() ? std::string("default") : pnm, file);
+		if (!ok && !cli.empty()) ok = xm_set(cli);
 	} else {
 		// a start takes the one Options names; a config read again keeps its own
 		if (!conf.running && start_this()) macwant = conf.macStartId;
-		if (!cli.empty()) macwant = cli;
-		ok = xm_set(macwant);
+		ok = !cli.empty() && xm_set(cli);
+		if (!ok) ok = xm_set(macwant);
 	}
-	if (!ok && !cli.empty()) ok = xm_set(cli);
 	if (!ok) {
 		xlog(XLG_CONF, XLL_WARN, "no machine to start, taking the first one");
 		if (xm_list().isEmpty() || !xm_set(xm_list().first().id)) {

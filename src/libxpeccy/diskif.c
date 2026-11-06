@@ -178,19 +178,31 @@ static void dif_apply(DiskIF* dif) {
 }
 
 // A machine with no disk interface has no controller either: a command left by
-// the one before (a TR-DOS reset's Restore, then a switch) ends there. One out for
-// a divMMC is still in the machine, and keeps its own.
-static void dif_none_stop(DiskIF* dif) {
-	if (dif->cfg != DIF_NONE) return;
-	dif->fdc->plan = NULL;
-	dif->fdc->pos = 0;
-	dif->fdc->wait = -1;
+// the one before (a TR-DOS reset's Restore, then a switch) ends there, as the chip
+// that ran it ends one, so that one put back without a reset takes the next.
+// One out for a divMMC is still in the machine, and keeps its own.
+static void dif_none_stop(DiskIF* dif, int chip) {
+	FDC* fdc = dif->fdc;
+	if ((dif->cfg != DIF_NONE) || !fdc->plan || fdc->idle) return;	// none running
+	fdc->plan = NULL;
+	fdc->pos = 0;
+	fdc->wait = -1;
+	fdc->idle = 1;
+	if (chip == DIF_P3DOS) {	// uPD765: ready for a command byte (uidle)
+		fdc->drq = 1;
+		fdc->dir = 0;
+	} else {			// wd1793: INTRQ up, not busy
+		fdc->irq = 1;
+		fdc->drq = 0;
+		fdc->state &= ~1;
+	}
 }
 
 void difSetHW(DiskIF* dif, int type) {
+	int was = dif->type;
 	dif->cfg = findDHW(type) ? type : DIF_NONE;
 	dif_apply(dif);
-	dif_none_stop(dif);
+	dif_none_stop(dif, was);
 }
 
 void dif_set_out(DiskIF* dif, int out) {
@@ -293,7 +305,7 @@ void difDestroy(DiskIF* dif) {
 
 void difReset(DiskIF* dif) {
 	dif->hw->reset(dif);
-	dif_none_stop(dif);
+	dif_none_stop(dif, dif->type);
 }
 
 // Every drive's door closes in its own time, not only the selected one's: a disk
