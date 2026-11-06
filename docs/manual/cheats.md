@@ -45,7 +45,8 @@ A file that is not a cheat file at all is refused with a message.
 ```
 
 Tick a trainer to poke it into the machine. Untick it, and the bytes it changed are put
-back as they were.
+back as they were. A byte the game has changed since, or loaded again, stays as the game
+has it.
 
 Some trainers ask for a value, such as the number of lives. A **?** in the **Value**
 column marks them: ticking one asks for the number, from 0 to 255 (`#` for hex). Click the
