@@ -683,6 +683,8 @@ int main(int ac,char** av) {
 	QObject::connect(&tapw, &TapeWin::wannaOpen, &mwin, [&mwin]() {mwin.openMedia(QString(), FG_TAPE, -1, 0, true);});
 	QObject::connect(&tapw, &TapeWin::wannaEject, &mwin, &MainWin::tapeEject);
 	tapw.others = [&mwin](QMenu* m) {mwin.otherImages(m, FG_TAPE, -1, nullptr, 999);};
+	tapw.side = [&mwin](int step) {mwin.sideStepIn(MEDIA_TAPE, step);};
+	tapw.hasSides = [&mwin]() {return mwin.hasSides(MEDIA_TAPE);};
 
 	app.connect(&rzxw, SIGNAL(stateChanged(int)), &mwin, SLOT(rzxStateChanged(int)));
 	app.connect(&rzxw, SIGNAL(seekTo(int)), &mwin, SLOT(rzxSeek(int)));

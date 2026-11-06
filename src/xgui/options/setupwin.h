@@ -145,7 +145,7 @@ class SetupWin : public QDialog {
 		QGridLayout* gridSaves[4];	// their names lined up with Emulation's
 
 		// the devices' own controls, see makeDevWidgets()
-		QCheckBox *cbTapeAuto, *cbTapeRewind, *cbTapeFast, *cbTapeFlash, *cbTapeEdge, *bdtbox, *cbAddBoot, *a80box, *b80box, *c80box, *d80box, *adsbox, *bdsbox, *cdsbox, *ddsbox, *gsrbox, *ratWheel, *cbSwapButtons;
+		QCheckBox *cbTapeAuto, *cbTapeRewind, *cbTapeSet, *cbTapeFast, *cbTapeFlash, *cbTapeEdge, *bdtbox, *cbAddBoot, *a80box, *b80box, *c80box, *d80box, *adsbox, *bdsbox, *cdsbox, *ddsbox, *gsrbox, *ratWheel, *cbSwapButtons;
 		QComboBox *diskTypeBox, *cbFlpInterleave, *hiface, *hm_type, *hs_type, *sdrvBox, *cbScanTab, *cbCpuTurbo, *cbPsgCount, *cbPsgType, *cbPsgFrq, *cbPsgStereo;
 		xSlider *sldTapeSpeed, *sldPsgSep, *sldSensitivity;
 		QLabel *labTapeSpeedVal, *labPsgMhz, *labPsgSep;

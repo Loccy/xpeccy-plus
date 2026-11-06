@@ -14,6 +14,11 @@ before that point is upstream's history and is not repeated here.
 - **Frame skip** (Options > Video): on a computer too slow for the machine a frame is left
   undrawn now and then, so the machine and its sound keep their speed. When the machine falls
   behind for a few seconds, Xpeccy+ offers to turn it on.
+- **Next Side (Shift+F3) and Previous Side** put the next or previous side of the tape or
+  disk in use in, side B after side A. They are in the Media menu, with buttons in the Tape
+  Player and in each drive of the Disk Manager.
+- **Next tape of a set can be turned off** (Options, or Autoreverse in the Tape Player): the
+  tape then starts over at its end, for a game that loads its levels from side B again and again.
 
 ### Changed
 
@@ -38,6 +43,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **The Tape Player lists the tape that went in while the machine ran**: a side picked from
+  the tape menu, the next tape of a set or a tape opened without starting it left the old
+  tape's blocks on the list.
 - **The Debugger's dumps (disk, CMOS, registers) paint every line after a panel grows
   taller**: lines below its old height stayed blank while scrolling.
 - **The file dialog in a folder of tens of thousands of files** (a full TOSEC set): it lists

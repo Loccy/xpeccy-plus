@@ -49,7 +49,11 @@ a bar shows how far the tape is into the current block.
 At the bottom are the buttons of the deck: {icon}`tape-rec` **Record**,
 {icon}`tape-play` **Play**, {icon}`tape-rewind` **Rewind to the start**,
 {icon}`tape-stop` **Stop** and {icon}`tape-eject` **Eject the tape**. A tape cannot be
-ejected or rewound while it plays.
+ejected or rewound while it plays. After them, {icon}`tape-prev` **Previous tape of the
+set** and {icon}`tape-next` **Next tape of the set** put in the other sides (gray when the
+tape has none; see
+[The other sides beside an image](files.md#the-other-sides-beside-an-image)), and
+{icon}`tape-autorev` **Autoreverse** is **Next tape of a set**, described below.
 
 The window title says **Tape Player - modified** when blocks were recorded, moved or
 deleted since the tape was opened or saved.
@@ -118,9 +122,14 @@ A tape that is one of a set (see
 [The other sides beside an image](files.md#the-other-sides-beside-an-image)) goes on
 instead: when a program's own loader reads it again at its end, or a load through the ROM
 asks for a block that is not on it, the next tape of the set goes in at its start and
-plays - side A, side B, then side A again - and the screen shows `tape: side b`. A game whose
+plays - side A, side B, then side A again - and the screen shows `tape: side B`. A game whose
 levels are on side B gets them after side A with no hand on the deck. **Play** rewinds the
-tape that is in, as above, and so does a tape you have recorded on.
+tape that is in, as above, and so does a tape you have recorded on. With
+{icon}`tape-autorev` **Autoreverse** up (**Next tape of a set** in Options, see
+[Machine page](options-machine.md)) the tape that is in rewinds instead, as a lone one
+does: for a game that loads its levels again and again from side B and needs side A only
+to start, or one that goes wrong when it is given side A again. The buttons beside it and
+Shift+F3 still change the side by hand.
 
 With this switch off, the tape stays at its end until you rewind it: turn it off for a game
 that asks you to turn the tape over, or the game gets the same side again. It is on by

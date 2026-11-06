@@ -114,12 +114,13 @@ typedef struct {
 	QString path;
 } xSibling;
 QList<xSibling> media_siblings(Computer*, const QString& path, int id, int drv, int* cur);
-// The tape that follows the one at path in its set, for Rewind at end: the set by name
-// only, the first after the last. Of a side's several files (TOSEC's [a] alternates)
-// the one in seen first (the tapes that were in, newest first), else the one with the
-// same [flags], else one with none; place its place in the set ("side b"). Empty when
-// the tape is of no set.
-QString media_next_tape(Computer*, const QString& path, const QStringList& seen, QString* place = nullptr);
+// The image step places on from the one at path in its set (id and drv the slot's),
+// round past either end: the set by name, or with whole (a step by hand) an archive's
+// own list when its names make none. Of a side's several files the one in seen (the
+// images that were in), else the one with the same [flags], else one with none; one in
+// skip (a disk in another drive) never. place gets its place, "side B". Empty: none.
+QString media_next_side(Computer*, const QString& path, int id, int drv, const QStringList& seen, int step,
+	const QStringList& skip = QStringList(), QString* place = nullptr, bool whole = false);
 // the image to open from an archive, as an archive path: the only one, the one picked
 // when ask, the first otherwise; empty when none or the user cancelled (said why)
 QString media_from_archive(Computer*, const QString& archive, int id, int drv, bool ask);

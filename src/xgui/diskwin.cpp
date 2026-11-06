@@ -45,6 +45,10 @@ xDiskWin::xDiskWin(QWidget* p):QDialog(p) {
 	btnSave = diskButton(":/images/floppy.png", "Save the changes to the disk's own file");
 	btnSaveAs = diskButton(":/images/save-as.png", "Save the disk to a new file");
 	btnEject = diskButton(":/images/tape-eject.png", "Eject");
+	btnPrev = diskButton(":/images/tape-prev.png", "Previous disk of the set");
+	btnNext = diskButton(":/images/tape-next.png", "Next disk of the set");
+	btnPrev->setObjectName("diskPrev");
+	btnNext->setObjectName("diskNext");
 	protect = new QCheckBox("Write protect");
 	QHBoxLayout* top = new QHBoxLayout;
 	top->addWidget(path, 1);
@@ -53,6 +57,10 @@ xDiskWin::xDiskWin(QWidget* p):QDialog(p) {
 	top->addWidget(btnSave);
 	top->addWidget(btnSaveAs);
 	top->addWidget(btnEject);
+	top->addSpacing(6);
+	top->addWidget(btnPrev);
+	top->addWidget(btnNext);
+	top->addSpacing(6);
 	top->addWidget(protect);
 	note = new QLabel;
 	toTape = diskButton(":/images/tape.png", "Copy to tape");
@@ -92,6 +100,8 @@ xDiskWin::xDiskWin(QWidget* p):QDialog(p) {
 	connect(btnSave, &QToolButton::released, this, [this]() {doOp(DW_SAVE);});
 	connect(btnSaveAs, &QToolButton::released, this, [this]() {doOp(DW_SAVE_AS);});
 	connect(btnEject, &QToolButton::released, this, [this]() {doOp(DW_EJECT);});
+	connect(btnPrev, &QToolButton::released, this, [this]() {if (side && (drive() >= 0)) side(drive(), -1);});
+	connect(btnNext, &QToolButton::released, this, [this]() {if (side && (drive() >= 0)) side(drive(), 1);});
 	connect(protect, &QCheckBox::clicked, this, [this](bool on) {
 		int drv = drive();
 		if (drv >= 0) conf.zx->dif->flp[drv]->protect = on ? 1 : 0;
@@ -227,6 +237,7 @@ void xDiskWin::watchDrives() {
 		tabs->setTabText(i, driveName(i));
 		if (i == drive()) fill();
 	}
+	fillSides();
 	showHead();
 }
 
@@ -286,8 +297,30 @@ void xDiskWin::fillDrive(Floppy* flp) {
 	btnSave->setEnabled(file);
 	btnSaveAs->setEnabled(in);
 	btnEject->setEnabled(in);
+	fillSides();
 	protect->setEnabled(fit);
 	protect->setChecked(flp && flp->protect);
+}
+
+// Whether the shown drive's disk has other sides: a folder is read for it, so only when
+// the drive shown or what any drive holds has changed - a disk in another drive is not
+// stepped to
+void xDiskWin::fillSides() {
+	int drv = drive();
+	DiskIF* dif = conf.zx->dif;
+	QByteArray key = QByteArray(conf.macId.c_str()) + '|' + QByteArray::number(drv) + '|'
+		+ QByteArray::number(dif->type) + (dif->out ? "|out" : "|in");
+	for (int i = 0; i < 4; i++) {
+		Floppy* flp = conf.zx->dif->flp[i];
+		key += '|';
+		if (flp->insert && flp->path) key += flp->path;
+	}
+	if (key == sidesKey) return;
+	sidesKey = key;
+	Floppy* flp = (drv < 0) ? NULL : conf.zx->dif->flp[drv];
+	const bool sides = flp && flp->insert && flp->path && *flp->path && hasSides && hasSides(drv);
+	btnPrev->setEnabled(sides);
+	btnNext->setEnabled(sides);
 }
 
 static const QStringList trdHeads = {"Name", "Ext", "Start", "Length", "SecLen", "Trk", "Sec"};

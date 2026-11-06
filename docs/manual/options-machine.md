@@ -101,11 +101,13 @@ row opens the **Machine: Tape** sheet:
 
 - **Playback speed**;
 - **Auto play / stop**;
-- **Rewind at end**;
+- **Rewind at end**, and under it **Next tape of a set**: at its end a tape of a set goes
+  on to the next one (on by default), or, off, starts over itself;
 - **Fast loading**, **Flash loading** and **Edge detection**.
 
-The first four are the same settings as in the **Tape Player**, where a change takes
-effect at once.
+**Playback speed**, **Auto play / stop**, **Rewind at end**, **Next tape of a set**
+({icon}`tape-autorev` **Autoreverse** there) and **Fast loading** are also in the
+**Tape Player**, where a change takes effect at once.
 
 The tape's loudness is **Tape** in the **Volumes** group of the **Sound** page (see
 [Sound page](options-sound.md)).

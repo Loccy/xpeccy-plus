@@ -166,6 +166,7 @@ void conf_init(char* confdir) {
 	conf.boot = 1;
 	conf.autorun = AR_ASK;		// asked on the first tape or disk opened
 	conf.tape.rewind = 1;		// a tape that ran out starts over on the next Play or LOAD
+	conf.tape.setNext = 1;
 	conf.tape.flash = 1;		// both only refine fast loading, which the user switches
 	conf.tape.edge = 1;
 	conf.tape.exp = wav_export_default();
@@ -404,6 +405,7 @@ void saveConfig() {
 	fprintf(cfile, "flash = %s\n", YESNO(conf.tape.flash));
 	fprintf(cfile, "edge = %s\n", YESNO(conf.tape.edge));
 	fprintf(cfile, "rewind = %s\n", YESNO(conf.tape.rewind));
+	fprintf(cfile, "rewind.set = %s\n", YESNO(conf.tape.setNext));
 	fprintf(cfile, "export.rate = %i\n", conf.tape.exp.rate);
 	fprintf(cfile, "export.bits = %i\n", conf.tape.exp.bits);
 	fprintf(cfile, "export.level = %i\n", conf.tape.exp.level);
@@ -1464,6 +1466,7 @@ void loadConfig() {
 					if (pnam=="fast") conf.tape.fast = arg.b;
 					if (pnam=="edge") conf.tape.edge = arg.b;
 					if (pnam=="rewind") conf.tape.rewind = arg.b;
+					if (pnam=="rewind.set") conf.tape.setNext = arg.b;
 					if (pnam=="export.rate") conf.tape.exp.rate = arg.i;
 					if (pnam=="export.bits") conf.tape.exp.bits = arg.i;
 					if (pnam=="export.level") conf.tape.exp.level = arg.i;

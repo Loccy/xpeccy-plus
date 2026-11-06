@@ -150,6 +150,9 @@
         <file>images/tape-stop.png</file>
         <file>images/rzx-bookmark.png</file>
         <file>images/tape-eject.png</file>
+        <file>images/tape-prev.png</file>
+        <file>images/tape-next.png</file>
+        <file>images/tape-autorev.png</file>
         <file>images/label.png</file>
         <file>images/bars.png</file>
         <file>images/arrGreen.png</file>

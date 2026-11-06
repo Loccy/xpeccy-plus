@@ -173,9 +173,15 @@ class MainWin : public QWidget {
 		void hotkeysNote();
 		void setMessage(QString, double = 2.0, bool hold = false);
 		void fillUserMenu();
-		// side: another side of the set in the deck or the drive, picked from its list
-		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false, bool side = false);
-		void mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from);	// a tape or a disk, read in the background
+		// side: another side of the set in the deck or the drive, picked from its list;
+		// note: what the OSD says once it is in
+		void openMedia(const QString& path, int id, int drv, int run, bool pinned = false, bool side = false,
+			const QString& note = QString());
+		// a tape or a disk, read in the background
+		void mountMedia(const QString& path, int id, int drv, bool pinned, const QString& from, const QString& note = QString());
+		void sideStep(int step);	// the Next/Previous Side keys
+		void sideStepIn(int src, int step);	// ...the buttons: in the deck (MEDIA_TAPE) or a drive
+		bool hasSides(int src);
 		QString mediaIn(int id, int drv);
 		void mediaThread(std::function<void()> work, std::function<void()> done);
 		void mediaOpened(const QString& path, int id, int drv, int run, bool pinned, const QString& from, bool disk);
@@ -342,12 +348,18 @@ class MainWin : public QWidget {
 
 		std::string shdLoaded;	// the shader the program is linked with now
 		int mediaSrc;		// where the image in use is: a drive, the tape, a divMMC card, or a snapshot
+		int sideSrc = -1;	// the drive or the tape last in use, kept while a side changes in it; -1 none
 		int mediaSeen;		// the drive motors (bits 0..3), the tape playing, the cards read, as last seen
 		QByteArray mediaRaw[7];	// what each drive, the tape and the cards held, as last seen
 		int cardReads[2];	// the divMMC cards' read counts as last seen
 		void watchMedia();
 		Tape* setTape = nullptr;	// the tape whose set was looked for, and its path then
 		QByteArray setRaw;
+		bool setOn = false;	// and whether a set was looked for at all (Next tape of a set)
+		bool tapeSides = false;	// the deck's tape can be stepped by hand (a set, or its archive's list) - not inSet
+		QString sideHeld(int src);
+		QString sideNext(int src, int step, QString* place);
+		void sidePut(int src, const QString& path, const QString& place);
 		QStringList tapeSeen;	// the tapes that were in, newest first, for the side a set turns back to
 		void watchTapeSet(Computer*);
 		void spareTape(Computer*, const QString& next, const QString& place);
@@ -357,6 +369,8 @@ class MainWin : public QWidget {
 		QString tapeSparePlace;
 		quint64 spareGen = 0;
 		quint64 mountGen = 0;		// the last mount started (mountMedia)
+		QString mountPath;		// ...the image it reads while it does, empty after
+		int mountSrc = -1;		// ...and where it goes: a drive, or MEDIA_TAPE
 		double hwMulSeen = 1.0;	// the board's turbo as last reported
 		std::string macSeen;	// ...on this machine
 		void watchClock();

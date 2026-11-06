@@ -132,6 +132,86 @@ int drive_count(Computer* comp) {
 	return (comp->dif->type == DIF_BDI) ? 4 : (comp->dif->type == DIF_P3DOS) ? 2 : 0;
 }
 
+// THE SIDES OF A SET
+//
+// The Next/Previous Side keys, and the Tape Player's and the Disk Manager's buttons: the
+// next place of the set (Side A -> B, round past the end) in the deck or a drive. It goes
+// in as a pick from the menu does, a playing tape stopped first. A disk in another drive
+// is not taken.
+
+// what the deck or a drive holds: empty for none, or a drive the machine has not
+QString MainWin::sideHeld(int src) {
+	Computer* comp = conf.zx;
+	const char* raw = nullptr;
+	if (src == MEDIA_TAPE) {
+		if (comp->tape->blkCount > 0) raw = comp->tape->path;
+	} else if ((src >= 0) && (src < drive_count(comp)) && !comp->dif->out) {
+		Floppy* flp = comp->dif->flp[src];
+		if (flp->insert) raw = flp->path;
+	}
+	return QString::fromLocal8Bit((raw && *raw) ? raw : "");
+}
+
+// the image step places on in the deck or a drive; empty when there is none
+QString MainWin::sideNext(int src, int step, QString* place) {
+	Computer* comp = conf.zx;
+	QString path = sideHeld(src);
+	if (path.isEmpty()) return QString();
+	// an image still being read for this slot: a later one would drop it, so it is the
+	// one that goes in, and the press steps on from it
+	if ((src == mountSrc) && !mountPath.isEmpty()) path = mountPath;
+	if (src == MEDIA_TAPE) return media_next_side(comp, path, FG_TAPE, -1, tapeSeen, step, {}, place, true);
+	QStringList skip;
+	for (int i = 0; i < 4; i++) {
+		const QString other = (i == src) ? QString() : sideHeld(i);
+		if (!other.isEmpty()) skip.append(other);
+	}
+	return media_next_side(comp, path, FH_DRIVE_A + src, src, {}, step, skip, place, true);
+}
+
+// Whether a drive's disk has another side to step to, for its buttons. The deck's tape
+// is looked at once a tape, by watchTapeSet.
+bool MainWin::hasSides(int src) {
+	return (src == MEDIA_TAPE) ? tapeSides : !sideNext(src, 1, nullptr).isEmpty();
+}
+
+// the next side into the deck or a drive, or why not
+void MainWin::sideStepIn(int src, int step) {
+	Computer* comp = conf.zx;
+	if (comp->rzx.play) {
+		setMessage(" not in RZX ");
+		return;
+	}
+	QString place;
+	const QString path = sideNext(src, step, &place);
+	if (path.isEmpty()) {
+		setMessage(" no other side ");
+		return;
+	}
+	sidePut(src, path, place);
+}
+
+// The keys: in the slot of the image in use - the tape or the drive the title names, or
+// named last while a side changes in it; none yet, the tape if it can be stepped, else drive A
+void MainWin::sideStep(int step) {
+	int src = sideSrc;
+	if (sideHeld(src).isEmpty())
+		src = tapeSides ? MEDIA_TAPE : 0;
+	sideStepIn(src, step);
+}
+
+void MainWin::sidePut(int src, const QString& path, const QString& place) {
+	sideSrc = src;
+	// its place in the set (media_next_side), "side B"
+	if (src == MEDIA_TAPE) {
+		if (conf.zx->tape->on) tapStateChanged(TW_STATE, TWS_STOP);
+		openMedia(path, FG_TAPE, -1, AR_MOUNT, true, true, QString(" tape: %0 ").arg(place));
+	} else {
+		openMedia(path, FH_DRIVE_A + src, src, AR_MOUNT, true, true,
+			QString(" drive %0: %1 ").arg(QChar('A' + src)).arg(place));
+	}
+}
+
 // an SD card by its place: -1 the Z-controller's, 0 and 1 a divMMC's slots
 static SDCard* sd_card(Computer* comp, int card) {
 	return (card < 0) ? comp->sdc : comp->div->card[card & 1];

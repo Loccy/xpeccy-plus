@@ -366,6 +366,7 @@ void opt_set_psg_frq(QComboBox* box, double frq) {
 void SetupWin::makeDevWidgets() {
 	cbTapeAuto = new QCheckBox;
 	cbTapeRewind = new QCheckBox;
+	cbTapeSet = new QCheckBox;
 	cbTapeFast = new QCheckBox;
 	cbTapeFlash = new QCheckBox;
 	cbTapeEdge = new QCheckBox;
@@ -781,6 +782,7 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	// flash loading and edge detection only refine fast loading
 	connect(cbTapeFast, &QCheckBox::toggled, cbTapeFlash, &QWidget::setEnabled);
 	connect(cbTapeFast, &QCheckBox::toggled, cbTapeEdge, &QWidget::setEnabled);
+	connect(cbTapeRewind, &QCheckBox::toggled, cbTapeSet, &QWidget::setEnabled);
 	connect(sldTapeSpeed, &QSlider::valueChanged, this, [this](int v){
 		labTapeSpeedVal->setText(QString("%0%").arg(v));
 	});
@@ -1235,6 +1237,8 @@ void SetupWin::fillPages() {
 	cbTapeFlash->setEnabled(conf.tape.fast);
 	cbTapeEdge->setEnabled(conf.tape.fast);
 	cbTapeRewind->setChecked(conf.tape.rewind);
+	cbTapeSet->setChecked(conf.tape.setNext);
+	cbTapeSet->setEnabled(conf.tape.rewind);
 	sldTapeSpeed->setValue(comp->tape->speed);	// the readout follows in the slot
 	showDevRows();
 // tools
@@ -1640,6 +1644,7 @@ void SetupWin::applyGlobal() {
 	conf.tape.flash = cbTapeFlash->isChecked() ? 1 : 0;
 	conf.tape.edge = cbTapeEdge->isChecked() ? 1 : 0;
 	conf.tape.rewind = cbTapeRewind->isChecked() ? 1 : 0;
+	conf.tape.setNext = cbTapeSet->isChecked() ? 1 : 0;
 	tape_set_speed(comp->tape, sldTapeSpeed->value());
 	tape_apply_options(comp->tape);
 // tools
@@ -2055,7 +2060,8 @@ void SetupWin::buildDevices() {
 		tr("Per cent of normal. A few images made on machines with an unusual clock load only when it is nudged either way"));
 	tape.line();
 	tape.check(cbTapeAuto, tr("Auto play / stop"), tr("Start the tape when a loader asks for it, stop it between blocks"), true);
-	tape.check(cbTapeRewind, tr("Rewind at end"), tr("Play or the next load starts the tape again; a load goes on to the next tape of a set. Off: it stops at the end"), true);
+	tape.check(cbTapeRewind, tr("Rewind at end"), tr("Play or the next load starts the tape again. Off: it stops at the end"), true);
+	tape.check(cbTapeSet, tr("Next tape of a set"), tr("With rewind at end: a load goes on to the next tape of the set (Side B). Off: the same tape starts again, as a levels tape wants"), true);
 	tape.check(cbTapeFast, tr("Fast loading"), tr("Full speed, sound off and picture held while a loader reads the tape"), true);
 	tape.check(cbTapeFlash, tr("Flash loading"), tr("With fast loading: ROM blocks go straight to the machine"), true);
 	tape.check(cbTapeEdge, tr("Edge detection"), tr("With fast loading: a loader waiting for a pulse gets it at once. Faster, not exact"), true);

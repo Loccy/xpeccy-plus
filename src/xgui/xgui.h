@@ -336,6 +336,8 @@ class TapeWin : public QDialog {
 		void show();
 	public:
 		std::function<void(QMenu*)> others;	// the other sides of the tape, put in a menu
+		std::function<void(int)> side;		// the previous (-1) or next (1) tape of its set in
+		std::function<bool()> hasSides;		// ...and whether there is one
 	signals:
 		void wannaOpen();
 		void wannaEject();

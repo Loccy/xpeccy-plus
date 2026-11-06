@@ -426,6 +426,7 @@ void tap_take_image(Tape* deck, Tape* img) {
 	img->blkData = blk;
 	img->blkCount = cnt;
 	img->path = path;
+	deck->newBlock = 1;		// another tape's blocks: the Tape Player lists them again
 }
 
 void tapStop(Tape* tap) {

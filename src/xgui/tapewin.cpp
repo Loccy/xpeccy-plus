@@ -40,6 +40,11 @@ TapeWin::TapeWin(QWidget *par):QDialog(par) {
 	connect(ui.cbAuto,SIGNAL(clicked(bool)),this,SLOT(setOptions()));
 	connect(ui.cbFast,SIGNAL(clicked(bool)),this,SLOT(setOptions()));
 	connect(ui.cbRewind,SIGNAL(clicked(bool)),this,SLOT(setOptions()));
+	connect(ui.tbPrevTape, &QToolButton::released, this, [this]() {if (side) side(-1);});
+	connect(ui.tbNextTape, &QToolButton::released, this, [this]() {if (side) side(1);});
+	// Next tape of a set, as Options has it: autoreverse on a deck
+	connect(ui.tbAutoRev, SIGNAL(clicked(bool)), this, SLOT(setOptions()));
+	connect(ui.cbRewind, &QCheckBox::toggled, ui.tbAutoRev, &QWidget::setEnabled);
 }
 
 void TapeWin::show() {
@@ -89,6 +94,11 @@ void TapeWin::upd(Tape* tape) {
 	ui.stopBut->setEnabled(tape_running(tape));
 	ui.tbRewind->setEnabled(got && !tape->on);
 	ui.tbEject->setEnabled(got && !tape->on);
+	const bool sides = got && hasSides && hasSides();
+	ui.tbPrevTape->setEnabled(sides);
+	ui.tbNextTape->setEnabled(sides);
+	ui.tbAutoRev->setChecked(conf.tape.setNext);
+	ui.tbAutoRev->setEnabled(conf.tape.rewind);
 	ui.saveBut->setEnabled(got);
 	ui.tbToDisk->setEnabled(row >= 0);
 	ui.tbBlkUp->setEnabled(row > 0);
@@ -200,13 +210,14 @@ void TapeWin::doExport() {
 	file_errors(err);
 }
 
-// the three options are the same ones the Tape page of Options has, and they
+// the four options are the same ones the Tape page of Options has, and they
 // take effect where they are set - this window has no Apply
 
 void TapeWin::setOptions() {
 	conf.tape.autostart = ui.cbAuto->isChecked() ? 1 : 0;
 	conf.tape.fast = ui.cbFast->isChecked() ? 1 : 0;
 	conf.tape.rewind = ui.cbRewind->isChecked() ? 1 : 0;
+	conf.tape.setNext = ui.tbAutoRev->isChecked() ? 1 : 0;
 	tape_apply_options(conf.zx->tape);
 }
 
