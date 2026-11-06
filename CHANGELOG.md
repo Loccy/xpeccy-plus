@@ -22,6 +22,8 @@ before that point is upstream's history and is not repeated here.
 - **Decimal numbers in the Debugger**: a toolbar button and Ctrl+Shift+H switch hex and
   decimal, the hex form is picked in Options > Debugger, and a tip shows a number in hex,
   decimal and binary.
+- **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
+  programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`.
 
 ### Changed
 
@@ -53,6 +55,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **A `.pok` named on the command line before the image is kept**: the image's own cheat
+  file took its place.
 - **The Tape Player lists the tape that went in while the machine ran**: a side picked from
   the tape menu, the next tape of a set or a tape opened without starting it left the old
   tape's blocks on the list.
