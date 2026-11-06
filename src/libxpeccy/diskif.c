@@ -177,9 +177,20 @@ static void dif_apply(DiskIF* dif) {
 	if (dif->type != was) dif->fdc->slow = 0;	// the +3's real time is not the next controller's
 }
 
+// A machine with no disk interface has no controller either: a command left by
+// the one before (a TR-DOS reset's Restore, then a switch) ends there. One out for
+// a divMMC is still in the machine, and keeps its own.
+static void dif_none_stop(DiskIF* dif) {
+	if (dif->cfg != DIF_NONE) return;
+	dif->fdc->plan = NULL;
+	dif->fdc->pos = 0;
+	dif->fdc->wait = -1;
+}
+
 void difSetHW(DiskIF* dif, int type) {
 	dif->cfg = findDHW(type) ? type : DIF_NONE;
 	dif_apply(dif);
+	dif_none_stop(dif);
 }
 
 void dif_set_out(DiskIF* dif, int out) {
@@ -282,6 +293,7 @@ void difDestroy(DiskIF* dif) {
 
 void difReset(DiskIF* dif) {
 	dif->hw->reset(dif);
+	dif_none_stop(dif);
 }
 
 // Every drive's door closes in its own time, not only the selected one's: a disk
