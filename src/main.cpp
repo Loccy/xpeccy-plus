@@ -579,6 +579,7 @@ int main(int ac,char** av) {
 
 	conf_init(confdir);
 	shortcut_init();
+	conf_cli_machine(cliMac);
 	loadConfig();
 	log_apply();
 
@@ -781,15 +782,14 @@ int main(int ac,char** av) {
 #ifdef __APPLE__
 	int style = 0;
 #endif
-	// The machine before anything else: choosing it resets it, which would
-	// take away a snapshot or a register named before -m.
+	// loadConfig() built it; only a migrated config needs the switch.
 	// -p is what the profiles answered to, so the name a profile went by still
 	// names its machine
 	if (cliMac) {
 		std::string mid = xm_id_for_name(cliMac);
 		if (mid.empty()) {
 			cli_warn(QString("no such machine: %0").arg(QString::fromLocal8Bit(cliMac)));
-		} else {
+		} else if (conf.macId != mid) {
 			mwin.chooseMachine(mid);
 		}
 	}

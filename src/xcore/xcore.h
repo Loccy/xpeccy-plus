@@ -441,6 +441,7 @@ const char* dbgPaletteDefault(const char*);
 void loadStylePalette(const std::string&);	// debugger colours shipped with a style sheet
 QColor stylePaletteColor(const std::string&, const QString&);	// one colour of that file, invalid if none
 void loadConfig();
+void conf_cli_machine(const char*);	// -m: the machine the start builds, not the config's
 void saveConfig();
 bool start_asks();
 bool reloadConfig();

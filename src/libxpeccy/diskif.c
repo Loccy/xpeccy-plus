@@ -177,9 +177,27 @@ static void dif_apply(DiskIF* dif) {
 	if (dif->type != was) dif->fdc->slow = 0;	// the +3's real time is not the next controller's
 }
 
+// A command no time will finish (its interface gone, or out) ends as the chip ends one.
+static void dif_end_command(DiskIF* dif, int chip) {
+	FDC* fdc = dif->fdc;
+	if (!fdc->plan) return;
+	if (chip == DIF_P3DOS) {	// uPD765: out of exec, then as its reset leaves it
+		fdc->irq = 0;
+		uReset(fdc);
+	} else {			// wd1793: a command, or the spin-down after one
+		fdc->plan = NULL;
+		fdc->idle = 1;
+		fdc->irq = 1;
+		fdc->drq = 0;
+		fdc->flp->motor = 0;
+	}
+}
+
 void difSetHW(DiskIF* dif, int type) {
+	int was = dif->cfg;
 	dif->cfg = findDHW(type) ? type : DIF_NONE;
 	dif_apply(dif);
+	if (dif->cfg != was) dif_end_command(dif, was);
 }
 
 void dif_set_out(DiskIF* dif, int out) {
@@ -282,6 +300,7 @@ void difDestroy(DiskIF* dif) {
 
 void difReset(DiskIF* dif) {
 	dif->hw->reset(dif);
+	if (dif->out) dif_end_command(dif, dif->cfg);	// the reset reaches one out for a divMMC
 }
 
 // Every drive's door closes in its own time, not only the selected one's: a disk

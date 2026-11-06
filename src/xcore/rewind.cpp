@@ -362,12 +362,13 @@ static int rw_show(Computer* comp, int back, long long* phase) {
 }
 
 static void rw_let_go(Computer* comp, long long* phase) {
-	int from = rw_clock;
 	rwEntry* e = rw_at(rw_back);
 	if (e) rw_snd_w = e->snd;
 	rw_acc = {};
 	if (rewind_restore(comp, rw_back, phase)) {
-		xlog(XLG_CORE, XLL_INFO, "rewind: played on from frame %i, key let go at %i", rw_clock, from);
+		// rw_from, not rw_clock: the playback has moved that to the snapshot on screen
+		xlog(XLG_CORE, XLL_INFO, "rewind: played on from frame %i, %.1f s back from frame %i",
+			rw_clock, (rw_from - rw_clock) / comp_fps(comp), rw_from);
 		cheats_rollback(comp);
 	}
 	snd_drop();		// the history's sound, played backwards
