@@ -103,10 +103,10 @@ file's trainers are not: tick it once the game has loaded.
 - `NAME=` names the trainer. Without it the trainer is named by its pokes.
 - `ADR` can be a label, also as `LABEL+N` or `LABEL-N`: from `-l` or the image's own
   labels; a loaded label wins over a hex number spelled the same, such as `each`. The label
-  carries its page, so no `PAGE/` goes before it. Its address is looked
-  up each time the trainer is ticked, so after you rebuild your program and **File >
-  Reload** it, the poke goes where the label is now. A label that is not loaded is named
-  in the trainer's row, and the trainer cannot be ticked.
+  carries its page, so no `PAGE/` goes before it. Its address is looked up each time the
+  trainer is ticked, so after you rebuild your program and **File > Reload** it, the poke
+  goes where the label is now. A label that is not loaded is named in the trainer's row,
+  and the trainer cannot be ticked.
 
 Give `--poke` once for each trainer: all the pokes of one `--poke` are ticked together.
 The trainers come after those of a cheat file named on the command line; without one, they
