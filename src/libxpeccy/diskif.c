@@ -107,7 +107,6 @@ void bdiReset(DiskIF* dif) {
 // +3DOS (uPD765)
 
 void uReset(FDC*);
-void uidle(FDC*);
 unsigned char uRead(FDC*, int);
 void uWrite(FDC*, int, unsigned char);
 
@@ -178,19 +177,19 @@ static void dif_apply(DiskIF* dif) {
 	if (dif->type != was) dif->fdc->slow = 0;	// the +3's real time is not the next controller's
 }
 
-// A command no time will finish (no interface, or one out) ends as the chip ends one.
+// A command no time will finish (its interface gone, or out) ends as the chip ends one.
 static void dif_end_command(DiskIF* dif, int chip) {
 	FDC* fdc = dif->fdc;
-	if (!fdc->plan || fdc->idle) return;	// none running
-	fdc->plan = NULL;
-	if (chip == DIF_P3DOS) {	// uPD765: out of exec, ready for a command byte
+	if (!fdc->plan) return;
+	if (chip == DIF_P3DOS) {	// uPD765: out of exec, then as its reset leaves it
 		fdc->irq = 0;
-		uidle(fdc);
-	} else {			// wd1793: INTRQ up, motor off
+		uReset(fdc);
+	} else {			// wd1793: a command, or the spin-down after one
+		fdc->plan = NULL;
 		fdc->idle = 1;
 		fdc->irq = 1;
 		fdc->drq = 0;
-		if (fdc->flp) fdc->flp->motor = 0;
+		fdc->flp->motor = 0;
 	}
 }
 
@@ -198,7 +197,7 @@ void difSetHW(DiskIF* dif, int type) {
 	int was = dif->cfg;
 	dif->cfg = findDHW(type) ? type : DIF_NONE;
 	dif_apply(dif);
-	if (dif->cfg == DIF_NONE) dif_end_command(dif, was);
+	if (dif->cfg != was) dif_end_command(dif, was);
 }
 
 void dif_set_out(DiskIF* dif, int out) {
