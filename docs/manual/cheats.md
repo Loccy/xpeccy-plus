@@ -33,6 +33,10 @@ name. The file goes into the window with nothing ticked, and the window says
 window again; a file you opened yourself stays, and so does the game's own when you pick
 another side of it from its list.
 
+A program that starts Xpeccy+ with a game can also hand its trainers over on the command
+line, with no file (see [Cheats](command-line.md#cheats) there). The window then says
+**Command line**, and the trainers stay with the game as its own cheat file would.
+
 A file that is not a cheat file at all is refused with a message.
 
 ## Turning a trainer on
