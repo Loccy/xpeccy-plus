@@ -355,9 +355,11 @@ void xHexSpin::updatePal() {
 	} else {
 		str = p ? p->styleSheet() : ""; // getStyleString("dbg.input.bg", "dbg.input.txt");
 	}
-	// only what moved: either one repolishes the field, and this runs on every value
-	if (p && (font() != p->font())) setFont(p->font());
+	// only what moved: either one repolishes the field, and this runs on every value.
+	// The font after the sheet: the first sheet after the window is shown hands the
+	// field the application font
 	if (styleSheet() != str) setStyleSheet(str);
+	if (p && (font() != p->font())) setFont(p->font());
 #else
 	QPalette pal;
 	if (chgMask) {
