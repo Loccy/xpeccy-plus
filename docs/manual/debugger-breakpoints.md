@@ -610,7 +610,8 @@ for word is left out, so a list loaded twice counts each hit once.
 Options of the command line set breakpoints at start (see
 [Command line](command-line.md#debugging)):
 
-- `--bp ADR` - a **Fetch** breakpoint on a CPU address or a label;
+- `--bp ADR` - a **Fetch** breakpoint on a CPU address or a label; a label in a page that
+  is not paged in at start gets a **ROM cell** or **RAM cell** breakpoint instead;
 - `--brk FILE` - loads a `.xbrk` file; its breakpoints are added to those loaded before;
 - `--brk-log FILE` - writes the breakpoint log to that file, or with `-` to the standard
   output.

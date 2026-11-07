@@ -333,9 +333,9 @@ changed has no name there. A ROM is known by its contents, so a ROM file of your
 same bytes has them too.
 
 They work as other labels do: in the listing, typed as an address, in breakpoints and
-conditions. A ROM that is not paged in still has its place: `CALL TRDOS_FUNCTION` is
-`CALL 3D13` from BASIC too. A condition such as `PC == LD_BYTES` holds only while that ROM
-is paged in.
+conditions. A ROM that is not paged in still has its place, for a label of yours in it
+too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too. A condition
+such as `PC == LD_BYTES`, or a breakpoint on it, holds only while that ROM is paged in.
 
 Your labels come first. A label of yours of the same name is the one an address or an
 instruction gets, and one at the same address is shown instead. A ROM label's name typed in
@@ -370,7 +370,8 @@ opens the **Labels List**.
 - The field under it filters the list: only labels that contain what you type are shown.
   The case of the letters matters.
 - The list shows each label's address and name. Double-click a label, or select it and
-  press Enter, and the listing goes there.
+  press Enter, and the listing goes there; to a label in a ROM that is not paged in, where
+  that ROM runs.
 - **Convert address to CPU address space** - shows where the CPU sees each label now, as
   `CPU:8010`. A label in a page that is not paged in keeps its page and offset.
 
@@ -490,7 +491,8 @@ between sessions.
 you name: the selected block, or all 64K with nothing selected. The file starts with an
 `ORG` line; labels are written as `name:`, comments as they are, instructions after a tab.
 A [ROM label](#rom-labels) the instructions use gets an `EQU` line before the `ORG`, as
-`LD_BYTES EQU 0x0556`. An assembler can read the file back.
+`LD_BYTES EQU 0x0556`; if a label of yours in the block has its name, the instructions get
+its address instead. An assembler can read the file back.
 
 Ctrl+C copies the same text for the block, without the first line.
 
