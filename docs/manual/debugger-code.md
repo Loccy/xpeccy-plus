@@ -334,8 +334,10 @@ same bytes has them too.
 
 They work as other labels do: in the listing, typed as an address, in breakpoints and
 conditions. A ROM that is not paged in still has its place, for a label of yours in it
-too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too. A condition
-such as `PC == LD_BYTES`, or a breakpoint on it, holds only while that ROM is paged in.
+too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too, and so is
+`TRDOS_FUNCTION` typed as an address - the dump then shows what is paged in there now. A
+condition such as `PC == LD_BYTES`, or a breakpoint on it, holds only while that ROM is
+paged in.
 
 Your labels come first. A label of yours of the same name is the one an address or an
 instruction gets, and one at the same address is shown instead. A ROM label's name typed in

@@ -159,7 +159,7 @@ These are for this run only:
 - `--sp ADR` - set the SP register.
 - `--bp ADR` - a breakpoint on executing that address. A label name works too; a label in a
   page that is not paged in at start gets the breakpoint on its cell, so it stops when that
-  page runs it.
+  page runs it (a ROM label in several banks gets one in each).
 - `--brk FILE` - load a list of breakpoints (`.xbrk`); its addresses can be labels. Give it
   more than once to load several lists.
 - `--brk-log FILE` - where the [breakpoint log](debugger-breakpoints.md#the-breakpoint-log)
