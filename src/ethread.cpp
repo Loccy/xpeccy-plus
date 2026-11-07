@@ -885,6 +885,7 @@ void xThread::emuCycle(Computer* comp) {
 			while (sndNsFixed > nsPerSampleFixed)
 				sndNsFixed -= nsPerSampleFixed;
 			snd_drop();
+			snd_mirror_keep_up(comp);	// the chips the sound thread mixes keep up meanwhile
 		} else {
 			while (sndNsFixed > nsPerSampleFixed) {
 				comp->sndAgo = sndNsFixed - nsPerSampleFixed;

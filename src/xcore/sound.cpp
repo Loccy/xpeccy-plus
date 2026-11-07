@@ -592,6 +592,20 @@ static void snd_ay_log(aymChip* chip, int what, int a, int b) {
 	snd_tok_put();
 }
 
+// Where no sub-samples carry the time (fast mode, sound off), it goes over by itself
+// every so often. The copy then works its chips through it alongside, as the machine
+// does its own; left to the next sub-sample, minutes of fast mode came in one piece and
+// the sound thread spent the first moments after it on the AY's noise, while the ring
+// ran dry. The pieces add up to the same (ay_flush)
+#define SND_ADV_SLICE	(1LL << 24)	// ns, about 17 ms
+
+void snd_mirror_keep_up(Computer* comp) {
+	if ((mp.comp != comp) || (comp->ts->advNs < SND_ADV_SLICE)) return;
+	sndTok* t = snd_tok_new(SND_T_ADV);
+	t->adv = snd_mirror_adv(comp);
+	snd_tok_put();
+}
+
 // one sub-sample of a mirrored machine; scope: the debugger's step, heard by the scope only
 static void snd_mirror_sample(Computer* comp, int scope) {
 	if ((mp.comp != comp) || comp->sndSeed) snd_mirror_seed(comp);
@@ -1048,6 +1062,7 @@ int sndSync(Computer* comp) {
 				// the copy keeps following, fm and all: a state put back goes over
 				if ((mp.comp == comp) && comp->sndSeed && snd_mirror_fits(comp))
 					snd_mirror_seed(comp);
+				snd_mirror_keep_up(comp);
 				sp.quiet++;
 			} else if (snd_mirror_fits(comp)) {
 				snd_mirror_sample(comp, 0);
@@ -1063,6 +1078,7 @@ int sndSync(Computer* comp) {
 			sp.smpCount++;
 		} else if (conf.emu.fast) {
 			snd_drop();		// the GS's flush is all fast mode runs here
+			snd_mirror_keep_up(comp);
 		}
 	}
 #if NEW_SMP_METHOD

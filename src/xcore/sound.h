@@ -118,6 +118,9 @@ void snd_fm_capture_free(void*);
 // A snapshot put back: the copy seeded from it at once, a stale fm from what was
 // captured there. Emulation thread
 void snd_fm_reseed(Computer*, const void*);
+// Fast mode and sound off make no sub-samples to carry the machine's time to the sound
+// thread's copy of its chips: this hands it over in pieces. Emulation thread
+void snd_mirror_keep_up(Computer*);
 // fn(arg) runs on the sound thread, after the sub-samples queued so far
 void snd_q_call(void (*fn)(long long), long long arg);
 int snd_queued_bytes();		// handed over, not yet in the ring
