@@ -114,7 +114,7 @@ QColor xDisasmModel::dim_color(const QColor& fgr, const QColor& rbg) const {
 	QColor txt = fgr;
 	if (!txt.isValid())
 		txt = wid ? wid->palette().color(QPalette::Text) : QColor(Qt::black);
-	return QColor((txt.red() + bgr.red()) / 2, (txt.green() + bgr.green()) / 2, (txt.blue() + bgr.blue()) / 2);
+	return label_shade(txt, bgr);
 }
 
 QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
@@ -1026,7 +1026,7 @@ QWidget* xDasmSyntax::createEditor(QWidget* par, const QStyleOptionViewItem& opt
 xDasmSyntax::xDasmSyntax(QObject* p):QStyledItemDelegate(p) {
 }
 
-// half way between a text and its background: the shaded part of a label
+// half way between a text and its background: dimmed columns, the shaded part of a label
 QColor label_shade(const QColor& txt, const QColor& bgr) {
 	return QColor((txt.red() + bgr.red()) / 2, (txt.green() + bgr.green()) / 2, (txt.blue() + bgr.blue()) / 2);
 }
@@ -1054,13 +1054,15 @@ void xDasmLabel::drawDisplay(QPainter* pnt, const QStyleOptionViewItem& opt, con
 	int mrg = stl->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, wid) + 1;
 	QRect trc = rect.adjusted(mrg, 0, -mrg, 0);
 	int flg = Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine;
-	QString head = text.left(pre);
+	QFontMetrics fm(opt.font);
+	QString all = fm.elidedText(text, opt.textElideMode, trc.width());
+	QString head = all.left(pre);
 	pnt->save();
 	pnt->setFont(opt.font);
 	pnt->setPen(label_shade(txt, bg));
 	pnt->drawText(trc, flg, head);
 	pnt->setPen(txt);
-	pnt->drawText(trc.adjusted(text_width(QFontMetrics(opt.font), head), 0, 0, 0), flg, text.mid(pre));
+	pnt->drawText(trc.adjusted(text_width(fm, head), 0, 0, 0), flg, all.mid(head.size()));
 	pnt->restore();
 }
 

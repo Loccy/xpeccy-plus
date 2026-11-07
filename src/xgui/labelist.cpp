@@ -124,6 +124,11 @@ xLabeList::xLabeList(QWidget* p):QDialog(p) {
 void xLabeList::listDoubleClicked(QModelIndex idx) {
 	if (!idx.isValid()) return;
 	QString str = mod->list.at(idx.row());
+	if (mod->romMode) {		// a label of the user's of that name is not the one picked
+		xAdr xadr = labels_rom_cell(str);
+		if (xadr.adr >= 0) emit adrSelected(xadr.adr);
+		return;
+	}
 	emit labSelected(str);
 //	close();
 }

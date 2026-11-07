@@ -55,6 +55,7 @@ struct romLabList {
 static QList<romLabList> romLists;
 static QHash<int, QString> romByAbs;		// ROM cell -> name, for the machine in use
 static QMap<QString, QList<int> > romByName;	// name -> its cells, lowest first
+static QList<QByteArray> romBanks;		// the MD5s they were found by
 
 static void rom_lists_read() {
 	static bool done = false;
@@ -85,24 +86,30 @@ static void rom_lists_read() {
 	}
 }
 
-// The machine's ROM, as loaded: called under emu_lock whenever it may have changed
+// The machine's ROM, as loaded: called under emu_lock whenever it may have
+// changed. The same banks as last time change nothing
 void labels_rom_scan(Computer* comp) {
+	QList<QByteArray> banks;
+	if (comp) {
+		int size = comp->mem->romMask + 1;
+		for (int bank = 0; bank + MEM_16K <= size; bank += MEM_16K)
+			banks.append(QCryptographicHash::hash(QByteArray::fromRawData((const char*)comp->mem->romData + bank, MEM_16K),
+				QCryptographicHash::Md5).toHex());
+	}
+	if (banks == romBanks) return;
+	romBanks = banks;
 	romByAbs.clear();
 	romByName.clear();
 	labGen++;
-	if (!comp) return;
 	rom_lists_read();
-	int size = comp->mem->romMask + 1;
-	for (int bank = 0; bank + MEM_16K <= size; bank += MEM_16K) {
-		QByteArray md5 = QCryptographicHash::hash(QByteArray::fromRawData((const char*)comp->mem->romData + bank, MEM_16K),
-			QCryptographicHash::Md5).toHex();
+	for (int b = 0; b < banks.size(); b++) {
 		foreach(const romLabList& lst, romLists) {
-			QHash<QByteArray, QSet<QString> >::const_iterator it = lst.banks.constFind(md5);
+			QHash<QByteArray, QSet<QString> >::const_iterator it = lst.banks.constFind(banks.at(b));
 			if (it == lst.banks.constEnd()) continue;
 			for (int i = 0; i < lst.labs.size(); i++) {
 				const QString& nm = lst.labs.at(i).second;
 				if (it->contains(nm)) continue;
-				int abs = bank + lst.labs.at(i).first;
+				int abs = b * MEM_16K + lst.labs.at(i).first;
 				romByAbs[abs] = nm;
 				romByName[nm].append(abs);
 			}
@@ -122,16 +129,15 @@ xAdr labels_rom_cell(const QString& nm) {
 	const QList<int>& cells = romByName[nm];
 	xadr.type = MEM_ROM;
 	xadr.abs = cells.first();
-	if (conf.zx) {
-		foreach(int abs, cells) {
-			if (comp_find_xadr(conf.zx, MEM_ROM, abs, MEM_VIEW_READ) >= 0) {
-				xadr.abs = abs;
-				break;
-			}
+	foreach(int abs, cells) {
+		int adr = conf.zx ? comp_find_xadr(conf.zx, MEM_ROM, abs, MEM_VIEW_READ) : -1;
+		if (adr >= 0) {
+			xadr.abs = abs;
+			xadr.adr = adr;
+			break;
 		}
 	}
 	xadr.bank = xadr.abs >> 14;
-	xadr.adr = conf.zx ? comp_find_xadr(conf.zx, MEM_ROM, xadr.abs, MEM_VIEW_READ) : -1;
 	return xadr;
 }
 
@@ -273,6 +279,16 @@ xAdr find_label_cell(QString nm) {
 xAdr label_cpu(xAdr xadr) {
 	if (conf.zx && (((conf.zx->hw->id == HW_ZXNEXT) && (xadr.type == MEM_RAM)) || (xadr.type == MEM_ROM)))
 		xadr.adr = comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
+	// a ROM label's name in other banks too (the Evo's copies of the 48 BASIC): the
+	// one paged in now, unless the cell is a label of the user's
+	if ((xadr.type == MEM_ROM) && (xadr.adr < 0) && romByAbs.contains(xadr.abs)
+			&& !(conf.labmap.contains(MEM_ROM) && conf.labmap[MEM_ROM].contains(xadr.abs))) {
+		const QString& nm = romByAbs[xadr.abs];
+		if (romByName.value(nm).size() > 1) {
+			xAdr alt = labels_rom_cell(nm);
+			if (alt.adr >= 0) xadr = alt;
+		}
+	}
 	return xadr;
 }
 

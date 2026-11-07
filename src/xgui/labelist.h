@@ -31,6 +31,7 @@ class xLabeList : public QDialog {
 		void show();
 	signals:
 		void labSelected(QString);
+		void adrSelected(int);		// a CPU address: a ROM label's, not looked up by name
 		void labSetChanged();
 	private slots:
 		void listDoubleClicked(QModelIndex);

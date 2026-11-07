@@ -789,6 +789,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 
 	connect(ui_asm.actLabelsList, &QAction::triggered, labswin, &xLabeList::show);
 	connect(labswin, &xLabeList::labSelected, this, &DebugWin::jumpToLabel);
+	connect(labswin, &xLabeList::adrSelected, this, [this](int adr) {ui_asm.dasmTable->setAdr(adr, 1);});
 	connect(labswin, &xLabeList::labSetChanged, this, &DebugWin::fillDisasm);
 
 	connect(ui_asm.actShowLabels, &QAction::toggled, this, &DebugWin::setShowLabels);

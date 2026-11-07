@@ -2256,6 +2256,7 @@ static int quick_put(Computer* comp, quickKept* k) {
 	if (res) {
 		game_put(k->game);
 		last_snapshot = k->game.image;
+		labels_rom_scan(comp);		// an SZX may hold a ROM of its own
 	}
 	return res;
 }
