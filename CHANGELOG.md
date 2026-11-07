@@ -71,8 +71,8 @@ before that point is upstream's history and is not repeated here.
 
 - **A snapshot taken in the 128K menu or BASIC editor opens on a machine with that ROM**: a
   128K one stayed on a +2 or +2A, where the RUN waiting in it was lost or the machine reset.
-  A `.z80` goes to the model it names; for a `.sna`, which names none, the +2 and +2A/+3 ones
-  are told from the snapshot. *(reported by ZXLion)*
+  A `.z80` goes to the model it names; a `.sna`, which names none, is told from the snapshot -
+  a Pentagon's menu by its TR-DOS item, a +3 from a +2A by its disk drive. *(reported by ZXLion)*
 - **48K and 128K snapshots run on the +2A and +3**: a 48K `.z80` or a 128K `.sna` in
   48 BASIC reset the machine there.
 - **A middle click clears DUMP's selection on any byte**, not only on the first eight of a
