@@ -270,6 +270,9 @@ void labels_touch();		// ...and makes it change
 void labels_rom_scan(Computer*);	// under emu_lock
 QStringList labels_rom_names();
 xAdr labels_rom_cell(const QString&);
+// "global.local": how much of it is the global, 0 if not local; the global a cell is under
+int label_local_prefix(const QString&);
+QString label_block(xAdr);
 void clear_labels();
 void clear_all_labels();
 

@@ -684,7 +684,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 
 	xid_none = new xItemDelegate(XTYPE_NONE);
 	xid_byte = new xItemDelegate(XTYPE_BYTE);
-	xid_labl = new xItemDelegate(XTYPE_LABEL);
+	xid_labl = new xDasmLabel();
 	xid_dump = new xItemDelegate(XTYPE_DUMP);
 
 // actions data

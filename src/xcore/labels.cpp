@@ -280,6 +280,29 @@ xAdr find_label(QString nm) {
 	return label_cpu(find_label_cell(nm));
 }
 
+// A local label, SjASMPlus's "global.local": the length of the part before the
+// last dot when a label of that name is loaded, else 0
+int label_local_prefix(const QString& nm) {
+	int pos = nm.lastIndexOf('.');
+	if ((pos < 1) || (pos == nm.size() - 1) || !conf.curlabset) return 0;
+	return conf.curlabset->list.contains(nm.left(pos)) ? pos : 0;
+}
+
+// The block a cell is in: the nearest label at or before it, in its 16K bank,
+// that is not a local one. Empty when there is none near
+QString label_block(xAdr xadr) {
+	if (!conf.labmap.contains(xadr.type)) return QString();
+	const QMap<int, QString>& map = conf.labmap[xadr.type];
+	QMap<int, QString>::const_iterator it = map.upperBound(xadr.abs);
+	int low = xadr.abs & ~0x3fff;
+	for (int i = 0; (i < 256) && (it != map.constBegin()); i++) {
+		it--;
+		if (it.key() < low) break;
+		if (!label_local_prefix(it.value())) return it.value();
+	}
+	return QString();
+}
+
 // The page of a LABELSLIST line. SjASMPlus writes it in decimal; a page with a
 // hex digit in it comes from Xpeccy+ before 2026.8.2, which wrote hex. FF and an
 // empty page (":ADDR") are a CPU address: -2. -1: not a page.
