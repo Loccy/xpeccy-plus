@@ -332,10 +332,16 @@ changed has no name there. A ROM is known by its contents, so a ROM file of your
 same bytes has them too.
 
 They work as other labels do: in the listing, typed as an address, in breakpoints and
-conditions. A label of yours at the same address is shown instead: typing a name on a ROM
-label's row makes one. A ROM label cannot be removed, and **Save labels** does not save
-it. **ROM labels** on the **Debugger** page of **Options** switches them off. Where they
-come from, and their licenses, is in `config/labels/README.md` beside the program.
+conditions. A ROM that is not paged in still has its place: `CALL TRDOS_FUNCTION` is
+`CALL 3D13` from BASIC too. A condition such as `PC == LD_BYTES` holds only while that ROM
+is paged in.
+
+Your labels come first. A label of yours of the same name is the one an address or an
+instruction gets, and one at the same address is shown instead. A ROM label's name typed in
+the address column makes a label of yours, as a new name does; `@START` goes to the ROM's
+`START`. A ROM label cannot be removed, and **Save labels** does not save it. **ROM labels**
+on the **Debugger** page of **Options** switches them off. Where they come from, and their
+licenses, is in `config/labels/README.md` beside the program.
 
 ```{index} Auto-load labels, label; loading automatically
 ```
@@ -482,7 +488,8 @@ between sessions.
 **Disasm to file** in the {icon}`floppy` floppy disk menu writes the listing to a text file
 you name: the selected block, or all 64K with nothing selected. The file starts with an
 `ORG` line; labels are written as `name:`, comments as they are, instructions after a tab.
-An assembler can read the file back.
+A [ROM label](#rom-labels) the instructions use gets an `EQU` line before the `ORG`, as
+`LD_BYTES EQU 0x0556`. An assembler can read the file back.
 
 Ctrl+C copies the same text for the block, without the first line.
 
