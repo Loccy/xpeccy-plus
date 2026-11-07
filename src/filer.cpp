@@ -1744,10 +1744,10 @@ int load_file(Computer* comp, const char* name, int id, int drv) {
 				switch (inf->id) {
 					case FL_SNA: case FL_Z80: case FL_SZX: case FL_SPG: case FL_NEX: case FL_SNX:
 						rzx_rec_touch();
-						last_snapshot = path;
-						break;
+						// fall through
 					case FL_RZX:
 						last_snapshot = path;
+						labels_rom_scan(comp);		// an SZX may hold a ROM of its own
 						break;
 				}
 				if (inf->id == FL_RZX)

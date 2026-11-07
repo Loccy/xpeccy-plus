@@ -17,6 +17,7 @@
 #include <QTemporaryFile>
 #include <QTextCodec>
 #include <QStandardItemModel>
+#include <QRegularExpression>
 
 #include "debuger.h"
 #include "dbg_sprscan.h"
@@ -335,6 +336,7 @@ void DebugWin::start() {
 	frame_skip_stop(comp);		// ...the one Frame skip left undrawn too
 	if (!comp->vid->tail)
 		vid_dark_tail(comp->vid);
+	labels_rom_scan(comp);		// a snapshot an RZX played brought a ROM of its own
 	emu_unlock();
 
 	this->move(conf.dbg.pos);
@@ -2350,7 +2352,8 @@ void DebugWin::dbgSLab() {saveLabels(NULL);}
 void DebugWin::jumpToLabel(QString lab) {
 	xAdr xadr = find_label(lab);
 	if (xadr.type >= 0) {
-		int cadr = comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
+		int cadr = (xadr.type == MEM_ROM) ? label_home(xadr).adr	// paged out: where its ROM runs
+			: comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
 		if (cadr >= 0) {
 			ui_asm.dasmTable->setAdr(cadr, 1);
 		}
@@ -2381,40 +2384,46 @@ void DebugWin::saveDasm() {
 	QList<dasmData> list;
 	Computer* comp = conf.zx;
 	if (file.open(QFile::WriteOnly)) {
-		QString body;
-		QTextStream strm(&body);
+		QStringList body;		// a row a line
 		int adr = (blockStart < 0) ? 0 : (blockStart & comp->mem->busmask);
 		int end = (blockEnd < 0) ? comp->mem->busmask : (blockEnd & comp->mem->busmask);
 		int org = adr;
 		int work = 1;
 		QSet<QString> defined;
 		QMap<QString, int> romUsed;		// ROM labels the code names: an EQU each, or it does not assemble
+		QList<QPair<int, QString> > romLines;	// the lines that name one
 		while ((adr <= end) && work) {
 			list = getDisasm(comp, adr);
 			foreach (drow, list) {
 				if (adr > comp->mem->busmask)
 					work = 0;		// address overfill (FFFF+)
 				if (drow.isequ) {
-					strm << drow.aname << ":";
-					strm << dasm_export(drow);
+					body.append(drow.aname + ":" + dasm_export(drow));
 					defined.insert(drow.aname);
 				} else if (drow.islab) {
 					if (drow.iscom) {
-						strm << drow.aname;
+						body.append(drow.aname);
 					} else {
-						strm << drow.aname << ":";
+						body.append(drow.aname + ":");
 						defined.insert(drow.aname);
 					}
 				} else {
-					strm << "\t" << dasm_export(drow);
-					if (drow.lrom >= 0) romUsed[drow.label] = drow.lrom;
+					if (drow.lrom >= 0) {
+						romUsed[drow.label] = drow.lrom;
+						romLines.append(qMakePair((int)body.size(), drow.label));
+					}
+					body.append("\t" + dasm_export(drow));
 				}
-				strm << "\n";
 			}
 			if (dasm_has_separator(list))
-				strm << "\n";
+				body.append(QString());
 		}
-		strm.flush();
+		// a ROM label whose name the block gives a label of the user's: its address
+		for (const QPair<int, QString>& rl : romLines) {
+			if (!defined.contains(rl.second)) continue;
+			QRegularExpression word("(?<![\\w.])" + QRegularExpression::escape(rl.second) + "(?![\\w.])");
+			body[rl.first].replace(word, "0x" + gethexword(romUsed.value(rl.second)));
+		}
 		QTextStream out(&file);
 		out << "; Created by Xpeccy+ Debugger\n\n";
 		bool equ = false;
@@ -2425,7 +2434,8 @@ void DebugWin::saveDasm() {
 		}
 		if (equ) out << "\n";
 		out << "\tORG 0x" << gethexword(org) << "\n\n";
-		out << body;
+		foreach (const QString& line, body)
+			out << line << "\n";
 		out.flush();
 		file.close();
 	} else {

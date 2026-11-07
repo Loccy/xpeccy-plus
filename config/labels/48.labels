@@ -3,8 +3,11 @@
 ; Names and addresses from SkoolKit's examples/48.rom.ctl (commit 30de485a,
 ; 2015), Copyright 2011-2015 Richard Dymond. Its routine titles are "taken from
 ; 'The Complete Spectrum ROM Disassembly' by Dr Ian Logan and Dr Frank O'Hara,
-; published by Melbourne House." Changed for Xpeccy+: C_ARC_GE1 moved from
-; #2347 to #235A, the target of the JR NC at #2350.
+; published by Melbourne House."
+;
+; Changed for Xpeccy+ on 2026-11-07: C_ARC_GE1 moved from #2347 to #235A, the
+; target of the JR NC at #2350; SV_SLICE? renamed SV_SLICE_Q and val renamed
+; val_fn, names that the debugger expressions can take.
 ;
 ; This file is free software: you can redistribute it and/or modify it under
 ; the terms of the GNU General Public License as published by the Free Software
@@ -831,7 +834,7 @@
 2A2C SV_ELEM
 2A45 SV_SLICE
 2A48 SV_DIM
-2A49 SV_SLICE?
+2A49 SV_SLICE_Q
 2A52 SLICING
 2A7A SL_RPT_C
 2A81 SL_SECOND
@@ -1080,7 +1083,7 @@
 35BF STK_PNTRS
 35C9 chrs
 35DC REPORT_B_4
-35DE val
+35DE val_fn
 360C V_RPORT_C
 361F str
 3645 read_in

@@ -43,5 +43,6 @@ class xLabeList : public QDialog {
 		Ui::LabList ui;
 		xLabelistModel* mod;
 		void fillSetList();
+		void setRomMode(bool);
 		int romIdx;		// the ROM labels' line in the set list, -1: none
 };

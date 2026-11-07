@@ -142,8 +142,6 @@ class xDasmLabel : public xItemDelegate {
 		mutable QColor bgr;
 };
 
-QColor label_shade(const QColor& txt, const QColor& bgr);
-
 // paints the command column token by token: constants take their own
 // colour, a label goes bold, everything else keeps the row colour
 

@@ -185,7 +185,7 @@ the version in brackets in the window title - `Xpeccy+ (2026.10-dev+20261102)`, 
 Releases ship with `config/`, so the emulator works right after unpacking. Machines, screen
 layouts, palettes, shaders, styles and keymaps are built into the binary; `config/` carries
 the ROM images (`config/roms/`), and a file of the same name dropped in there replaces a
-built-in one.
+built-in one, and the files below.
 
 The images are firmware of the emulated machines and are **not** covered by the MIT license
 of this project - they stay under the terms of their own copyright holders. Details:
@@ -202,6 +202,11 @@ Miguel Guerreiro / Papaya Dezign. It keeps its own terms: see
 `config/boot.$B` is bundled for the same reason: TR-DOS images that carry no boot file of
 their own get it appended when they are opened. It is Dimon boot 2024 by Dmitry Yurinov and
 keeps its own terms, like the ROM images.
+
+`config/labels/48.labels` names the 48K BASIC's routines in the Debugger. It comes from
+SkoolKit by Richard Dymond and stays under the GNU GPL v3 or later; it is a data file the
+emulator reads when it starts, not built into it. Sources and terms of every ROM label list:
+[`config/labels/README.md`](config/labels/README.md).
 
 The debugger's default font, DejaVu Sans Mono 2.37, is built into the binary so it looks the
 same on every platform. It keeps its own terms too - see [`LICENSE_DEJAVU`](LICENSE_DEJAVU).

@@ -260,7 +260,7 @@ xLabelSet* setLabelSet(QString);
 
 void add_label(xAdr, QString, xLabelSet* = nullptr);
 void del_label(QString);
-QString find_label(xAdr);
+QString find_label(xAdr, bool* rom = nullptr);	// rom: the name is a ROM label's
 xAdr find_label(QString);
 xAdr find_label_cell(QString);	// the label's cell, without working out where the CPU sees it now
 xAdr label_cpu(xAdr);		// ...and that, for a cell find_label_cell() gave
@@ -269,11 +269,10 @@ void labels_touch();		// ...and makes it change
 // the labels of known ROMs, below the user's: found again when the ROM changes
 void labels_rom_scan(Computer*);	// under emu_lock
 bool labels_rom_only(const QString&);	// a ROM label's name, not one of the user's
-bool label_from_rom(xAdr);		// find_label(xAdr) names it from the ROM's
-xAdr label_home(xAdr);			// a ROM label paged out: where its ROM runs, for typing
+xAdr label_home(xAdr);			// a label in ROM paged out: where its ROM runs, for typing
 QString xconf_install_dir();		// config of the installed program
-QStringList labels_rom_names();
-xAdr labels_rom_cell(const QString&);
+QStringList labels_rom_names();		// every ROM label's name: the list, completion
+xAdr labels_rom_cell(const QString&);	// a ROM label's cell, the one paged in if any
 // "global.local": how much of it is the global, 0 if not local; the global a cell is under
 int label_local_prefix(const QString&);
 QString label_block(xAdr);

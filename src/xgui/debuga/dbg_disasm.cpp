@@ -102,6 +102,18 @@ int xDisasmModel::rowCount(const QModelIndex&) const {
 	return row_count;
 }
 
+// half way between two colours: dimmed columns, the shaded part of a label
+static QColor color_mix(const QColor& one, const QColor& two) {
+	return QColor((one.red() + two.red()) / 2, (one.green() + two.green()) / 2, (one.blue() + two.blue()) / 2);
+}
+
+// a row's background as painted: the selection, the model's colour or the view's
+static QColor row_ground(const QStyleOptionViewItem& opt, const QModelIndex& idx) {
+	if (opt.state & QStyle::State_Selected) return opt.palette.color(QPalette::Highlight);
+	QVariant bg = idx.data(X_BackgroundRole);
+	return bg.isValid() ? qvariant_cast<QBrush>(bg).color() : opt.palette.color(QPalette::Base);
+}
+
 // secondary text: halfway between the row colour and the row background,
 // so it follows the current style instead of a hardcoded gray, and stays
 // readable on the pc/selection rows
@@ -114,7 +126,7 @@ QColor xDisasmModel::dim_color(const QColor& fgr, const QColor& rbg) const {
 	QColor txt = fgr;
 	if (!txt.isValid())
 		txt = wid ? wid->palette().color(QPalette::Text) : QColor(Qt::black);
-	return label_shade(txt, bgr);
+	return color_mix(txt, bgr);
 }
 
 QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
@@ -343,9 +355,10 @@ void placeLabel(Computer* comp, dasmData& drow) {
 	QString num;
 	xMnem mn;
 	xAdr xadr;
+	bool rom = false;
 	while (work && (shift < 8)) {
 		xadr = dasm_xadr(comp, drow.oadr - shift);
-		lab = find_label(xadr);
+		lab = find_label(xadr, &rom);
 		if (lab.isEmpty()) {
 			if (drow.oflag & OF_MEMADR) {
 				shift++;
@@ -361,7 +374,7 @@ void placeLabel(Computer* comp, dasmData& drow) {
 				replace_number(drow.command, dasm_word(drow.oadr, drow.fmt),
 					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
-				if (label_from_rom(xadr)) drow.lrom = (drow.oadr - shift) & 0xffff;
+				if (rom) drow.lrom = (drow.oadr - shift) & 0xffff;
 			}
 			work = 0;
 		}
@@ -717,8 +730,9 @@ int asmAddr(Computer* comp, QVariant val, xAdr xadr) {
 	if (adr < 0) {
 		if (!romName && (find_label(str).type >= 0)) return -1;
 		if ((str.at(0).isLetter() || (str.at(0) == '_')) && !str.contains('$') && !str.contains(' ')) {
-			lab = find_label(xadr);
-			if (!lab.isEmpty()) {						// remove current label
+			bool rom;
+			lab = find_label(xadr, &rom);
+			if (!lab.isEmpty() && !rom) {					// remove current label, if the user's
 				del_label(lab);
 			}
 			add_label(xadr, str);						// add new label
@@ -886,9 +900,10 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 				if (dasm[row].islab) {			// comment or label
 					if (dasm[row].iscom) {		// comment
 						del_comment(xadr);
-					} else {			// label
-						str = find_label(xadr);
-						if (!str.isEmpty()) {
+					} else {			// label: the user's, a ROM label stays
+						bool rom;
+						str = find_label(xadr, &rom);
+						if (!str.isEmpty() && !rom) {
 							del_label(str);
 						}
 					}
@@ -957,8 +972,8 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 				}
 			} else if (str.startsWith("dw ", Qt::CaseInsensitive)) {	// word/addr
 				str = str.mid(3);
-				xadr = find_label(str);
-				if (xadr.type >= 0) {				// check label
+				xadr = label_home(find_label(str));
+				if ((xadr.type >= 0) && (xadr.adr >= 0)) {	// check label
 					idx = xadr.adr;
 					*ptr &= 0x0f;
 					*ptr |= DBG_VIEW_ADDR;
@@ -1032,15 +1047,9 @@ QWidget* xDasmSyntax::createEditor(QWidget* par, const QStyleOptionViewItem& opt
 xDasmSyntax::xDasmSyntax(QObject* p):QStyledItemDelegate(p) {
 }
 
-// half way between a text and its background: dimmed columns, the shaded part of a label
-QColor label_shade(const QColor& txt, const QColor& bgr) {
-	return QColor((txt.red() + bgr.red()) / 2, (txt.green() + bgr.green()) / 2, (txt.blue() + bgr.blue()) / 2);
-}
-
 void xDasmLabel::paint(QPainter* pnt, const QStyleOptionViewItem& opt, const QModelIndex& idx) const {
 	pre = idx.data(X_PrefixRole).toInt();
-	QVariant bg = idx.data(X_BackgroundRole);
-	bgr = bg.isValid() ? qvariant_cast<QBrush>(bg).color() : opt.palette.color(QPalette::Base);
+	bgr = row_ground(opt, idx);
 	xItemDelegate::paint(pnt, opt, idx);
 	pre = 0;
 }
@@ -1054,7 +1063,6 @@ void xDasmLabel::drawDisplay(QPainter* pnt, const QStyleOptionViewItem& opt, con
 	xItemDelegate::drawDisplay(pnt, opt, rect, QString());		// the selection, if any
 	bool sel = opt.state & QStyle::State_Selected;
 	QColor txt = opt.palette.color(sel ? QPalette::HighlightedText : QPalette::Text);
-	QColor bg = sel ? opt.palette.color(QPalette::Highlight) : bgr;
 	const QWidget* wid = opt.widget;
 	QStyle* stl = wid ? wid->style() : QApplication::style();
 	int mrg = stl->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, wid) + 1;
@@ -1065,7 +1073,7 @@ void xDasmLabel::drawDisplay(QPainter* pnt, const QStyleOptionViewItem& opt, con
 	QString head = all.left(pre);
 	pnt->save();
 	pnt->setFont(opt.font);
-	pnt->setPen(label_shade(txt, bg));
+	pnt->setPen(color_mix(txt, bgr));
 	pnt->drawText(trc, flg, head);
 	pnt->setPen(txt);
 	pnt->drawText(trc.adjusted(text_width(fm, head), 0, 0, 0), flg, all.mid(head.size()));
@@ -1094,9 +1102,7 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 	int lpos = lab.isEmpty() ? -1 : text.indexOf(lab);
 	int lpre = idx.data(X_PrefixRole).toInt();
 	if ((lpre < 1) || (lpre >= lab.size())) lpre = 0;
-	QColor shade = label_shade(base, (opt.state & QStyle::State_Selected) ? opt.palette.color(QPalette::Highlight)
-		: idx.data(X_BackgroundRole).isValid() ? qvariant_cast<QBrush>(idx.data(X_BackgroundRole)).color()
-		: opt.palette.color(QPalette::Base));
+	QColor shade = color_mix(base, row_ground(opt, idx));
 	QFont bfnt = opt.font;
 	bfnt.setBold(true);
 	QFontMetrics fm(opt.font);
@@ -1187,7 +1193,7 @@ bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyl
 			bool ok = false;
 			int val = word ? dbg_num_parse(tok, &ok) : 0;
 			if (pos == lpos) {
-				xAdr xa = find_label(lab);
+				xAdr xa = label_home(find_label(lab));
 				if (xa.adr >= 0) tip = dbg_num_tip(xa.adr, true, lab);
 			} else if (ok) {
 				tip = dbg_num_tip(val, val == idx.data(Qt::UserRole).toInt());

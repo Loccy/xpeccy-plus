@@ -2146,7 +2146,6 @@ void MainWin::openMedia(const QString& path, int id, int drv, int run, bool pinn
 		else
 			x_state_replaced();
 		int err = load_file(comp, loc.data(), id, drv);
-		if (!medium) labels_rom_scan(comp);		// a snapshot may have brought a ROM of its own
 		emu_unlock();
 		if (err == ERR_OK) {
 			mediaOpened(fpath, id, drv, run, pinned, from, media_to_drive(comp, fpath, id));

@@ -67,7 +67,7 @@ QVariant xLabelistModel::data(const QModelIndex& idx, int role) const {
 			str = list.at(row);
 			xadr = romMode ? labels_rom_cell(str) : find_label(str);
 			if (cpuMode) {
-				zadr = comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
+				zadr = (xadr.type == MEM_ROM) ? xadr.adr : comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
 				if (zadr < 0) {
 					if ((conf.zx->hw->id == HW_ZXNEXT) && (xadr.type == MEM_RAM) && (xadr.abs >= 0x40000))
 						adrstr = QString("%0:%1").arg(gethexbyte((xadr.abs - 0x40000) >> 13), dbg_adr(xadr.abs & 0x1fff));
@@ -125,7 +125,7 @@ void xLabeList::listDoubleClicked(QModelIndex idx) {
 	if (!idx.isValid()) return;
 	QString str = mod->list.at(idx.row());
 	if (mod->romMode) {		// a label of the user's of that name is not the one picked
-		xAdr xadr = labels_rom_cell(str);
+		xAdr xadr = label_home(labels_rom_cell(str));	// paged out: where its ROM runs
 		if (xadr.adr >= 0) emit adrSelected(xadr.adr);
 		return;
 	}
@@ -136,9 +136,7 @@ void xLabeList::listDoubleClicked(QModelIndex idx) {
 // the ROM labels are only looked at: the user's set stays in effect
 void xLabeList::changeLabelSet() {
 	bool rom = (romIdx >= 0) && (ui.cbLabelSet->currentIndex() == romIdx);
-	mod->romMode = rom;
-	ui.tbEditGrp->setEnabled(!rom);
-	ui.tbDelGrp->setEnabled(!rom);
+	setRomMode(rom);
 	if (rom) {
 		mod->reset(ui.name->text());
 		return;
@@ -147,6 +145,13 @@ void xLabeList::changeLabelSet() {
 	setLabelSet(str);
 	mod->reset(ui.name->text());
 	emit labSetChanged();
+}
+
+// the ROM labels are only looked at: no editing the set
+void xLabeList::setRomMode(bool rom) {
+	mod->romMode = rom;
+	ui.tbEditGrp->setEnabled(!rom);
+	ui.tbDelGrp->setEnabled(!rom);
 }
 
 void xLabeList::newGroup() {
@@ -189,9 +194,7 @@ void xLabeList::fillSetList() {
 		romIdx = ui.cbLabelSet->count();
 		ui.cbLabelSet->addItem("ROM labels (read-only)", QString());
 	}
-	mod->romMode = false;
-	ui.tbEditGrp->setEnabled(true);
-	ui.tbDelGrp->setEnabled(true);
+	setRomMode(false);
 	if (conf.curlabset) {
 		setRFIndex(ui.cbLabelSet, conf.curlabset->name, 0);
 	} else {

@@ -1109,6 +1109,11 @@ int main(int ac,char** av) {
 		if (arg.first == "--bp") {
 			bool ok = true;
 			xAdr xadr = find_label(arg.second);
+			if (((xadr.type == MEM_ROM) || (xadr.type == MEM_RAM)) && (xadr.adr < 0)) {
+				// its bank is not paged in now: a breakpoint on the cell, where it runs
+				brkSet(BRK_MEMCELL, MEM_BRK_FETCH | ((xadr.type == MEM_ROM) ? MEM_BRK_ROM : MEM_BRK_RAM), xadr.abs, -1);
+				continue;
+			}
 			tmpi = (xadr.type >= 0) ? xadr.adr : str_num(arg.second, &ok);
 			if (ok) {
 				brkSet(BRK_CPUADR, MEM_BRK_FETCH, tmpi & 0xffff, -1);

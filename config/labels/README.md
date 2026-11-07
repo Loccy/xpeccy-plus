@@ -22,8 +22,10 @@ part of SkoolKit and so under the **GNU General Public License, version 3 or lat
 text is in `GPL-3.0.txt` here. Its routine titles are "taken from 'The Complete Spectrum ROM
 Disassembly' by Dr Ian Logan and Dr Frank O'Hara, published by Melbourne House". It is a
 separate data file, read by the program at run time and not built into it, so the program
-itself stays under the MIT license. Changed for Xpeccy+: `C_ARC_GE1` moved from #2347 to
-#235A, where the ROM's own `JR NC` at #2350 goes.
+itself stays under the MIT license. Changed for Xpeccy+ on 2026-11-07: `C_ARC_GE1` moved
+from #2347 to #235A, where the ROM's own `JR NC` at #2350 goes; `SV_SLICE?` renamed
+`SV_SLICE_Q` and `val` renamed `val_fn`, since a name in the Debugger's expressions cannot
+hold a `?` and `VAL` is one of their pseudo-variables.
 
 ## +3DOS - Xpeccy+
 
