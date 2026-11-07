@@ -46,7 +46,16 @@ only when it is run, and a disk only from drive A.
 ```
 
 A `.z80` or `.sna` snapshot runs on any machine with its memory paging. One taken inside
-the ROM - in the BASIC editor, or with the program in the middle of a ROM routine - also
-needs the very same ROM. The 128K and the clones (Pentagon, Scorpion and the others) share
-one; the +2 has its own, and the +2A and +3 theirs, so such a snapshot from a 128K is
-moved off them. A machine of your own counts by its hardware, whatever ROM files it has.
+the ROM - in the 128K menu or the BASIC editor, or in the middle of a ROM routine - also
+needs the very same ROM:
+
+- A `.z80` taken inside the ROM opens on the model it names. Even the clones' ROMs differ
+  there: the Pentagon's menu has a TR-DOS item the 128K's has not.
+- A `.sna` names no model. For one taken in the 128K menu or editor, Xpeccy+ tells from
+  the snapshot whether it was a 128K or a clone, a +2, or a +2A/+3, and switches only if
+  the current machine is of another kind. A 128K and a Pentagon cannot be told apart this
+  way. To keep the model, save as `.z80` or `.szx`.
+- A program running in RAM stays on the current machine, unless it keeps the 128K
+  editor's ROM paged in, which the +2, +2A and +3 do not have.
+
+A machine of your own counts by its hardware, whatever ROM files it has.
