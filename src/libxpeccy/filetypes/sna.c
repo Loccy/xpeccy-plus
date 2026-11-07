@@ -192,8 +192,13 @@ void sna_screen_text(const char* name, const unsigned char* font, char* out) {
 	memset(out, ' ', 24 * 33);
 	for (int r = 0; r < 24; r++) out[r * 33 + 32] = '\n';
 	out[24 * 33 - 1] = 0;
-	if (sna_read(name) < 49179) return;
+	size_t len = sna_read(name);
+	if (len < 49179) return;
 	const unsigned char* scr = sna_buf + 27;
+	if ((len >= 131103) && (sna_buf[49181] & 0x08)) {	// 7FFD bit 3: the screen in bank 7
+		scr = sna_bank(sna_buf, len, 7);
+		if (!scr) return;
+	}
 	for (int r = 0; r < 24; r++) {
 		for (int c = 0; c < 32; c++) {
 			unsigned char cell[8];

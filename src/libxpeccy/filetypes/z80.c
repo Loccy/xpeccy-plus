@@ -187,15 +187,20 @@ int z80GetHardware(const char* name) {
 	unsigned char buf[38];
 	int len = (int)fread(buf, 1, sizeof(buf), file);
 	int res = z80_hardware_of(buf, len);
-	if ((res != SNAP_HW_48K) && (res != SNAP_HW_UNKNOWN)) {
+	int ext = buf[30] | (buf[31] << 8);
+	int p1ffd = 0;					// 86: 1FFD, in a 55-byte header
+	if ((len >= 38) && (ext > 54) && !fseek(file, 86, SEEK_SET)) p1ffd = fgetc(file) & 0xff;
+	// a +2A/+3 in its all-RAM paging (1FFD bit 0) has no ROM in at all
+	int allram = ((res == SNAP_HW_PLUS2A) || (res == SNAP_HW_PLUS3)) && (p1ffd & 1);
+	if ((res != SNAP_HW_48K) && (res != SNAP_HW_UNKNOWN) && !allram) {
 		int pc = buf[32] | (buf[33] << 8);		// 35: 7FFD
 		if (pc == 0x0038) {			// as the interrupt came: where it came at
-			int w = z80_word_at(file, 32 + (buf[30] | (buf[31] << 8)), buf[35], buf[8] | (buf[9] << 8));
+			int w = z80_word_at(file, 32 + ext, buf[35], buf[8] | (buf[9] << 8));
 			if (w >= 0) pc = w;
 		}
 		res |= snap_rom_flags(pc, buf[35]);
 		// a Pentagon's PC in ROM may be in TR-DOS, which the file does not record
-		if ((res & SNAP_EDITOR) && (pc < 0x4000) && (SNAP_HW_OF(res) == SNAP_HW_PENTAGON))
+		if ((pc < 0x4000) && (SNAP_HW_OF(res) == SNAP_HW_PENTAGON))
 			res |= SNAP_IN_ROM;
 	}
 	fclose(file);
