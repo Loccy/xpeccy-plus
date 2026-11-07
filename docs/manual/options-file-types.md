@@ -49,15 +49,16 @@ A `.z80` or `.sna` snapshot runs on any machine with its memory paging. One take
 the ROM - in the 128K menu or the BASIC editor, or in the middle of a ROM routine - also
 needs the very same ROM:
 
-- A `.z80` taken in the 128K menu or editor opens on the model it names. Even the clones'
-  ROMs differ there: the Pentagon's menu has a TR-DOS item the 128K's has not. One stopped
-  in a 48 BASIC routine needs the same editor: a 128K one runs on the 128K and the clones,
-  not on the +2, +2A or +3.
-- A `.sna` names no model. For one taken in the 128K menu or editor, Xpeccy+ tells from
-  the snapshot whether it was a 128K or a clone, a +2, a +2A or a +3. The menu on its
-  screen tells a 128K from a Pentagon or a Scorpion. A snapshot that does not tell stays on
-  the current machine if it is a 128K or a clone. To keep the model for sure, save as `.z80`
-  or `.szx`.
+- A `.z80` taken in the menu or editor opens on the model it names. Even the clones' ROMs
+  differ there: the Pentagon's menu has a TR-DOS item the 128K's has not. The +2A and +3
+  share their ROMs, but a +3's disk system is set up for its drive. One stopped in a
+  48 BASIC routine needs the same editor: a 128K one runs on the 128K and the clones, not
+  on the +2, +2A or +3.
+- A `.sna` names no model. For one taken in the menu or editor, Xpeccy+ tells the model
+  from the snapshot: a +2, a +2A or a +3 by what the ROM left in memory, a 128K, a Pentagon
+  or a Scorpion by the menu on its screen. When the snapshot does not tell, **Auto** asks
+  which machine to use, as **Ask** does. To keep the model for sure, save as `.z80` or
+  `.szx`.
 - A program running in RAM stays on the current machine, unless it keeps the 128K
   editor's ROM paged in, which the +2, +2A and +3 do not have.
 
