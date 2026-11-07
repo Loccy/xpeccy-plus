@@ -170,7 +170,8 @@ static struct alignas(64) {
 	int subPos;		// sub-samples made since the start: sb_pos as the sound thread will have it
 	int smpCount;
 	long long quiet;	// sub-samples of silence (Enabled off) not handed over yet
-} sp = {0, 0, 0, 0, -1, -1, 0, 0, 0};
+	long long advSent;	// the devices' time handed over to the copy (snd_mirror_hold)
+} sp = {0, 0, 0, 0, -1, -1, 0, 0, 0, 0};
 alignas(64) static std::atomic<long long> sqHead(0);	// what the consumer may take
 alignas(64) static std::atomic<long long> sqTail(0);	// what it has taken
 
@@ -335,7 +336,7 @@ static void snd_tok(int kind, sndPair lev = sndPair(), long long val = 0, void (
 // Fast mode asks for a drop on every step: one already queued at this point, with
 // nothing put into the ring after it, says it all
 void snd_drop() {
-	if (sp.dropAt == sp.put) return;
+	if ((sp.dropAt == sp.put) && !sp.quiet) return;
 	snd_tok(SND_T_DROP);
 	sp.dropAt = sp.put;
 }
@@ -418,7 +419,7 @@ static struct alignas(64) {
 } mp;
 
 // the sound thread's
-static struct {
+static struct alignas(64) {
 	int on;
 	sndMix m;
 	TSound ts;
@@ -433,16 +434,18 @@ static int snd_mirror_fits(Computer* comp) {
 	return 1;
 }
 
-// Fast mode can outrun the copy's fm: the time handed over and the time the copy has
-// worked through, so the machine waits while the copy is too far behind (snd_mirror_hold)
-static long long sndAdvSent = 0;				// the producer's
-alignas(64) static std::atomic<long long> sndAdvDone(0);	// the sound thread's
+// Fast mode can outrun the copy's fm: the time handed over (sp.advSent) and the time
+// the copy has worked through, so the machine waits while the copy is too far behind
+// (snd_mirror_hold). Both move at every sub-sample: each on a line of its own
+static struct alignas(64) {
+	std::atomic<long long> v;
+} sndAdvDone = {{0}};
 
 // the devices' time handed over with an item
 static long long snd_mirror_adv(Computer* comp) {
 	long long adv = comp->ts->advNs;
 	comp->ts->advNs = 0;
-	sndAdvSent += adv;
+	sp.advSent += adv;
 	return adv;
 }
 
@@ -616,16 +619,17 @@ static void snd_ay_log(aymChip* chip, int what, int a, int b) {
 // Where no sub-samples carry the time (fast mode, sound off), it goes over in pieces, so
 // the copy works its chips through it alongside and not all at once after (the ring dry)
 #define SND_ADV_SLICE	(1LL << 24)	// ns, about 17 ms
-// ...and the machine waits while the copy is more than this of its time behind: what is
-// left for it when the sound comes back, or a save waits for, stays a few ms of work
+// ...and the machine waits while the copy is more than this of its time behind. Bounded,
+// not small: a chip keeps up to 2^30 ns unworked (pendNs), so what is left when the sound
+// comes back, or a save waits for, is up to a second of fm per chip - tens of ms of work
 #define SND_ADV_BEHIND	(1LL << 28)	// ns, about a quarter of a second
 
 static void snd_mirror_hold() {
-	if (sndAdvSent - sndAdvDone.load(std::memory_order_acquire) <= SND_ADV_BEHIND) return;
+	if (sp.advSent - sndAdvDone.v.load(std::memory_order_acquire) <= SND_ADV_BEHIND) return;
 	snd_q_flush();
-	while ((sndAdvSent - sndAdvDone.load() > SND_ADV_BEHIND / 2) && !sndQuit.load()) {
+	while ((sp.advSent - sndAdvDone.v.load() > SND_ADV_BEHIND / 2) && !sndQuit.load()) {
 		if ((stTail.load() == stHead.load()) && (sqTail.load() == sqHead.load())) {
-			sndAdvSent = sndAdvDone.load();		// all taken: the two counts agree
+			sp.advSent = sndAdvDone.v.load();		// all taken: the two counts agree
 			break;
 		}
 		snd_kick();
@@ -635,6 +639,9 @@ static void snd_mirror_hold() {
 
 void snd_mirror_keep_up(Computer* comp) {
 	if (mp.comp != comp) return;
+	// a state put back (a load, a reset) goes over now, not after the copy has worked
+	// through the old one's time - which the machine would wait for
+	if (comp->sndSeed && snd_mirror_fits(comp)) snd_mirror_seed(comp);
 	if (comp->ts->advNs >= SND_ADV_SLICE) {
 		sndTok* t = snd_tok_new(SND_T_ADV);
 		t->adv = snd_mirror_adv(comp);
@@ -675,7 +682,7 @@ static void snd_mirror_time(long long ns) {
 		tsSync(&sm.ts, k);
 		ns -= k;
 	}
-	sndAdvDone.store(sndAdvDone.load(std::memory_order_relaxed) + all, std::memory_order_release);
+	sndAdvDone.v.store(sndAdvDone.v.load(std::memory_order_relaxed) + all, std::memory_order_release);
 }
 
 static void snd_mirror_take_seed(sndSeedCopy* c) {
@@ -734,6 +741,9 @@ void* snd_fm_capture() {
 	if (!sm.on) return NULL;
 	sndFmCap* c = NULL;
 	for (int i = 0; i < 4; i++) {
+		// a chip made a YM2203 has no core before its first flush, which fast mode
+		// puts off for a second: the machine's may have one by then, stale
+		if (!sm.chip[i].fm && (sm.chip[i].type == SND_YM2203)) ym2203_make(&sm.chip[i]);
 		if (!sm.chip[i].fm) continue;
 		if (!c) c = new sndFmCap();
 		c->has[i] = 1;
@@ -1110,10 +1120,7 @@ int sndSync(Computer* comp) {
 				// nothing to hear: only what the machine itself does at a sample
 				// (the Next's copper, AY clock, DACs) is done, the mix is not made
 				if (comp->hw->sndtake) comp->hw->sndtake(comp, &mp.take);
-				// the copy keeps following, fm and all: a state put back goes over
-				if ((mp.comp == comp) && comp->sndSeed && snd_mirror_fits(comp))
-					snd_mirror_seed(comp);
-				snd_mirror_keep_up(comp);
+				snd_mirror_keep_up(comp);	// the copy keeps following, fm and all
 				sp.quiet++;
 			} else if (snd_mirror_fits(comp)) {
 				snd_mirror_sample(comp, 0);

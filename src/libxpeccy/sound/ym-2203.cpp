@@ -371,6 +371,10 @@ void ym2203_free(aymChip* chip) {
 	chip->fm = NULL;
 }
 
+void ym2203_make(aymChip* chip) {
+	fm_of(chip);
+}
+
 void ym2203_reset(aymChip* chip) {
 	ay_reset(chip);
 	chip->reg[0xff] = 0;

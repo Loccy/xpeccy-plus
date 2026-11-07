@@ -58,6 +58,7 @@ void ym2203_wr(aymChip*, int, int);
 void ym2203_flush(aymChip*);		// count the time sync has put by, see ay_flush()
 int ym2203_fm_out(aymChip*);		// the fm half; the SSG one is ym_vol()
 void ym2203_free(aymChip*);		// drop the core, if this chip ever had one
+void ym2203_make(aymChip*);		// the core a first flush would make, made now
 int ym2203_state_size(aymChip*, void**);	// its state as bytes: how many, where
 void ym2203_state_pack(aymChip*);	// the core into those bytes
 void ym2203_state_unpack(aymChip*);	// and back out of them
