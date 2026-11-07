@@ -560,7 +560,8 @@ void xDumpTable::mousePressEvent(QMouseEvent* ev) {
 	int col = idx.column();
 	if ((row < 0) || (row >= model->rowCount())) return;
 	if ((col < 0) || (col >= model->columnCount())) return;
-	if (col > 8) return;
+	// the address and the bytes of a row; the text column is no one byte
+	if ((col > model->dmpsize) && (ev->button() != X_MidButton)) return;
 	int adr = model->dmpadr + (row * model->dmpsize);
 	if (col != 0)
 		adr += col - 1;
