@@ -15,6 +15,8 @@ class xDiskDumpModel : public xTableModel {
 		void setTrack(int);
 		void recount();			// rows from the track length and rowBytes
 		int rowBytes;			// bytes on one line, a multiple of DUMP_GROUP
+		int codePage;			// XCP_*: the text column's
+		bool hasDisk() const;		// the drive shown holds a disk
 	private:
 		int drv;
 		int trk;
@@ -26,6 +28,7 @@ class xDiskDump : public QTableView {
 		xDiskDump(QWidget* = NULL);
 		void update();
 		void setRowBytes(int);		// 0 = fit as many groups as there is room for
+		void setCodePage(int);		// XCP_*: the text column's
 	public slots:
 		void setTrack(int);
 		void setDrive(int);
@@ -36,6 +39,7 @@ class xDiskDump : public QTableView {
 		void layoutColumns();
 		xDiskDumpModel* mod;
 		void resizeEvent(QResizeEvent*);
+		void paintEvent(QPaintEvent*);
 };
 
 #include "ui_form_fdddump.h"
@@ -52,4 +56,5 @@ class xDiskDumpWidget : public xDockWidget {
 	private slots:
 		void toTarget();
 		void bytes_changed();
+		void cp_changed();
 };

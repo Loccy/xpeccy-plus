@@ -155,6 +155,7 @@ void DebugWin::toggleNumFmt() {
 }
 
 void DebugWin::showNumFmt() {
+	numTipsAct->setChecked(conf.dbg.numtips);	// Options may have moved it
 	ui_asm.tbNumbers->setText((conf.dbg.numfmt == CPU_NUM_DEC) ? "DEC" : "HEX");
 	QString key = shortcut_key(XCUT_DBG_NUMBERS);
 	ui_asm.tbNumbers->setToolTip(QString("Hex or decimal addresses and values%0")
@@ -753,6 +754,12 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	ui_asm.tbDbgOpt->addAction(ui_asm.actDimAddr);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actDimOps);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actSyntax);
+	numTipsAct = new QAction("Number tips", this);
+	numTipsAct->setCheckable(true);
+	numTipsAct->setChecked(conf.dbg.numtips);
+	numTipsAct->setToolTip("A number's hex, decimal and binary under the mouse");
+	connect(numTipsAct, &QAction::toggled, this, [](bool on) { conf.dbg.numtips = on ? 1 : 0; });
+	ui_asm.tbDbgOpt->addAction(numTipsAct);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actBlockSep);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actShowSeg);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actRomWr);
@@ -1543,16 +1550,14 @@ void DebugWin::reFormFlags(int width) {
 		ui_cpu.flagsGrid->addWidget(dbgFlagBox[i], (p / per) * 2 + 1, p % per + ofs, Qt::AlignCenter);
 	}
 	if (width > 0) {
-		// The row is exactly as wide as the registers above it, and no wider:
-		// spreading it over the whole panel instead would put the split between
-		// two register columns off the middle of the row as soon as the dock is
-		// wider than the registers need
+		// over the whole panel, its middle under the split between the register columns
 		int cells = width - FLAG_SPACING * (per - 1);
 		// hand the remainder out a pixel at a time: dropping it would leave the
 		// row short and its middle no longer under the register column split
-		for (int i = 0; i < per; i++)
+		for (int i = 0; i < per; i++) {
 			ui_cpu.flagsGrid->setColumnMinimumWidth(i, cells / per + ((i < cells % per) ? 1 : 0));
-		ui_cpu.flagsGrid->setColumnStretch(per, 1);	// slack goes after them
+			ui_cpu.flagsGrid->setColumnStretch(i, 1);
+		}
 	} else {
 		ui_cpu.flagsGrid->setColumnStretch(0, 1);
 		ui_cpu.flagsGrid->setColumnStretch(per + 1, 1);
@@ -1610,16 +1615,10 @@ int DebugWin::regsLayoutWidth(int cols) {
 // needs - so whatever changes an input calls this instead of picking a policy.
 void DebugWin::applyCpuWidthLimits() {
 	if (!regPairW) return;			// nothing measured yet
-	if (conf.dbg.reglayout == DBG_REGS_AUTO) {
-		// never wider than two columns: dragging further would only add empty space
-		wid_cpu->setMaximumWidth(regsLayoutWidth(2));
-		wid_cpu->setMinimumWidth(regsLayoutWidth(cpuWideDock ? 2 : 1));
-	} else {
-		// no maximum: it clamps the whole dock column, and this panel is meant
-		// to be able to sit above the disassembler
-		wid_cpu->setMaximumWidth(QWIDGETSIZE_MAX);
-		wid_cpu->setMinimumWidth(regsLayoutWidth(conf.dbg.reglayout));
-	}
+	// no maximum: it would clamp the whole dock column; extra width centers the registers
+	wid_cpu->setMaximumWidth(QWIDGETSIZE_MAX);
+	int lay = conf.dbg.reglayout;
+	wid_cpu->setMinimumWidth(regsLayoutWidth((lay == DBG_REGS_AUTO) ? (cpuWideDock ? 2 : 1) : lay));
 }
 
 void DebugWin::reFormCPU(xRegBunch* b) {
@@ -1667,15 +1666,25 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 	ui_cpu.formRegs = new QGridLayout;
 	ui_cpu.formRegs->setHorizontalSpacing(0);
 	ui_cpu.formRegs->setVerticalSpacing(2);
-	for (i = 0; i < regCols; i++)
-		ui_cpu.formRegs->setColumnMinimumWidth(i * RCOL_STEP + 2, RCOL_GAP);
-	if ((regCols == 2) && (blockW > regPairW * 2 + RCOL_GAP)) {
-		// the flags row is the wider of the two: widen the gap between the
-		// register columns by the same amount, or the split between them would
-		// no longer sit over the middle of the row
-		ui_cpu.formRegs->setColumnMinimumWidth(2, blockW - regPairW * 2);
+	int base = 0;		// the grid column the first register column starts on
+	if (regCols > 2) {
+		for (i = 0; i < regCols; i++)
+			ui_cpu.formRegs->setColumnMinimumWidth(i * RCOL_STEP + 2, RCOL_GAP);
+		ui_cpu.formRegs->setColumnStretch(regCols * RCOL_STEP - 1, 1);	// packed to the left
+	} else {
+		// each register column centered in its half, alike, so the split stays in the middle
+		base = 1;
+		for (i = 0; i < regCols; i++) {
+			ui_cpu.formRegs->setColumnMinimumWidth(base + i * RCOL_STEP, labw);
+			ui_cpu.formRegs->setColumnMinimumWidth(base + i * RCOL_STEP + 1, fldw);
+		}
+		ui_cpu.formRegs->setColumnStretch(0, 1);
+		if (regCols == 2) {
+			ui_cpu.formRegs->setColumnMinimumWidth(base + 2, RCOL_GAP);
+			ui_cpu.formRegs->setColumnStretch(base + 2, 2);
+		}
+		ui_cpu.formRegs->setColumnStretch(base + regCols * RCOL_STEP - 1, 1);
 	}
-	ui_cpu.formRegs->setColumnStretch(regCols * RCOL_STEP - 1, 1);	// packed to the left
 	// one column per register group, in the order the groups are numbered, but
 	// only where the table names them and there is room for that many columns
 	bool bygroup = false;
@@ -1686,7 +1695,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		for (i = 0; i < cnt; i++) {
 			int c = b->regs[i].group - 1;
 			if ((c < 0) || (c >= regCols)) c = regCols - 1;	// the table forgot this one
-			placeReg(b, i, nrow[c], c * RCOL_STEP);
+			placeReg(b, i, nrow[c], base + c * RCOL_STEP);
 			nrow[c]++;
 		}
 	} else {
@@ -1712,9 +1721,9 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		if (half < 1) half = 1;
 		for (int r = 0; r < rows.size(); r++) {
 			int blk = (r / half) * 2;	// which pair of columns this row goes to
-			placeReg(b, rows.at(r).first, r % half, blk * RCOL_STEP);
+			placeReg(b, rows.at(r).first, r % half, base + blk * RCOL_STEP);
 			if (rows.at(r).second >= 0)
-				placeReg(b, rows.at(r).second, r % half, (blk + 1) * RCOL_STEP);
+				placeReg(b, rows.at(r).second, r % half, base + (blk + 1) * RCOL_STEP);
 		}
 	}
 	for (i = cnt; i < dbgRegLabs.size(); i++) {	// rest of the widgets is unused

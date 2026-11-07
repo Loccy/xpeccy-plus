@@ -8,6 +8,7 @@
 #include "../sound/gs.h"
 #include "../sound/soundrive.h"
 #include "../hdd.h"
+#include "../xstate.h"
 #include "../sdcard.h"
 #include "../nvram.h"
 
@@ -746,6 +747,7 @@ void szx_set_machine(const char* id) {
 void szx_ext_save(szxBuf* b, Computer* comp) {
 	size_t mark;
 	int i;
+	if (xstate_fm_back) xstate_fm_back(comp);	// a YM2203's fm, from the copy that made the sound
 	sb_put(b, szx_ext_tag, sizeof(szx_ext_tag));
 	// the Next's picture walks the counted dots with the board's state: done before
 	// any of it is taken (VID below does the same for every machine)
@@ -1094,6 +1096,7 @@ static void ext_chip_load(Computer* comp, int n, const unsigned char* p, size_t 
 	chip->wait = tmp_.wait;
 	chip->blk_fm = tmp_.blk_fm;
 	chip->curReg = tmp_.curReg;
+	chip->fm_stale = 0;		// the fm the file has, or the machine's own from its reset
 }
 
 static void ext_fm_load(Computer* comp, int n, const unsigned char* p, size_t len) {

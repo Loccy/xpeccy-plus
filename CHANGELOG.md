@@ -21,7 +21,10 @@ before that point is upstream's history and is not repeated here.
   tape then starts over at its end, for a game that loads its levels from side B again and again.
 - **Decimal numbers in the Debugger**: a toolbar button and Ctrl+Shift+H switch hex and
   decimal, the hex form is picked in Options > Debugger, and a tip shows a number in hex,
-  decimal and binary.
+  decimal and binary - over a byte of the dumps with its address, label and the word read
+  from it. Number tips in Options > Debugger turns the tips off.
+- **The Debugger's FDD panel has a code page for its text column**, as DUMP has, and says
+  when the drive is empty instead of showing a track of FF.
 - **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
   programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`. An
   address can be a label, looked up when the cheat is ticked, so it follows a rebuilt program.
@@ -39,6 +42,8 @@ before that point is upstream's history and is not repeated here.
   CP866 and KOI8-R are still in its list.
 - **The Watcher uses the Debugger's font and shows 16 bytes a watch**; its registers look
   as in the Debugger.
+- **The Debugger's CPU panel fills its column**: the registers centered, the flags spread
+  over the row. With the Auto layout it no longer squeezes the stack under it.
 - **The ZX Spectrum Next runs much faster, with the same picture and sound**: games and demos
   20-50 % faster, and up to 1.7 times in the Windows builds, which are now laid out by a
   profile of real programs - the other machines gain 6-14 % there too.
@@ -51,8 +56,9 @@ before that point is upstream's history and is not repeated here.
   same picture and sound. A frame in which nothing on screen changes is not drawn again.
 - **Sound is made on a core of its own**: the sound chips, the mixing and the filter run
   beside the emulation, not in it - up to a quarter faster on a computer with two cores or
-  more, with the sound the same to the bit. With **Sound > Enabled** off no sound is worked
-  out at all.
+  more, a third to a half with TurboSound FM, the SAA or General Sound fitted, and with
+  TurboSound FM also a fifth to a third in fast forward and Fast Mode; the sound is the
+  same to the bit. With **Sound > Enabled** off no sound is worked out at all.
 - **The file dialog keeps its sort and view (List or Detail) between runs**: sorted by
   **Date Modified** once, a Downloads folder opens with the newest file at the top.
 - **File > Open has one Disk type instead of Disk A to Disk D**: a disk opened there goes
@@ -60,6 +66,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **A middle click clears DUMP's selection on any byte**, not only on the first eight of a
+  row; Ctrl and Shift clicks mark the block there too.
 - **The Watcher's memory rows change while the machine runs**, as its registers do.
 - **A `.pok` named on the command line before the image is kept**: the image's own cheat
   file took its place.

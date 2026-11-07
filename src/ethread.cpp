@@ -505,7 +505,7 @@ static int ra_snapshot(Computer* comp, int finish) {
 	if (autostart_busy()) return 0;		// the typist counts frames of its own
 	if (!xstate_safe(comp)) return 0;
 	if (!raState) raState = xstate_create();
-	if (!raState || !xstate_save(raState, comp)) {
+	if (!raState || !xstate_save_as_is(raState, comp)) {
 		raBroken = 1;
 		return 0;
 	}
@@ -663,7 +663,7 @@ static int ra_kept_frames(Computer* comp, int k, int shown, int finish) {
 		// frame ahead it runs from the machine as it stands then
 		if (k > 1) {
 			if (!raKept.state) raKept.state = xstate_create();
-			if (!raKept.state || !xstate_save(raKept.state, comp)) {
+			if (!raKept.state || !xstate_save_as_is(raKept.state, comp)) {
 				ra_wind_back(comp);
 				if (!last) ra_raster_put(raShown, vid);
 				ra_kept_drop();
@@ -885,6 +885,7 @@ void xThread::emuCycle(Computer* comp) {
 			while (sndNsFixed > nsPerSampleFixed)
 				sndNsFixed -= nsPerSampleFixed;
 			snd_drop();
+			snd_mirror_keep_up(comp);	// the chips the sound thread mixes keep up meanwhile
 		} else {
 			while (sndNsFixed > nsPerSampleFixed) {
 				comp->sndAgo = sndNsFixed - nsPerSampleFixed;

@@ -504,6 +504,7 @@ void saveConfig() {
 	fprintf(cfile, "numbers = %s\n", dbg_numfmt_name(conf.dbg.numfmt));
 	fprintf(cfile, "numbers.hex = %s\n", dbg_numfmt_name(conf.dbg.hexfmt));
 	fprintf(cfile, "syntax.colors = %s\n", YESNO(conf.dbg.synhl));
+	fprintf(cfile, "number.tips = %s\n", YESNO(conf.dbg.numtips));
 	fprintf(cfile, "block.separator = %s\n", YESNO(conf.dbg.blocksep));
 	fprintf(cfile, "show.memmap = %s\n", YESNO(conf.dbg.showmmap));
 	fprintf(cfile, "show.ports = %s\n", YESNO(conf.dbg.showports));
@@ -991,6 +992,7 @@ void loadConfig() {
 	conf.dbg.dimadr = 0;
 	conf.dbg.dimops = 1;
 	conf.dbg.synhl = 1;
+	conf.dbg.numtips = 1;
 	conf.dbg.blocksep = 1;
 	conf.dbg.showmmap = 1;
 	conf.dbg.showports = 1;
@@ -1176,6 +1178,7 @@ void loadConfig() {
 						if ((fmt >= 0) && (fmt != CPU_NUM_DEC)) conf.dbg.hexfmt = fmt;
 					}
 					if (pnam == "syntax.colors") conf.dbg.synhl = arg.b;
+					if (pnam == "number.tips") conf.dbg.numtips = arg.b;
 					if (pnam == "block.separator") conf.dbg.blocksep = arg.b;
 					if (pnam == "show.memmap") conf.dbg.showmmap = arg.b;
 					if (pnam == "show.ports") conf.dbg.showports = arg.b;

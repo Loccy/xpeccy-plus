@@ -148,7 +148,7 @@ QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
 	switch(role) {
 		case Qt::ToolTipRole:
 			// the address as a number, on its own row and on a label's
-			if ((col == 0) && !dasm[row].iscom && !dasm[row].issep)
+			if ((col == 0) && !dasm[row].iscom && !dasm[row].issep && conf.dbg.numtips)
 				res = dbg_num_tip(dasm[row].adr, true);
 			break;
 		case Qt::EditRole:
@@ -1157,6 +1157,10 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyleOptionViewItem& option, const QModelIndex& idx) {
 	if (ev->type() != QEvent::ToolTip)
 		return QStyledItemDelegate::helpEvent(ev, view, option, idx);
+	if (!conf.dbg.numtips) {
+		QToolTip::hideText();
+		return true;
+	}
 	QStyleOptionViewItem opt = option;
 	initStyleOption(&opt, idx);
 	QString text = opt.text;
@@ -1306,6 +1310,7 @@ int xDisasmTable::updContent() {
 			setCurrentIndex(model->index(r, 0));
 		}
 	}
+	dbg_cell_tip_follow(this);
 	return res;
 }
 
@@ -1629,14 +1634,9 @@ void xDisasmTable::focusInEvent(QFocusEvent* ev) {
 // the address column's tip over its address, as the command column has it over
 // the number pointed at
 bool xDisasmTable::viewportEvent(QEvent* ev) {
-	if (ev->type() != QEvent::ToolTip)
-		return QTableView::viewportEvent(ev);
-	QHelpEvent* hev = static_cast<QHelpEvent*>(ev);
-	QModelIndex idx = indexAt(hev->pos());
-	if (!idx.isValid() || (idx.column() != 0))
-		return QTableView::viewportEvent(ev);
-	dbg_show_tip(viewport(), visualRect(idx), idx.data(Qt::ToolTipRole).toString(), true);
-	return true;
+	if ((ev->type() == QEvent::ToolTip) && (columnAt(static_cast<QHelpEvent*>(ev)->pos().x()) == 0))
+		return dbg_cell_tip(this, ev);
+	return QTableView::viewportEvent(ev);
 }
 
 void xDisasmTable::mouseMoveEvent(QMouseEvent* ev) {

@@ -1270,6 +1270,7 @@ void SetupWin::fillPages() {
 	ui.sbTextSize->setValue(conf.dbg.dmsize);
 	ui.sbDbgStackOfs->setValue(conf.dbg.stackofs);
 	ui.cbDbgNumbers->setCurrentIndex(ui.cbDbgNumbers->findData(conf.dbg.numfmt));
+	ui.cbDbgNumTips->setChecked(conf.dbg.numtips);
 	ui.cbDbgMemmap->setChecked(conf.dbg.showmmap);
 	ui.cbDbgPorts->setChecked(conf.dbg.showports);
 	ui.cbDbgSignals->setChecked(conf.dbg.showsig);
@@ -1680,6 +1681,7 @@ void SetupWin::applyGlobal() {
 	// the step is 2, but a typed-in value can still land odd
 	conf.dbg.stackofs = ui.sbDbgStackOfs->value() & ~1;
 	dbg_set_numfmt(ui.cbDbgNumbers->currentData().toInt());
+	conf.dbg.numtips = ui.cbDbgNumTips->isChecked() ? 1 : 0;
 	conf.dbg.font = dbgfnt;
 	conf.dbg.showports = ui.cbDbgPorts->isChecked() ? 1 : 0;
 	conf.dbg.showsig = ui.cbDbgSignals->isChecked() ? 1 : 0;

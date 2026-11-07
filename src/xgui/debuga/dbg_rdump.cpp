@@ -21,10 +21,12 @@ void xRDumpWidget::draw() {
 xRDumpTable::xRDumpTable(QWidget* p):QTableView(p) {
 	model = new xRDumpModel;
 	setModel(model);
+	dbg_cell_tips(this);
 }
 
 void xRDumpTable::update() {
 	model->refill();
+	dbg_cell_tip_follow(this);
 }
 
 void xRDumpTable::resizeEvent(QResizeEvent* e) {
@@ -97,6 +99,11 @@ QVariant xRDumpModel::data(const QModelIndex& idx, int role) const {
 	if (col >= col_count) return res;
 	int adr;
 	switch(role) {
+		case Qt::ToolTipRole:
+			// as the memory dump's: the address, its label, the byte and the word
+			if ((col == 0) || !conf.dbg.numtips) break;
+			res = dbg_cpu_byte_tip(regs.at(row).value + col - 1);
+			break;
 		case Qt::TextAlignmentRole:
 			// right, like the other dumps: the extra width of a group's first
 			// cell then shows up as a gap in front of it

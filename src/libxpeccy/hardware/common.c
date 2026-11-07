@@ -203,13 +203,15 @@ sndPair zx_mix(sndMix* m, sndVolume* sv) {
 	return vol;
 }
 
-// what zx_mix hears, at the sample
+// what zx_mix hears, at the sample. A GS or an SAA not fitted is silent: asked by its
+// flag, not by a call, as this runs at every sub-sample
 void zx_snd_take(Computer* comp, sndMix* m) {
+	static const sndPair none = {0, 0};
 	snd_mix_take_wire(m, comp);
 	m->ts = comp->ts;
-	m->in.gs = gsVolume(comp->gs);
+	m->in.gs = comp->gs->enable ? gsVolume(comp->gs) : none;
 	m->in.sdrv = sdrvVolume(comp->sdrv);
-	m->in.saa = saaVolume(comp->saa);
+	m->in.saa = comp->saa->enabled ? saaVolume(comp->saa) : none;
 }
 
 sndPair zx_vol(Computer* comp, sndVolume* sv) {

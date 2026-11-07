@@ -26,6 +26,15 @@ static const unsigned short cp437_hi[128] = {
 	0x2261, 0x00B1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00F7, 0x2248, 0x00B0, 0x2219, 0x00B7, 0x221A, 0x207F, 0x00B2, 0x25A0, 0x00A0
 };
 
+// the Latin one first, then the Cyrillic ones; the names as code pages are written
+void dump_codepage_items(QComboBox* box) {
+	box->addItem("CP437", XCP_437);
+	box->addItem("CP1251", XCP_1251);
+	box->addItem("CP866", XCP_866);
+	box->addItem("KOI8-R", XCP_KOI8R);
+	box->setToolTip("Code page of the text column");
+}
+
 QString getDumpString(QByteArray bts, int cp) {
 	QString res;
 	QTextCodec* codec = NULL;
@@ -109,6 +118,27 @@ int xDumpModel::mrd(int adr) const {
 		if (cell) res = *cell | (*flag << 8);
 	}
 	return res;
+}
+
+// A byte's tip: its address as the address column writes it, the label there,
+// and the word read on from it - into the next page in a page view
+QString xDumpModel::cellTip(int adr, const QString& note) const {
+	if (mode == XVIEW_CPU) return dbg_cpu_byte_tip(adr, note);
+	Computer* comp = conf.zx;
+	int lo = mrd(adr) & 0xff;
+	int word = -1;
+	QString lab;
+	int area = dump_view_area(mode);
+	int ofs = dump_page_ofs(comp, area, adr);
+	int shown = (adr % pgsize) + pgbase;	// the address column's
+	xAdr xa;
+	xa.bank = -1;
+	xa.adr = shown;		// find_label takes a CPU address label only if this cell is there now
+	if (comp_cell_xadr(comp, area, page, ofs, &xa.type, &xa.abs))
+		lab = find_label(xa);
+	int hi = comp_cell_peek(comp, area, page, ofs + 1);
+	if (hi >= 0) word = lo | ((hi & 0xff) << 8);
+	return dbg_byte_tip(lo, word, gethexbyte(page).append(":").append(dbg_word(shown)), lab, note);
 }
 
 void xDumpModel::mwr(int adr, unsigned char bt) {
@@ -208,9 +238,14 @@ QVariant xDumpModel::data(const QModelIndex& idx, int role) const {
 			break;
 		case Qt::ToolTipRole:
 			switch (fm) {
-				case TS_FM_CRAM: res = QString("FMAPS: CRAM, color #%0").arg(gethexbyte((cadr & 0x1ff) >> 1)); break;
-				case TS_FM_SFILE: res = QString("FMAPS: SFILE, sprite %0").arg((cadr & 0x1ff) / 6); break;
-				case TS_FM_REGS: res = QString("FMAPS: port #%0AF").arg(gethexbyte(cadr & 0xff)); break;
+				case TS_FM_CRAM: str = QString("FMAPS: CRAM, color #%0").arg(gethexbyte((cadr & 0x1ff) >> 1)); break;
+				case TS_FM_SFILE: str = QString("FMAPS: SFILE, sprite %0").arg((cadr & 0x1ff) / 6); break;
+				case TS_FM_REGS: str = QString("FMAPS: port #%0AF").arg(gethexbyte(cadr & 0xff)); break;
+			}
+			if ((col > 0) && (col < 17) && conf.dbg.numtips) {
+				res = cellTip(cadr, str);
+			} else if (!str.isEmpty()) {
+				res = str;
 			}
 			break;
 		case Qt::TextAlignmentRole:
@@ -305,6 +340,7 @@ xDumpTable::xDumpTable(QWidget* p):QTableView(p) {
 	rowBytes = 0;			// auto
 	model = new xDumpModel();
 	setModel(model);
+	dbg_cell_tips(this);		// a byte's tip over the byte, as the listing has it over a number
 	// no stretching: the columns are sized in layoutColumns and stay put
 	horizontalHeader()->setStretchLastSection(false);
 
@@ -334,6 +370,7 @@ void xDumpTable::setCodePage(int cp) {
 void xDumpTable::update() {
 	model->update();
 	QTableView::update();
+	dbg_cell_tip_follow(this);
 }
 
 void xDumpTable::setLimit(unsigned int lim) {
@@ -533,7 +570,8 @@ void xDumpTable::mousePressEvent(QMouseEvent* ev) {
 	int col = idx.column();
 	if ((row < 0) || (row >= model->rowCount())) return;
 	if ((col < 0) || (col >= model->columnCount())) return;
-	if (col > 8) return;
+	// the address and the bytes of a row; the text column is no one byte
+	if ((col > model->dmpsize) && (ev->button() != X_MidButton)) return;
 	int adr = model->dmpadr + (row * model->dmpsize);
 	if (col != 0)
 		adr += col - 1;
@@ -582,12 +620,12 @@ void xDumpTable::mouseMoveEvent(QMouseEvent* ev) {
 	if ((col < 0) || (col >= model->columnCount())) return;
 	int adr;
 	adr = model->dmpadr + (row * model->dmpsize);
-	if ((col > 0) && (col < 17)) {
+	if ((col > 0) && (col <= model->dmpsize)) {
 		adr += col - 1;
 	}
 	adr %= model->maxadr;
 	if ((ev->modifiers() == Qt::NoModifier) && (ev->buttons() & Qt::LeftButton) && (adr != blockStart) && (adr != blockEnd) && (adr != markAdr)) {
-		if ((col == 0) || (col > 17))
+		if ((col == 0) || (col > model->dmpsize))
 			adr += model->dmpsize;
 		if (adr < blockStart) {
 			blockStart = adr;
@@ -628,11 +666,7 @@ xDumpWidget::xDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) {
 	ui.cbDumpBytes->addItem("12/row", 12);
 	ui.cbDumpBytes->addItem("16/row", 16);
 
-	// the Latin one first, then the Cyrillic ones; the names as code pages are written
-	ui.cbCodePage->addItem("CP437", XCP_437);
-	ui.cbCodePage->addItem("CP1251", XCP_1251);
-	ui.cbCodePage->addItem("CP866", XCP_866);
-	ui.cbCodePage->addItem("KOI8-R", XCP_KOI8R);
+	dump_codepage_items(ui.cbCodePage);
 
 	ui.cbDumpView->addItem("CPU", XVIEW_CPU);
 	ui.cbDumpView->addItem("RAM", XVIEW_RAM);

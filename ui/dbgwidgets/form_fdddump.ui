@@ -116,7 +116,20 @@
       </widget>
      </item>
      <item>
+      <widget class="QComboBox" name="cbDiskCodePage">
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QToolButton" name="tbTarget">
+       <property name="toolTip">
+        <string>To the drive, the track and the byte under the head</string>
+       </property>
        <property name="text">
         <string>...</string>
        </property>

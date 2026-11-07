@@ -191,6 +191,16 @@ void tsReset(TSound* ts) {
 	ts->r_stat = 0;		// read chip registers, as any AY does. TSFM switches this on itself
 }
 
+// TSFM's FM mute. The chip's time so far is counted before it moves, so it starts
+// where it was set rather than at the chip's last flush, wherever that fell - the
+// same place for any copy of the chip that follows its writes (ay_log)
+static void ts_set_blk(aymChip* chip, int blk) {
+	if (chip->blk_fm == blk) return;
+	ay_flush(chip);
+	chip->blk_fm = blk;
+	if (ay_log) ay_log(chip, AYL_BLK, blk, 0);
+}
+
 // fffd (a14 = 1)	wr:reg.num	rd:reg.data
 // bffd (a14 = 0)	wr:reg.data	rd:FF
 
@@ -217,9 +227,9 @@ void tsOut(TSound* ts, int port, int val) {
 					// scheme and what nedoPC's own FM test expects of #F8.
 					ts->curChip = (val & 1) ? ts->chipB : ts->chipA;
 					ts->r_stat = !(val & 2);
-					ts->chipA->blk_fm = !!(val & 4);
-					ts->chipB->blk_fm = !!(val & 4);
-					ts->chipC->blk_fm = !!(val & 4);
+					ts_set_blk(ts->chipA, !!(val & 4));
+					ts_set_blk(ts->chipB, !!(val & 4));
+					ts_set_blk(ts->chipC, !!(val & 4));
 				} else {
 					ts->curChip->wr(ts->curChip, port, val);
 				}

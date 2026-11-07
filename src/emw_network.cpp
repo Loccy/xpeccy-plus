@@ -13,6 +13,8 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QContextMenuEvent>
+#include <QHelpEvent>
+#include <QToolTip>
 #include <QDockWidget>
 #include <QTimer>
 #include <QWindow>
@@ -452,6 +454,31 @@ void MainWin::socketRead() {
 			}
 			sock->write(w ? w->metaObject()->className() : "nothing");
 			sock->write("\r\n");
+		}
+	} else if (com == "tip") {
+		// tip X Y TITLE: the tip a resting mouse gets at winshot's X Y (Qt sends it only
+		// to the active window, which a hidden desktop never has); answers it or nothing
+		QString name = prm.mid(3).join(" ");
+		QWidget* win = NULL;
+		foreach(QWidget* w, QApplication::topLevelWidgets()) {
+			if (w->isVisible() && !name.isEmpty() && w->windowTitle().startsWith(name)) {
+				win = w;
+				break;
+			}
+		}
+		if (win && (prm.size() > 3)) {
+			QPoint pos(prm[1].toInt(), prm[2].toInt());
+			QWidget* at = win->childAt(pos);
+			if (!at) at = win;
+			// a tip from before goes at once: hideText lets it linger
+			foreach(QWidget* w, QApplication::topLevelWidgets())
+				if (w->isVisible() && w->inherits("QTipLabel")) w->hide();
+			QHelpEvent hev(QEvent::ToolTip, at->mapFrom(win, pos), win->mapToGlobal(pos));
+			QApplication::sendEvent(at, &hev);
+			QString txt = QToolTip::isVisible() ? QToolTip::text() : QString("nothing");
+			sock->write(QString("%0 %1\r\n").arg(at->metaObject()->className(), txt.remove('\n')).toUtf8());
+		} else {
+			sock->write("nothing\r\n");
 		}
 	} else if (com == "click") {
 		// click X Y [right]: at a point of the window, whatever is there
