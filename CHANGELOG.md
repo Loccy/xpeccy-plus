@@ -22,6 +22,10 @@ before that point is upstream's history and is not repeated here.
 - **Decimal numbers in the Debugger**: a toolbar button and Ctrl+Shift+H switch hex and
   decimal, the hex form is picked in Options > Debugger, and a tip shows a number in hex,
   decimal and binary.
+- **Number tips over the Debugger's dumps and registers**: rest the mouse on a byte of DUMP,
+  REG-DUMP, the disk dump or CMOS for its address, label, value and the word read from it,
+  or on a register of the CPU panel or the Watcher. Number tips in Options > Debugger turns
+  them off.
 - **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
   programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`. An
   address can be a label, looked up when the cheat is ticked, so it follows a rebuilt program.
@@ -56,6 +60,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **The Debugger's first open under a style draws PC in its own font**: PC (and at times
+  IR and IM) came in the interface font, in a narrower field, until the next step.
 - **The Watcher's memory rows change while the machine runs**, as its registers do.
 - **A `.pok` named on the command line before the image is kept**: the image's own cheat
   file took its place.
