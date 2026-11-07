@@ -92,6 +92,12 @@ static bool fm_takes(int hwid, int model, int dif, int need, int snap) {
 	return true;
 }
 
+// A snapshot names the model it was taken on - but a .sna, whose size only
+// says 48K or 128K, and a disk names a family at most
+static bool fm_names_model(const xFileMac* row) {
+	return row->probe && (row->ftype != FL_SNA);
+}
+
 // An SZX stands the machine at a point in its frame, so it is loaded on the
 // model it names: a core shared by several models is not enough, unless the
 // machine is one of the user's own rather than a model of the table.
@@ -171,6 +177,34 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	auto fits = [&](const std::string& id) {
 		return fm_runs(id, row->need, snap) && ((row->need != FMN_EXACT) || fm_exact_on(id, snap, target));
 	};
+	// the machines but the running one that can take the file, in this order
+	std::vector<std::string> can;
+	auto add = [&](const std::string& id) {
+		if (!id.empty() && (id != conf.macId) && (std::find(can.begin(), can.end(), id) == can.end())
+				&& fm_runs(id, row->need, snap))
+			can.push_back(id);
+	};
+	// Ask, whenever there is a choice: not when the running machine is the model
+	// the file names, nor when only one machine can take it. A file that names
+	// none has the machine Auto would go back to on top, and Keep for the answer
+	// when the running one can take it.
+	if (pref == FM_ASK) {
+		bool named = fm_names_model(row) && !target.empty();
+		if (named && (target == conf.macId)) return pick;
+		pick.runs = fits(conf.macId);
+		if (!named && fits(conf.macBase)) add(conf.macBase);
+		add(target);
+		foreach(const xMachine& mac, xm_list())
+			add(mac.id);
+		if (can.size() + (pick.runs ? 1 : 0) < 2) {
+			if (!pick.runs && !can.empty()) pick.target = can.front();
+			return pick;
+		}
+		pick.ask = can;
+		pick.keep = !named && pick.runs;
+		xlog(XLG_FILE, XLL_INFO, "%s on %s: asking", row->key, conf.macId.c_str());
+		return pick;
+	}
 	// The user's own machine when it can take the file: a machine a file
 	// switched to was for that file. Then the one running, if it can.
 	if (fits(conf.macBase)) {
@@ -182,21 +216,11 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	}
 	if (fits(conf.macId)) return pick;
 	// the one the file names, then every other one that can take it
-	std::vector<std::string> can;
-	auto add = [&](const std::string& id) {
-		if (!id.empty() && (std::find(can.begin(), can.end(), id) == can.end()) && fm_runs(id, row->need, snap))
-			can.push_back(id);
-	};
 	add(target);
 	foreach(const xMachine& mac, xm_list())
 		add(mac.id);
 	if (can.empty()) return pick;
-	if (pref == FM_ASK) {
-		pick.ask = can;
-	} else {
-		pick.target = can.front();
-	}
-	xlog(XLG_FILE, XLL_INFO, "%s does not run on %s: %s", row->key, conf.macId.c_str(),
-		pick.target.empty() ? "asking" : pick.target.c_str());
+	pick.target = can.front();
+	xlog(XLG_FILE, XLL_INFO, "%s does not run on %s: %s", row->key, conf.macId.c_str(), pick.target.c_str());
 	return pick;
 }

@@ -55,7 +55,7 @@ void xFileTypesBox::fill() {
 		bool any = (rows[i].need == FMN_ANY);
 		ft_add(box, "Auto", FM_AUTO, any ? "Back to your machine if a file switched" : "Switch only when needed, then back to yours");
 		if (!any)
-			ft_add(box, "Ask", FM_ASK, "When this machine cannot run the file, ask which one to use");
+			ft_add(box, "Ask", FM_ASK, "Ask every time which machine to run it on");
 		ft_add(box, "Keep current", FM_KEEP, "Never switch the machine");
 		box->insertSeparator(box->count());
 		std::string family;		// parted by family, as the Model menu is

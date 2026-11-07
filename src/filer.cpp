@@ -877,20 +877,21 @@ static int replace_ok(Computer* comp, xFileTypeInfo* inf, int drv) {
 	return ERR_OK;
 }
 
-// Ask: the machines that can take the file, Auto's pick first. false is
-// Cancel - the file is not opened at all
-static bool media_ask_machine(const QString& path, const std::vector<std::string>& ids, std::string* mac) {
+// Ask: the other machines that can take the file, the one it names first, and
+// Keep for the running one. false is Cancel - the file is not opened at all
+static bool media_ask_machine(const QString& path, const xFileMacPick& pick, std::string* mac) {
 	const xMachine* cur = xm_find(conf.macId);
 	QString curName = QString::fromLocal8Bit(cur ? cur->name.c_str() : conf.macId.c_str());
+	QString name = arc_name(path).toHtmlEscaped();
 	QDialog dlg;
 	dlg.setWindowTitle("Choose a Machine");
 	QVBoxLayout* lay = new QVBoxLayout(&dlg);
-	QLabel* lab = new QLabel(QString("<b>%1</b> does not run on %2.<br>Run it on:")
-		.arg(arc_name(path).toHtmlEscaped(), curName.toHtmlEscaped()));
+	QLabel* lab = new QLabel(pick.runs ? QString("Run <b>%1</b> on:").arg(name)
+		: QString("<b>%1</b> does not run on %2.<br>Run it on:").arg(name, curName.toHtmlEscaped()));
 	lab->setWordWrap(true);
 	lay->addWidget(lab);
 	QListWidget* list = new QListWidget;
-	for (const std::string& id : ids) {
+	for (const std::string& id : pick.ask) {
 		const xMachine* m = xm_find(id);
 		QListWidgetItem* it = new QListWidgetItem(QString::fromLocal8Bit(m ? m->name.c_str() : id.c_str()));
 		it->setData(Qt::UserRole, QString::fromLocal8Bit(id.c_str()));
@@ -904,7 +905,7 @@ static bool media_ask_machine(const QString& path, const std::vector<std::string
 	QPushButton* run = new QPushButton("Switch");
 	QPushButton* keep = new QPushButton(QString("Keep %1").arg(curName));
 	QPushButton* cancel = new QPushButton("Cancel");
-	run->setDefault(true);
+	(pick.keep ? keep : run)->setDefault(true);
 	btns->addStretch();
 	btns->addWidget(run);
 	btns->addWidget(keep);
@@ -942,7 +943,7 @@ bool media_machine(Computer* comp, const QString& path, int id, int drv, int run
 	if (local.isEmpty()) return true;			// opening it says why not
 	xFileMacPick pick = fm_pick(inf->id, local.toLocal8Bit().data());
 	if (!pick.ask.empty())
-		return media_ask_machine(path, pick.ask, mac);
+		return media_ask_machine(path, pick, mac);
 	*mac = pick.target;
 	return true;
 }
