@@ -28,8 +28,8 @@ The **File types** group has a row per format:
 
 - **Format** - the kind of file.
 - **Needs** - what a machine must have to run it: **any machine**, **Beta Disk (TR-DOS)**,
-  **+3 disk drive**, **TSConf**, **ZX Spectrum Next**, **read from the file** (a `.z80` or `.sna` names its
-  model), **exactly the one it was taken on** (SZX) or **exactly the one it was recorded
+  **+3 disk drive**, **TSConf**, **ZX Spectrum Next**, **read from the file** (a `.z80` names its
+  model, a `.sna` only 48K or 128K), **exactly the one it was taken on** (SZX) or **exactly the one it was recorded
   on** (RZX).
 - **Opened on** - **Auto**, **Ask**, **Keep current**, or one machine from the list.
 
@@ -41,3 +41,12 @@ row back to **Auto**.
 
 Only a file that is about to run can switch the machine: a snapshot always, a tape or a disk
 only when it is run, and a disk only from drive A.
+
+```{index} snapshot; which machine runs it
+```
+
+A `.z80` or `.sna` snapshot runs on any machine with its memory paging. One taken inside
+the ROM - in the BASIC editor, or with the program in the middle of a ROM routine - also
+needs the very same ROM. The 128K and the clones (Pentagon, Scorpion and the others) share
+one; the +2 has its own, and the +2A and +3 theirs, so such a snapshot from a 128K is
+moved off them. A machine of your own counts by its hardware, whatever ROM files it has.

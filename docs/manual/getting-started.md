@@ -78,9 +78,11 @@ to your machine.
 The **File types** page of **Options** sets this for each kind of file:
 
 - **Auto** - switch only when needed, then back to your machine;
-- **Ask** - when this machine cannot run the file, the **Choose a Machine** window lists
-  the machines that can: **Switch** to the one picked, **Keep** the current one, or
-  **Cancel** and not open the file;
+- **Ask** - every time there is a choice, the **Choose a Machine** window lists the other
+  machines that can run the file, the one named in the file first: **Switch** to the one
+  picked, **Keep** the current one, or **Cancel** and not open the file. It does not ask
+  when the current machine is the one named in the file, or when only one machine can run
+  it;
 - **Keep current** - never switch the machine;
 - or one machine that always opens this kind of file.
 
