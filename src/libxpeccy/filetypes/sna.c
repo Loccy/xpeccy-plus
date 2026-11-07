@@ -185,41 +185,6 @@ int sna_plus3_drive(const char* name) {
 	return b7 && (b7[0x22db] == 0x04) && (b7[0x22dc] == 'A');
 }
 
-// The text on a .sna's screen, read with the font given (96 characters from
-// the space, 8 bytes each; inverse ones too): 24 lines of 32, a cell that is
-// not a character a space. out takes 24 * 33 bytes.
-void sna_screen_text(const char* name, const unsigned char* font, char* out) {
-	memset(out, ' ', 24 * 33);
-	for (int r = 0; r < 24; r++) out[r * 33 + 32] = '\n';
-	out[24 * 33 - 1] = 0;
-	size_t len = sna_read(name);
-	if (len < 49179) return;
-	const unsigned char* scr = sna_buf + 27;
-	if ((len >= 131103) && (sna_buf[49181] & 0x08)) {	// 7FFD bit 3: the screen in bank 7
-		scr = sna_bank(sna_buf, len, 7);
-		if (!scr) return;
-	}
-	for (int r = 0; r < 24; r++) {
-		for (int c = 0; c < 32; c++) {
-			unsigned char cell[8];
-			for (int y = 0; y < 8; y++)
-				cell[y] = scr[((r & 0x18) << 8) | (y << 8) | ((r & 7) << 5) | c];
-			for (int ch = 1; ch < 96; ch++) {
-				const unsigned char* f = font + ch * 8;
-				int same = 1, inv = 1;
-				for (int y = 0; y < 8; y++) {
-					if (cell[y] != f[y]) same = 0;
-					if (cell[y] != (unsigned char)~f[y]) inv = 0;
-				}
-				if (same || inv) {
-					out[r * 33 + c] = (char)(0x20 + ch);
-					break;
-				}
-			}
-		}
-	}
-}
-
 static int sna_after_call(const unsigned char* rom, int adr) {
 	static const unsigned char calls[] = {0xcd, 0xc4, 0xcc, 0xd4, 0xdc, 0xe4, 0xec, 0xf4, 0xfc};
 	if ((adr >= 1) && ((rom[adr - 1] & 0xc7) == 0xc7)) return 1;		// RST n
