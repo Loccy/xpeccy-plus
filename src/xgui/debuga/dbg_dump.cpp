@@ -26,6 +26,15 @@ static const unsigned short cp437_hi[128] = {
 	0x2261, 0x00B1, 0x2265, 0x2264, 0x2320, 0x2321, 0x00F7, 0x2248, 0x00B0, 0x2219, 0x00B7, 0x221A, 0x207F, 0x00B2, 0x25A0, 0x00A0
 };
 
+// the Latin one first, then the Cyrillic ones; the names as code pages are written
+void dump_codepage_items(QComboBox* box) {
+	box->addItem("CP437", XCP_437);
+	box->addItem("CP1251", XCP_1251);
+	box->addItem("CP866", XCP_866);
+	box->addItem("KOI8-R", XCP_KOI8R);
+	box->setToolTip("Code page of the text column");
+}
+
 QString getDumpString(QByteArray bts, int cp) {
 	QString res;
 	QTextCodec* codec = NULL;
@@ -656,11 +665,7 @@ xDumpWidget::xDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) {
 	ui.cbDumpBytes->addItem("12/row", 12);
 	ui.cbDumpBytes->addItem("16/row", 16);
 
-	// the Latin one first, then the Cyrillic ones; the names as code pages are written
-	ui.cbCodePage->addItem("CP437", XCP_437);
-	ui.cbCodePage->addItem("CP1251", XCP_1251);
-	ui.cbCodePage->addItem("CP866", XCP_866);
-	ui.cbCodePage->addItem("KOI8-R", XCP_KOI8R);
+	dump_codepage_items(ui.cbCodePage);
 
 	ui.cbDumpView->addItem("CPU", XVIEW_CPU);
 	ui.cbDumpView->addItem("RAM", XVIEW_RAM);

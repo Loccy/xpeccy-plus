@@ -8,6 +8,7 @@
 #include <QHeaderView>
 #include <QDockWidget>
 #include <QMenu>
+#include <QComboBox>
 
 #include "../../xcore/xcore.h"
 #include "../../xgui/xgui.h"
@@ -31,6 +32,11 @@ enum {
 	XCP_866,
 	XCP_KOI8R
 };
+
+// a dump row's bytes as text in a code page (XCP_*), a dot for a control code
+QString getDumpString(QByteArray bts, int cp);
+// the code pages, as a dump's list offers them
+void dump_codepage_items(QComboBox* box);
 
 enum {
 	XVIEW_NONE = 0,

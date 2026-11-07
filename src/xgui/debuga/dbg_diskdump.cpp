@@ -2,6 +2,8 @@
 #include "dbg_dump.h"		// dump layout constants: both dumps line up alike
 #include "../../xcore/xcore.h"
 
+#include <QPainter>
+
 // dump index is a physical track: (cylinder << 1) | side, the same slot flpNext
 // addresses. how far the head steps is the drive's property, not the disk's -
 // same limit flpStep uses. note the number is a slot, not a count: a
@@ -103,6 +105,20 @@ void xDiskDump::setRowBytes(int n) {
 	layoutColumns();
 }
 
+void xDiskDump::setCodePage(int cp) {
+	mod->codePage = cp;
+	mod->update();
+}
+
+// an empty drive has no bytes to show, not a track of FF: it says so instead
+void xDiskDump::paintEvent(QPaintEvent* ev) {
+	QTableView::paintEvent(ev);
+	if (mod->hasDisk()) return;
+	QPainter pnt(viewport());
+	pnt.setPen(palette().color(QPalette::Disabled, QPalette::Text));
+	pnt.drawText(viewport()->rect(), Qt::AlignCenter, QString("No disk in drive %0").arg(QChar('A' + (drv & 3))));
+}
+
 // the base sets the scroll range and the row header's height, which bounds the painted rows
 void xDiskDump::resizeEvent(QResizeEvent* ev) {
 	QTableView::resizeEvent(ev);
@@ -116,7 +132,14 @@ xDiskDumpModel::xDiskDumpModel(QObject* p):xTableModel(p) {
 	drv = 0;
 	trk = 0;
 	rowBytes = 8;
+	codePage = XCP_437;		// as the memory dump starts
 	setCols(DUMP_COLS);
+}
+
+bool xDiskDumpModel::hasDisk() const {
+	if (!conf.zx || !conf.zx->dif) return false;
+	Floppy* flp = conf.zx->dif->flp[drv];
+	return flp && flp->insert;
 }
 
 void xDiskDumpModel::setDrive(int dr) {
@@ -131,7 +154,7 @@ void xDiskDumpModel::recount() {
 	if (!conf.zx || !conf.zx->dif) return;
 	Floppy* flp = conf.zx->dif->flp[drv];
 	if (!flp) return;
-	int new_rcnt = (flp->trklen + rowBytes - 1) / rowBytes;
+	int new_rcnt = flp->insert ? (flp->trklen + rowBytes - 1) / rowBytes : 0;
 #if 1
 	setRows(new_rcnt);
 #else
@@ -162,9 +185,10 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 	int adr = row * rowBytes;		// first byte of the line
 	int offset = adr + (col - 1);		// the cell's own byte
 	unsigned char ch;
-	int pos;
 	char buf[256];
+	QByteArray arr;
 	Floppy* flp = conf.zx->dif->flp[drv];
+	if (!flp->insert) return res;		// no rows then, but a refresh may ask first
 	QFont fnt;
 	QString cnam;
 	QColor pcol;
@@ -176,7 +200,6 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 			if (col == 0) break;
 			if (col > rowBytes) break;
 			if (offset >= flp->trklen) break;
-			if (!flp->insert) break;
 			ch = flp->data[trk].field[offset];
 			switch(ch & 0x0f) {
 				case 1: cnam = "dbg.disk.id"; break;		// id
@@ -203,19 +226,15 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 			fnt.setBold(true);
 			res = fnt;
 			break;
-		case Qt::ToolTipRole: {
+		case Qt::ToolTipRole:
 			// the byte, and the word read on from it; its place as the first
-			// column writes it - a place in the track, not a CPU address.
-			// An empty drive's bytes read FF, as shown
+			// column writes it - a place in the track, not a CPU address
 			if (!conf.dbg.numtips || (col == 0) || (col > rowBytes)) break;
 			if (offset >= flp->trklen) break;
-			int lo = flp->insert ? flp->data[trk].byte[offset] : 0xff;
-			int word = -1;
-			if (offset + 1 < flp->trklen)
-				word = lo | ((flp->insert ? flp->data[trk].byte[offset + 1] : 0xff) << 8);
-			res = dbg_byte_tip(lo, word, QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
+			res = dbg_byte_tip(flp->data[trk].byte[offset],
+				(offset + 1 < flp->trklen) ? flp->data[trk].byte[offset] | (flp->data[trk].byte[offset + 1] << 8) : -1,
+				QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
 			break;
-		}
 		case Qt::TextAlignmentRole:
 			// same rule as the memory dump: everything right, so a wider cell
 			// shows its extra space in front of the value
@@ -229,25 +248,13 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 				snprintf(buf, sizeof(buf), "%.2X:", trk);
 				strcat(buf, dbg_adr(adr).toLatin1().constData());
 			} else if (col == DUMP_TEXTCOL) {
-				pos = 0;
-				while (pos < rowBytes) {
-					if (adr < flp->trklen) {
-						ch = flp->data[trk].byte[adr];
-						if ((ch < 32) || (ch > 127))
-							ch = '.';
-					} else {
-						ch = '.';
-					}
-					buf[pos++] = ch;
-					adr++;
-				}
-				buf[pos] = 0;
+				// in the code page picked, as the memory dump's; past the track a dot
+				for (int i = 0; i < rowBytes; i++, adr++)
+					arr.append((adr < flp->trklen) ? (char)flp->data[trk].byte[adr] : '.');
+				res = getDumpString(arr, codePage);
+				break;
 			} else if (offset < flp->trklen) {
-				if (flp->insert) {
-					snprintf(buf, sizeof(buf), "%.2X", flp->data[trk].byte[offset]);
-				} else {
-					strcpy(buf, "FF");
-				}
+				snprintf(buf, sizeof(buf), "%.2X", flp->data[trk].byte[offset]);
 			} else {
 				buf[0] = 0;
 			}
@@ -276,8 +283,14 @@ xDiskDumpWidget::xDiskDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i
 	ui.cbDiskBytes->addItem("12/row", 12);
 	ui.cbDiskBytes->addItem("16/row", 16);
 	connect(ui.cbDiskBytes, SIGNAL(currentIndexChanged(int)), this, SLOT(bytes_changed()));
+	dump_codepage_items(ui.cbDiskCodePage);
+	connect(ui.cbDiskCodePage, SIGNAL(currentIndexChanged(int)), this, SLOT(cp_changed()));
 
 	setDrive(0);
+}
+
+void xDiskDumpWidget::cp_changed() {
+	ui.tabDiskDump->setCodePage(getRFIData(ui.cbDiskCodePage));
 }
 
 // the spin box follows the selected drive: a 40 track one stops halfway, a
