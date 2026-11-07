@@ -425,6 +425,7 @@ static struct alignas(64) {
 	TSound ts;
 	aymChip chip[4];
 	sndPair (*mix)(sndMix*, sndVolume*);
+	long long advDone;	// the devices' time worked through, sndAdvDone when published
 } sm;
 
 // Can the sound thread mix this machine itself. The SAA's and the GS's levels go
@@ -436,7 +437,8 @@ static int snd_mirror_fits(Computer* comp) {
 
 // Fast mode can outrun the copy's fm: the time handed over (sp.advSent) and the time
 // the copy has worked through, so the machine waits while the copy is too far behind
-// (snd_mirror_hold). Both move at every sub-sample: each on a line of its own
+// (snd_mirror_hold). The one moves at every sub-sample, the other once a pass of the
+// sound thread's (snd_work): each on a line of its own
 static struct alignas(64) {
 	std::atomic<long long> v;
 } sndAdvDone = {{0}};
@@ -676,13 +678,12 @@ static void snd_mirror_sample(Computer* comp, int scope) {
 // the time an item carries, to the copy's chips (SND_TIME_PIECE)
 static void snd_mirror_time(long long ns) {
 	if (ns <= 0) return;
-	long long all = ns;
+	sm.advDone += ns;
 	while (ns > 0) {
 		int k = (ns > SND_TIME_PIECE) ? SND_TIME_PIECE : (int)ns;
 		tsSync(&sm.ts, k);
 		ns -= k;
 	}
-	sndAdvDone.v.store(sndAdvDone.v.load(std::memory_order_relaxed) + all, std::memory_order_release);
 }
 
 static void snd_mirror_take_seed(sndSeedCopy* c) {
@@ -1038,6 +1039,7 @@ static int snd_work() {
 			snd_sub(&sndQ[pos & SND_Q_MASK]);
 			pos++;
 		}
+		sndAdvDone.v.store(sm.advDone, std::memory_order_release);	// before the tails
 		sqTail.store(pos);
 		stTail.store(tt);
 	}
@@ -1045,6 +1047,7 @@ static int snd_work() {
 		snd_do_tok(&sndT[tt & SND_T_MASK]);
 		tt++;
 	}
+	sndAdvDone.v.store(sm.advDone, std::memory_order_release);
 	stTail.store(tt);
 	return 1;
 }
