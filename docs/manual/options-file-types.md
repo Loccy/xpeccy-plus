@@ -52,9 +52,10 @@ needs the very same ROM:
 - A `.z80` taken inside the ROM opens on the model it names. Even the clones' ROMs differ
   there: the Pentagon's menu has a TR-DOS item the 128K's has not.
 - A `.sna` names no model. For one taken in the 128K menu or editor, Xpeccy+ tells from
-  the snapshot whether it was a 128K or a clone, a +2, or a +2A/+3, and switches only if
-  the current machine is of another kind. A 128K and a Pentagon cannot be told apart this
-  way. To keep the model, save as `.z80` or `.szx`.
+  the snapshot whether it was a 128K or a clone, a +2, a +2A or a +3. The menu on its
+  screen tells a 128K from a Pentagon or a Scorpion. A snapshot that does not tell stays on
+  the current machine if it is a 128K or a clone. To keep the model for sure, save as `.z80`
+  or `.szx`.
 - A program running in RAM stays on the current machine, unless it keeps the 128K
   editor's ROM paged in, which the +2, +2A and +3 do not have.
 
