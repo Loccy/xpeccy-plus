@@ -149,6 +149,72 @@ int snaGetHardware(const char* name) {
 	return res;
 }
 
+// a 128K .sna read whole, and where its RAM bank n is in it: 5, 2 and the paged
+// one first, then the others in order, the paged one left out
+static size_t sna_read(const char* name, unsigned char* buf, size_t size) {
+	FILE* file = fopen(name, "rb");
+	if (!file) return 0;
+	size_t len = fread(buf, 1, size, file);
+	fclose(file);
+	return len;
+}
+
+static const unsigned char* sna_bank(const unsigned char* buf, size_t len, int n) {
+	int paged = buf[49181] & 7;
+	if (n == 5) return buf + 27;
+	if (n == 2) return buf + 27 + 0x4000;
+	if (n == paged) return buf + 27 + 0x8000;
+	size_t pos = 49183;
+	for (int k = 0; k < 8; k++) {
+		if ((k == 2) || (k == 5) || (k == paged)) continue;
+		if (k == n) return (pos + 0x4000 <= len) ? buf + pos : NULL;
+		pos += 0x4000;
+	}
+	return NULL;
+}
+
+// A +3, not a +2A: +3DOS fills in drive A's entry in bank 7 (#E2DB: 4, 'A') only
+// when it finds the disk controller at start; a +2A has zeroes there.
+int sna_plus3_drive(const char* name) {
+	static unsigned char buf[0x24000];
+	size_t len = sna_read(name, buf, sizeof(buf));
+	if (len < 131103) return 0;
+	const unsigned char* b7 = sna_bank(buf, len, 7);
+	return b7 && (b7[0x22db] == 0x04) && (b7[0x22dc] == 'A');
+}
+
+// The text on a .sna's screen, read with the font given (96 characters from
+// the space, 8 bytes each; inverse ones too): 24 lines of 32, a cell that is
+// not a character a space. out takes 24 * 33 bytes.
+void sna_screen_text(const char* name, const unsigned char* font, char* out) {
+	static unsigned char buf[0x24000];
+	memset(out, ' ', 24 * 33);
+	for (int r = 0; r < 24; r++) out[r * 33 + 32] = '\n';
+	out[24 * 33 - 1] = 0;
+	size_t len = sna_read(name, buf, sizeof(buf));
+	if (len < 49179) return;
+	const unsigned char* scr = buf + 27;
+	for (int r = 0; r < 24; r++) {
+		for (int c = 0; c < 32; c++) {
+			unsigned char cell[8];
+			for (int y = 0; y < 8; y++)
+				cell[y] = scr[((r & 0x18) << 8) | (y << 8) | ((r & 7) << 5) | c];
+			for (int ch = 1; ch < 96; ch++) {
+				const unsigned char* f = font + ch * 8;
+				int same = 1, inv = 1;
+				for (int y = 0; y < 8; y++) {
+					if (cell[y] != f[y]) same = 0;
+					if (cell[y] != (unsigned char)~f[y]) inv = 0;
+				}
+				if (same || inv) {
+					out[r * 33 + c] = (char)(0x20 + ch);
+					break;
+				}
+			}
+		}
+	}
+}
+
 static int sna_after_call(const unsigned char* rom, int adr) {
 	static const unsigned char calls[] = {0xcd, 0xc4, 0xcc, 0xd4, 0xdc, 0xe4, 0xec, 0xf4, 0xfc};
 	if ((adr >= 1) && ((rom[adr - 1] & 0xc7) == 0xc7)) return 1;		// RST n

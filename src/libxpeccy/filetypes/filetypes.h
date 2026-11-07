@@ -354,6 +354,8 @@ int saveSNA(Computer*, const char*, int);
 int loadSNA_f(Computer*, FILE*, size_t);
 int snaGetHardware(const char*);
 int sna_editor_of(const char* name, const unsigned char* const* eds, int count);
+int sna_plus3_drive(const char* name);
+void sna_screen_text(const char* name, const unsigned char* font, char* out);	// out: 24 * 33
 int sna_hardware_of(size_t);
 
 int loadSPG(Computer*,const char*, int);

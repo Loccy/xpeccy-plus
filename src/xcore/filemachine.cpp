@@ -5,6 +5,7 @@
 
 #include <map>
 #include <algorithm>
+#include <QRegularExpression>
 
 // Which machine a file is opened on: what each format needs, what the user
 // wants done about it, and the decision the two make together.
@@ -151,30 +152,75 @@ void fm_save(FILE* file) {
 	}
 }
 
+// a 16K image from the ROM folder, empty if it is not there
+static std::vector<unsigned char> fm_rom_image(const char* name) {
+	std::vector<unsigned char> img(MEM_16K);
+	FILE* file = fopen((conf.path.romDir + SLASH + name).c_str(), "rb");
+	if (!file) return std::vector<unsigned char>();
+	if (fread(img.data(), 1, MEM_16K, file) != MEM_16K) img.clear();
+	fclose(file);
+	return img;
+}
+
+// The 128K editor and its clones are one code; a menu snapshot still tells them
+// apart by its screen, the menu drawn in the ROM font: the Pentagon's has TR-DOS
+// where the 128K's has Tape Tester. The ROM holding the most words of the
+// screen wins; a tie says nothing.
+static int fm_sna_clone(const char* path) {
+	static const char* names[] = {"128-0.rom", "128p-0.rom", "256s-0.rom"};
+	static const int snaps[] = {SNAP_HW_128K | SNAP_IN_ROM, SNAP_HW_PENTAGON | SNAP_IN_ROM, SNAP_HW_SCORPION};
+	std::vector<unsigned char> font = fm_rom_image("48.rom");
+	if (font.empty()) return -1;
+	char text[24 * 33];
+	sna_screen_text(path, font.data() + 0x3d00, text);
+	std::vector<std::string> words;
+	foreach(QString w, QString(text).split(QRegularExpression("\\s+"), X_SkipEmptyParts))
+		if (w.size() > 2) words.push_back(w.toStdString());
+	int best = -1;
+	int top = 0;
+	for (int i = 0; i < 3; i++) {
+		std::vector<unsigned char> rom = fm_rom_image(names[i]);
+		if (rom.empty()) continue;
+		std::string txt(rom.begin(), rom.end());
+		for (char& ch : txt) ch &= 0x7f;		// a string's last letter has bit 7 set
+		int n = 0;
+		for (const std::string& w : words)
+			if (txt.find(w) != std::string::npos) n++;
+		if (n > top) {
+			top = n;
+			best = i;
+		} else if (n == top) {
+			best = -1;
+		}
+	}
+	if (best >= 0) xlog(XLG_FILE, XLL_INFO, "sna: its screen is the menu of %s", names[best]);
+	return (best < 0) ? -1 : snaps[best];
+}
+
 // A 128K .sna in its editor names no model, so the editor is told from the file
-// against the ones in the ROM folder; a file that does not tell runs anywhere a
-// 128K does, as the user picks.
+// against the ones in the ROM folder, then the model where the file can tell it;
+// a file that does not tell runs anywhere a 128K does, as the user picks.
 static int fm_sna_guess(const char* path) {
 	static const char* names[] = {"128-0.rom", "plus2-0.rom", "plus3-0.rom"};
-	static const int snaps[] = {SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY,
-		SNAP_HW_PLUS2 | SNAP_IN_ROM | SNAP_FAMILY, SNAP_HW_PLUS2A};
 	std::vector<unsigned char> img[3];
 	const unsigned char* eds[3];
 	int idx[3];
 	int n = 0;
 	for (int i = 0; i < 3; i++) {
-		FILE* file = fopen((conf.path.romDir + SLASH + names[i]).c_str(), "rb");
-		if (!file) continue;
-		img[i].resize(MEM_16K);
-		if (fread(img[i].data(), 1, MEM_16K, file) == MEM_16K) {
-			eds[n] = img[i].data();
-			idx[n++] = i;
-		}
-		fclose(file);
+		img[i] = fm_rom_image(names[i]);
+		if (img[i].empty()) continue;
+		eds[n] = img[i].data();
+		idx[n++] = i;
 	}
 	int ed = (n > 0) ? sna_editor_of(path, eds, n) : -1;
 	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[idx[ed]]);
-	return (ed < 0) ? SNAP_HW_128K : snaps[idx[ed]];
+	if (ed < 0) return SNAP_HW_128K;
+	switch (idx[ed]) {
+		case 1: return SNAP_HW_PLUS2 | SNAP_IN_ROM | SNAP_FAMILY;
+		case 2: return sna_plus3_drive(path) ? SNAP_HW_PLUS3 : SNAP_HW_PLUS2A;
+	}
+	int clone = fm_sna_clone(path);
+	return (clone < 0) ? (SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY) : clone;
 }
 
 xFileMacPick fm_pick(int ftype, const char* path) {
