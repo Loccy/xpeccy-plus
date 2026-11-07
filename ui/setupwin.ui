@@ -3077,7 +3077,25 @@ Tap or hold: a tap switches it, a longer press holds it</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="2">
+                  <item row="1" column="2" colspan="2">
+                   <layout class="QHBoxLayout" name="hlDbgNumTips">
+                    <property name="leftMargin">
+                     <number>12</number>
+                    </property>
+                    <item>
+                     <widget class="QCheckBox" name="cbDbgNumTips">
+                      <property name="text">
+                       <string>Number tips</string>
+                      </property>
+                      <property name="toolTip">
+                       <string>A number's hex, decimal and binary
+under the mouse: the listing and the dumps</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item row="2" column="2">
                    <widget class="QLabel" name="label_numbers">
                     <property name="text">
                      <string>Number format</string>
@@ -3091,7 +3109,7 @@ HEX/DEC on the listing's bar switches it</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="3">
+                  <item row="2" column="3">
                    <widget class="QComboBox" name="cbDbgNumbers">
                     <property name="toolTip">
                      <string>How the debugger writes addresses and values.
@@ -3099,7 +3117,7 @@ HEX/DEC on the listing's bar switches it</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="2">
+                  <item row="3" column="2">
                    <widget class="QLabel" name="label_stackofs">
                     <property name="text">
                      <string>Stack offset</string>
@@ -3113,7 +3131,7 @@ It goes on until the panel runs out of height</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="3">
+                  <item row="3" column="3">
                    <widget class="QSpinBox" name="sbDbgStackOfs">
                     <property name="toolTip">
                      <string>Offset the stack panel starts at.
@@ -3132,24 +3150,6 @@ It goes on until the panel runs out of height</string>
                      <number>-2</number>
                     </property>
                    </widget>
-                  </item>
-                  <item row="3" column="2" colspan="2">
-                   <layout class="QHBoxLayout" name="hlDbgNumTips">
-                    <property name="leftMargin">
-                     <number>12</number>
-                    </property>
-                    <item>
-                     <widget class="QCheckBox" name="cbDbgNumTips">
-                      <property name="text">
-                       <string>Number tips</string>
-                      </property>
-                      <property name="toolTip">
-                       <string>A number's hex, decimal and binary
-under the mouse: the listing and the dumps</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
                   </item>
                  </layout>
                 </widget>
