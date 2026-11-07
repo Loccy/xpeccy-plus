@@ -1,4 +1,9 @@
 {
+  "config": {
+    "GENERAL": {
+      "machine": "zx48"
+    }
+  },
   "steps": [
     [
       "wait",
@@ -31,6 +36,22 @@
     [
       "run",
       "activate-window Labels"
+    ],
+    [
+      "wait",
+      600
+    ],
+    [
+      "run",
+      "set-value cbLabelSet ROM labels (read-only)"
+    ],
+    [
+      "wait",
+      400
+    ],
+    [
+      "run",
+      "set-value name LD_"
     ],
     [
       "wait",

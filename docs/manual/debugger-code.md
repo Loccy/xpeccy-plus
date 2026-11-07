@@ -40,7 +40,10 @@ named place is shown as the name plus the offset: `LD A,(table + 2)`.
 
 Some rows are not instructions:
 
-- a **label** row, in bold on a tinted background, names the address of the row under it;
+- a **label** row, in bold on a tinted background, names the address of the row under it.
+  In a local label such as `draw.loop`, under the label `draw`, the `draw` part is paler.
+  It is paler in an instruction too, when the instruction is in `draw`'s block - after
+  `draw` and before the next label that is not a local one;
 - a **comment** row, in gray, starts with `;`;
 - an `EQU` row follows an instruction when a label points inside it: `NAME` with
   `EQU $-2` says the label is two bytes before the next instruction. Programs that change
@@ -317,6 +320,23 @@ back to the same place. Only Xpeccy+ reads such lines.
 Labels typed in the listing go into the set in effect, or into a new set called `noname`
 when there is none.
 
+### ROM labels
+
+```{index} ROM labels, label; ROM
+```
+
+Known ROMs come with labels of their own, with no file loaded: `LD_BYTES` at 0556 of the
+48K BASIC, `DOS_OPEN` in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS. The 48K BASIC
+names are also in the 48 BASIC of the 128K, +2, +3 and the clones; a routine a clone
+changed has no name there. A ROM is known by its contents, so a ROM file of yours with the
+same bytes has them too.
+
+They work as other labels do: in the listing, typed as an address, in breakpoints and
+conditions. A label of yours at the same address is shown instead: typing a name on a ROM
+label's row makes one. A ROM label cannot be removed, and **Save labels** does not save
+it. **ROM labels** on the **Debugger** page of **Options** switches them off. Where they
+come from, and their licenses, is in `config/labels/README.md` beside the program.
+
 ```{index} Auto-load labels, label; loading automatically
 ```
 
@@ -337,7 +357,9 @@ name from the same folder. These labels are in effect until the next file is ope
 opens the **Labels List**.
 
 - **Group** - the set of labels in effect. The buttons beside it: {icon}`edit` renames the
-  set, {icon}`add` adds a new empty set and {icon}`cancel` deletes the set.
+  set, {icon}`add` adds a new empty set and {icon}`cancel` deletes the set. The last line,
+  **ROM labels (read-only)**, lists the [ROM labels](#rom-labels): picking it leaves the
+  set in effect as it was.
 - The field under it filters the list: only labels that contain what you type are shown.
   The case of the letters matters.
 - The list shows each label's address and name. Double-click a label, or select it and

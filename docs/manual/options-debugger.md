@@ -52,4 +52,5 @@ Choosing another interface style on the **Appearance** page puts these colors ba
 style's own.
 
 **Misc** - **Auto-load labels**: opening an image also loads a `.labels` file of the same
-name, if there is one. See [Disasm panel](debugger-code.md).
+name, if there is one. See [Disasm panel](debugger-code.md). **ROM labels**: known ROMs
+name their routines in the listing. See [ROM labels](debugger-code.md#rom-labels).
