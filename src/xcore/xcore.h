@@ -265,6 +265,11 @@ xAdr find_label(QString);
 xAdr find_label_cell(QString);	// the label's cell, without working out where the CPU sees it now
 xAdr label_cpu(xAdr);		// ...and that, for a cell find_label_cell() gave
 unsigned labels_gen();		// changes whenever the labels in effect do
+void labels_touch();		// ...and makes it change
+// the labels of known ROMs, below the user's: found again when the ROM changes
+void labels_rom_scan(Computer*);	// under emu_lock
+QStringList labels_rom_names();
+xAdr labels_rom_cell(const QString&);
 void clear_labels();
 void clear_all_labels();
 
@@ -1136,6 +1141,7 @@ struct xConfig {
 		unsigned evonames:1;	// ZX Evolution panel: fields by their names in the docs, not in words
 		unsigned nxdetach:1;	// ZX Next panel: shown in a window of its own
 		unsigned imglabels:1;	// an image's .labels comes with it
+		unsigned romlabels:1;	// known ROMs name their routines
 		QFont font;
 		int numfmt;		// how addresses and the listing's values are written, CPU_NUM_*
 		int hexfmt;		// the hex form the decimal switch goes back to

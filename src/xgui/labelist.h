@@ -11,6 +11,7 @@ class xLabelistModel : public QAbstractListModel {
 	public:
 		xLabelistModel(QObject* = NULL);
 		QStringList list;
+		bool romMode;		// the ROM labels, not a set of the user's
 	public slots:
 		void reset(QString = QString());
 		void setCpuMode(bool);
@@ -41,4 +42,5 @@ class xLabeList : public QDialog {
 		Ui::LabList ui;
 		xLabelistModel* mod;
 		void fillSetList();
+		int romIdx;		// the ROM labels' line in the set list, -1: none
 };

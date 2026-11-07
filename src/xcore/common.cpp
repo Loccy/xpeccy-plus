@@ -87,6 +87,7 @@ void x_state_replaced() {
 	// a breakpoint hit not acted on yet (a stop the redraw ran into) was the
 	// old machine's
 	if (conf.zx) comp_brk_clear(conf.zx);
+	labels_rom_scan(conf.zx);		// a snapshot may bring a ROM of its own
 }
 
 // Another tape or disk, the machine as it was: its sound goes on and the pokes stay

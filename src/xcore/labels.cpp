@@ -1,6 +1,7 @@
 #include "xcore.h"
 #include "arcpath.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -35,6 +36,103 @@ static unsigned labGen = 1;
 
 unsigned labels_gen() {
 	return labGen;
+}
+
+void labels_touch() {
+	labGen++;
+}
+
+// ROM labels: res/labels/*.labels name the routines of known ROMs. A list is
+// for the 16K banks whose MD5 its "@rom" lines give; a patched bank leaves out
+// the names whose code changed. They are found by the bytes, so a ROM file of
+// the user's with the same bytes has them too.
+
+struct romLabList {
+	QList<QPair<int, QString> > labs;		// offset in the bank, name
+	QHash<QByteArray, QSet<QString> > banks;	// MD5 (hex) of a bank -> names it has not
+};
+
+static QList<romLabList> romLists;
+static QHash<int, QString> romByAbs;		// ROM cell -> name, for the machine in use
+static QMap<QString, QList<int> > romByName;	// name -> its cells, lowest first
+
+static void rom_lists_read() {
+	static bool done = false;
+	if (done) return;
+	done = true;
+	QDir dir(":/res/labels");
+	foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name)) {
+		QFile file(dir.filePath(fn));
+		if (!file.open(QFile::ReadOnly)) continue;
+		romLabList lst;
+		while (!file.atEnd()) {
+			QString line = QString::fromLatin1(file.readLine()).trimmed();
+			if (line.isEmpty() || line.startsWith(';')) continue;
+			QStringList arr = line.split(' ', X_SkipEmptyParts);
+			if (arr.first() == "@rom") {
+				if (arr.size() < 2) continue;
+				QSet<QString> drop;
+				foreach(QString wrd, arr.mid(2))
+					if (wrd.startsWith('-')) drop.insert(wrd.mid(1));
+				lst.banks[arr.at(1).toLatin1().toLower()] = drop;
+			} else if (arr.size() == 2) {
+				bool ok;
+				int ofs = arr.at(0).toInt(&ok, 16);
+				if (ok && (ofs >= 0) && (ofs < MEM_16K)) lst.labs.append(qMakePair(ofs, arr.at(1)));
+			}
+		}
+		romLists.append(lst);
+	}
+}
+
+// The machine's ROM, as loaded: called under emu_lock whenever it may have changed
+void labels_rom_scan(Computer* comp) {
+	romByAbs.clear();
+	romByName.clear();
+	labGen++;
+	if (!comp) return;
+	rom_lists_read();
+	int size = comp->mem->romMask + 1;
+	for (int bank = 0; bank + MEM_16K <= size; bank += MEM_16K) {
+		QByteArray md5 = QCryptographicHash::hash(QByteArray::fromRawData((const char*)comp->mem->romData + bank, MEM_16K),
+			QCryptographicHash::Md5).toHex();
+		foreach(const romLabList& lst, romLists) {
+			QHash<QByteArray, QSet<QString> >::const_iterator it = lst.banks.constFind(md5);
+			if (it == lst.banks.constEnd()) continue;
+			for (int i = 0; i < lst.labs.size(); i++) {
+				const QString& nm = lst.labs.at(i).second;
+				if (it->contains(nm)) continue;
+				int abs = bank + lst.labs.at(i).first;
+				romByAbs[abs] = nm;
+				romByName[nm].append(abs);
+			}
+		}
+	}
+	if (!romByAbs.isEmpty()) xlog(XLG_FILE, XLL_INFO, "ROM labels: %i", romByAbs.size());
+}
+
+QStringList labels_rom_names() {
+	return conf.dbg.romlabels ? romByName.keys() : QStringList();
+}
+
+// the cell of a ROM label: the one paged in now if the name is in more banks
+xAdr labels_rom_cell(const QString& nm) {
+	xAdr xadr = {-1, -1, -1, -1};
+	if (!conf.dbg.romlabels || !romByName.contains(nm)) return xadr;
+	const QList<int>& cells = romByName[nm];
+	xadr.type = MEM_ROM;
+	xadr.abs = cells.first();
+	if (conf.zx) {
+		foreach(int abs, cells) {
+			if (comp_find_xadr(conf.zx, MEM_ROM, abs, MEM_VIEW_READ) >= 0) {
+				xadr.abs = abs;
+				break;
+			}
+		}
+	}
+	xadr.bank = xadr.abs >> 14;
+	xadr.adr = conf.zx ? comp_find_xadr(conf.zx, MEM_ROM, xadr.abs, MEM_VIEW_READ) : -1;
+	return xadr;
 }
 
 // create conf.labmap from current labset
@@ -155,6 +253,9 @@ QString find_label(xAdr xadr) {
 			if ((now.type == xadr.type) && (now.abs == xadr.abs)) lab = conf.labmap[MEM_IO].value(xadr.adr);
 		}
 	}
+	// the user's labels first, then the ROM's
+	if (lab.isEmpty() && (xadr.type == MEM_ROM) && conf.dbg.romlabels)
+		lab = romByAbs.value(xadr.abs);
 	return lab;
 }
 
@@ -163,13 +264,14 @@ xAdr find_label_cell(QString nm) {
 	xAdr xadr = {-1, -1, -1, -1};
 	xLabelSet* set = conf.curlabset;
 	if (set) xadr = set->list.value(nm, xadr);
+	if (xadr.type < 0) xadr = labels_rom_cell(nm);
 	return xadr;
 }
 
-// that cell's CPU address now: on the Next it follows the paging, -1 when the
-// cell is not paged in
+// that cell's CPU address now: on the Next RAM, and ROM everywhere, follow the
+// paging, -1 when the cell is not paged in
 xAdr label_cpu(xAdr xadr) {
-	if (conf.zx && (conf.zx->hw->id == HW_ZXNEXT) && (xadr.type == MEM_RAM))
+	if (conf.zx && (((conf.zx->hw->id == HW_ZXNEXT) && (xadr.type == MEM_RAM)) || (xadr.type == MEM_ROM)))
 		xadr.adr = comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
 	return xadr;
 }

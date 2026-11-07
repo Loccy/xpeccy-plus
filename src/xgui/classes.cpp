@@ -1573,12 +1573,18 @@ void label_complete(QLineEdit* edt) {
 	QObject::connect(edt, &QLineEdit::textEdited, cmp, [cmp, mod, word]() {
 		int s, e;
 		QString pre = word(&s, &e);
-		if ((pre.size() < 2) || !conf.curlabset) {
+		if (pre.size() < 2) {
 			cmp->popup()->hide();
 			return;
 		}
-		if (mod->rowCount() != conf.curlabset->list.size())	// a label added, or another set
-			mod->setStringList(conf.curlabset->list.keys());
+		// the user's set and the ROM's names, again when a label was added or another set picked
+		if (cmp->property("labGen").toUInt() != labels_gen()) {
+			QStringList names = conf.curlabset ? conf.curlabset->list.keys() : QStringList();
+			names += labels_rom_names();
+			names.removeDuplicates();
+			mod->setStringList(names);
+			cmp->setProperty("labGen", labels_gen());
+		}
 		cmp->setCompletionPrefix(pre);
 		if (cmp->completionCount() < 1) {
 			cmp->popup()->hide();
