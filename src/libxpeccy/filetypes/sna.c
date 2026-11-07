@@ -91,6 +91,7 @@ int loadSNA_f(Computer* comp, FILE* file, size_t fileSize) {
 		comp->tsconf.p21af &= ~0x08;		// rom @ 0000
 		comp->tsconf.Page0 &= 0xfc;		// set page0 if 21af.b2=1
 		comp->tsconf.Page0 |= ((comp->flgROM) ? 1 : 0) | (comp->flgDOS ? 0 : 2);
+		snap_plus3_basic48(comp, SNAP_HW_128K);
 		comp->hw->out(comp, 0x7ffd, tmp);
 
 		for (tmp2 = 0; tmp2 < 8; tmp2++) {
@@ -123,8 +124,12 @@ int snaGetHardware(const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return SNAP_HW_UNKNOWN;
 	size_t size = fgetSize(file);
+	int res = sna_hardware_of(size);
+	unsigned char buf[3];			// 49179: PC, 49181: 7FFD
+	if ((res == SNAP_HW_128K) && !fseek(file, 49179, SEEK_SET) && (fread(buf, 1, 3, file) == 3))
+		res |= snap_in_rom(buf[0] | (buf[1] << 8), buf[2]);
 	fclose(file);
-	return sna_hardware_of(size);
+	return res;
 }
 
 int saveSNA(Computer* comp, const char* name, int drv) {

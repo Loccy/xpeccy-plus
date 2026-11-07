@@ -317,8 +317,15 @@ enum {
 	SNAP_HW_CORE = 0x100
 };
 
-int snapHwRuns(int snap, int hwid);
+// or'ed into what a file's probe says: the snapshot stopped inside its ROM - the
+// 128 editor paged in, or the PC there - so it goes on only on that very ROM
+#define SNAP_IN_ROM	0x10000
+#define SNAP_HW_OF(snap)	((snap) & ~SNAP_IN_ROM)
+
+int snapHwRuns(int snap, int hwid, int model);	// model: the machine's snapModel
 int snapHwIs(int snap, int hwid);
+int snap_in_rom(int pc, int p7ffd);		// SNAP_IN_ROM or 0, for a 128K-paging snapshot
+void snap_plus3_basic48(Computer* comp, int snap);
 
 int loadSZX(Computer*, const char*, int);
 int loadSZX_buf(Computer*, const unsigned char*, size_t);

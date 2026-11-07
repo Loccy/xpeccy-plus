@@ -169,8 +169,11 @@ int z80GetHardware(const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return SNAP_HW_UNKNOWN;
 	unsigned char buf[38];
-	int res = z80_hardware_of(buf, (int)fread(buf, 1, sizeof(buf), file));
+	int len = (int)fread(buf, 1, sizeof(buf), file);
 	fclose(file);
+	int res = z80_hardware_of(buf, len);
+	if ((res != SNAP_HW_48K) && (res != SNAP_HW_UNKNOWN))	// 32: PC, 35: 7FFD
+		res |= snap_in_rom(buf[32] | (buf[33] << 8), buf[35]);
 	return res;
 }
 
@@ -278,8 +281,10 @@ xlog(XLG_FILE, XLL_DEBUG, ".z80 version 2");
 		}
 		// 1ffd is a different port on each machine that has it, and goes
 		// first: a +3 takes it only while 7ffd is unlocked
-		if ((p1ffd >= 0) && z80_hw(hw)->p1ffd && snapHwRuns(hw, comp->hw->id))
+		if ((p1ffd >= 0) && z80_hw(hw)->p1ffd && snapHwRuns(hw, comp->hw->id, comp->snapModel))
 			comp->hw->out(comp, 0x1ffd, p1ffd);
+		else
+			snap_plus3_basic48(comp, hw);
 		// a 48K has no paging, and byte 35 means nothing there: taking it
 		// as 7ffd would put the 128 rom in on a machine that has one
 		comp->hw->out(comp, 0x7ffd, (hw == SNAP_HW_48K) ? 0x10 : pg);
@@ -316,6 +321,7 @@ xlog(XLG_FILE, XLL_DEBUG, ".z80 version 2");
 		}
 	} else {			// version 1
 xlog(XLG_FILE, XLL_DEBUG, ".z80 version 1");
+		snap_plus3_basic48(comp, SNAP_HW_48K);
 		comp->hw->out(comp, 0x7ffd, 0x10);	// a 48K snapshot: the 48 rom in
 		if (hd.flag12 & 0x20) {
 			xlog(XLG_FILE, XLL_DEBUG, "data is compressed");
