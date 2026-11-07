@@ -102,6 +102,18 @@ int xDisasmModel::rowCount(const QModelIndex&) const {
 	return row_count;
 }
 
+// half way between two colours: dimmed columns, the shaded part of a label
+static QColor color_mix(const QColor& one, const QColor& two) {
+	return QColor((one.red() + two.red()) / 2, (one.green() + two.green()) / 2, (one.blue() + two.blue()) / 2);
+}
+
+// a row's background as painted: the selection, the model's colour or the view's
+static QColor row_ground(const QStyleOptionViewItem& opt, const QModelIndex& idx) {
+	if (opt.state & QStyle::State_Selected) return opt.palette.color(QPalette::Highlight);
+	QVariant bg = idx.data(X_BackgroundRole);
+	return bg.isValid() ? qvariant_cast<QBrush>(bg).color() : opt.palette.color(QPalette::Base);
+}
+
 // secondary text: halfway between the row colour and the row background,
 // so it follows the current style instead of a hardcoded gray, and stays
 // readable on the pc/selection rows
@@ -114,7 +126,7 @@ QColor xDisasmModel::dim_color(const QColor& fgr, const QColor& rbg) const {
 	QColor txt = fgr;
 	if (!txt.isValid())
 		txt = wid ? wid->palette().color(QPalette::Text) : QColor(Qt::black);
-	return QColor((txt.red() + bgr.red()) / 2, (txt.green() + bgr.green()) / 2, (txt.blue() + bgr.blue()) / 2);
+	return color_mix(txt, bgr);
 }
 
 QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
@@ -225,6 +237,10 @@ QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
 			break;
 		case X_LabelRole:
 			if (col == 2) res = dasm[row].label;
+			break;
+		case X_PrefixRole:
+			if ((col == 0) && dasm[row].islab && !dasm[row].iscom) res = dasm[row].lpre;
+			if (col == 2) res = dasm[row].opre;
 			break;
 		case Qt::UserRole:
 			switch (col) {
@@ -339,9 +355,10 @@ void placeLabel(Computer* comp, dasmData& drow) {
 	QString num;
 	xMnem mn;
 	xAdr xadr;
+	bool rom = false;
 	while (work && (shift < 8)) {
 		xadr = dasm_xadr(comp, drow.oadr - shift);
-		lab = find_label(xadr);
+		lab = find_label(xadr, &rom);
 		if (lab.isEmpty()) {
 			if (drow.oflag & OF_MEMADR) {
 				shift++;
@@ -357,6 +374,7 @@ void placeLabel(Computer* comp, dasmData& drow) {
 				replace_number(drow.command, dasm_word(drow.oadr, drow.fmt),
 					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
+				if (rom) drow.lrom = (drow.oadr - shift) & 0xffff;
 			}
 			work = 0;
 		}
@@ -487,6 +505,8 @@ int dasmSome(Computer* comp, int adr, dasmData& drow, int fmt) {
 	int clen = 0;
 	drow.fmt = (fmt < 0) ? conf.dbg.numfmt : fmt;
 	drow.label.clear();
+	drow.opre = 0;
+	drow.lrom = -1;
 	drow.bytes.clear();
 	drow.adr = adr;
 	drow.flag = (mode == XVIEW_CPU) ? getBrkView(comp, adr, dasm_access(comp, adr)) : getBrk(comp, adr);
@@ -572,9 +592,11 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 	if (!lab.isEmpty()) {		// place label line if it exists
 		drow.islab = 1;
 		drow.aname = lab;
+		drow.lpre = label_local_prefix(lab);
 		list.append(drow);
 	}
 	drow.islab = 0;			// next line is addr
+	drow.lpre = 0;
 	if (conf.dbg.segment || (mode != XVIEW_CPU)) {
 		switch(xadr.type) {
 			case MEM_RAM: drow.aname = "RAM:"; break;
@@ -590,6 +612,11 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 	}
 	// 2:command / 3:info
 	clen = dasmSome(comp, adr, drow);
+	// a local label of the block the row is in: its global part is shaded
+	if (!drow.label.isEmpty()) {
+		int pre = label_local_prefix(drow.label);
+		if (pre && (label_block(xadr) == drow.label.left(pre))) drow.opre = pre;
+	}
 	// 1:bytes
 	if (drow.bytes.isEmpty()) {
 		for (int i = 0; i < clen; i++) drow.bytes.append(gethexbyte(dasmrd(adr + i, comp)));
@@ -609,6 +636,7 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 			drow.isequ = 1;
 			drow.adr = oadr;
 			drow.aname = lab;
+			drow.lpre = label_local_prefix(lab);
 			drow.command = QString("EQU $-%0").arg(clen);
 			list.append(drow);
 		}
@@ -690,16 +718,21 @@ int asmAddr(Computer* comp, QVariant val, xAdr xadr) {
 	QString lab;
 	QString str = val.toString();
 	int adr;
+	// a ROM label's name makes a label of the user's: @name goes to the ROM
+	bool romName = !str.startsWith('@') && labels_rom_only(str);
 	if (str.startsWith('@')) {			// @label will not create new label, just jump if it exists
 		adr = str_to_adr(comp, str.mid(1), true);
+	} else if (romName) {
+		adr = -1;
 	} else {
 		adr = str_to_adr(comp, str, true);
 	}
 	if (adr < 0) {
-		if (find_label(str).type >= 0) return -1;
+		if (!romName && (find_label(str).type >= 0)) return -1;
 		if ((str.at(0).isLetter() || (str.at(0) == '_')) && !str.contains('$') && !str.contains(' ')) {
-			lab = find_label(xadr);
-			if (!lab.isEmpty()) {						// remove current label
+			bool rom;
+			lab = find_label(xadr, &rom);
+			if (!lab.isEmpty() && !rom) {					// remove current label, if the user's
 				del_label(lab);
 			}
 			add_label(xadr, str);						// add new label
@@ -792,7 +825,7 @@ static QString asm_operand(QString op) {
 	}
 	xExpr exp = xexpr_compile(in.toLocal8Bit().data());
 	bool err = false;
-	int val = (int)xexpr_eval(exp, conf.zx, &err);
+	int val = (int)xexpr_eval(exp, conf.zx, &err, 0, 0, XE_CPU_HOME);
 	if (err || !xexpr_ok(exp)) return QString();
 	QString num = idx.isEmpty() ? QString("0x%0").arg(val & 0xffff, 0, 16)
 		: QString("%0%1").arg((val < 0) ? "-" : "+").arg(QString("0x%0").arg(qAbs(val) & 0xff, 0, 16));
@@ -867,9 +900,10 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 				if (dasm[row].islab) {			// comment or label
 					if (dasm[row].iscom) {		// comment
 						del_comment(xadr);
-					} else {			// label
-						str = find_label(xadr);
-						if (!str.isEmpty()) {
+					} else {			// label: the user's, a ROM label stays
+						bool rom;
+						str = find_label(xadr, &rom);
+						if (!str.isEmpty() && !rom) {
 							del_label(str);
 						}
 					}
@@ -938,8 +972,8 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 				}
 			} else if (str.startsWith("dw ", Qt::CaseInsensitive)) {	// word/addr
 				str = str.mid(3);
-				xadr = find_label(str);
-				if (xadr.type >= 0) {				// check label
+				xadr = label_home(find_label(str));
+				if ((xadr.type >= 0) && (xadr.adr >= 0)) {	// check label
 					idx = xadr.adr;
 					*ptr &= 0x0f;
 					*ptr |= DBG_VIEW_ADDR;
@@ -1013,6 +1047,39 @@ QWidget* xDasmSyntax::createEditor(QWidget* par, const QStyleOptionViewItem& opt
 xDasmSyntax::xDasmSyntax(QObject* p):QStyledItemDelegate(p) {
 }
 
+void xDasmLabel::paint(QPainter* pnt, const QStyleOptionViewItem& opt, const QModelIndex& idx) const {
+	pre = idx.data(X_PrefixRole).toInt();
+	bgr = row_ground(opt, idx);
+	xItemDelegate::paint(pnt, opt, idx);
+	pre = 0;
+}
+
+// as QItemDelegate lays it out, in two colours
+void xDasmLabel::drawDisplay(QPainter* pnt, const QStyleOptionViewItem& opt, const QRect& rect, const QString& text) const {
+	if ((pre < 1) || (pre >= text.size())) {
+		xItemDelegate::drawDisplay(pnt, opt, rect, text);
+		return;
+	}
+	xItemDelegate::drawDisplay(pnt, opt, rect, QString());		// the selection, if any
+	bool sel = opt.state & QStyle::State_Selected;
+	QColor txt = opt.palette.color(sel ? QPalette::HighlightedText : QPalette::Text);
+	const QWidget* wid = opt.widget;
+	QStyle* stl = wid ? wid->style() : QApplication::style();
+	int mrg = stl->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, wid) + 1;
+	QRect trc = rect.adjusted(mrg, 0, -mrg, 0);
+	int flg = Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine;
+	QFontMetrics fm(opt.font);
+	QString all = fm.elidedText(text, opt.textElideMode, trc.width());
+	QString head = all.left(pre);
+	pnt->save();
+	pnt->setFont(opt.font);
+	pnt->setPen(color_mix(txt, bgr));
+	pnt->drawText(trc, flg, head);
+	pnt->setPen(txt);
+	pnt->drawText(trc.adjusted(text_width(fm, head), 0, 0, 0), flg, all.mid(head.size()));
+	pnt->restore();
+}
+
 void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const QModelIndex& idx) const {
 	QStyleOptionViewItem opt = option;
 	initStyleOption(&opt, idx);
@@ -1033,6 +1100,9 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 	// but a space, so picking it out of the text by hand would miss half
 	QString lab = idx.data(X_LabelRole).toString();
 	int lpos = lab.isEmpty() ? -1 : text.indexOf(lab);
+	int lpre = idx.data(X_PrefixRole).toInt();
+	if ((lpre < 1) || (lpre >= lab.size())) lpre = 0;
+	QColor shade = color_mix(base, row_ground(opt, idx));
 	QFont bfnt = opt.font;
 	bfnt.setBold(true);
 	QFontMetrics fm(opt.font);
@@ -1052,7 +1122,11 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 		bool bold = false;
 		QColor clr;
 		if (pos == lpos) {			// a label stands out by weight, not by colour
-			end = pos + lab.size();
+			end = pos + (lpre ? lpre : lab.size());
+			bold = true;
+			if (lpre) clr = shade;		// the global part of a local label in its own block
+		} else if (lpre && (pos == lpos + lpre)) {
+			end = lpos + lab.size();
 			bold = true;
 		} else {
 			bool word = is_word_char(text.at(pos));
@@ -1123,7 +1197,7 @@ bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyl
 			bool ok = false;
 			int val = word ? dbg_num_parse(tok, &ok) : 0;
 			if (pos == lpos) {
-				xAdr xa = find_label(lab);
+				xAdr xa = label_home(find_label(lab));
 				if (xa.adr >= 0) tip = dbg_num_tip(xa.adr, true, lab);
 			} else if (ok) {
 				tip = dbg_num_tip(val, val == idx.data(Qt::UserRole).toInt());

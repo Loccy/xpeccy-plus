@@ -1669,19 +1669,40 @@ void label_complete(QLineEdit* edt) {
 	QObject::connect(edt, &QLineEdit::textEdited, cmp, [cmp, mod, word]() {
 		int s, e;
 		QString pre = word(&s, &e);
-		if ((pre.size() < 2) || !conf.curlabset) {
+		if (pre.size() < 2) {
 			cmp->popup()->hide();
 			return;
 		}
-		if (mod->rowCount() != conf.curlabset->list.size())	// a label added, or another set
-			mod->setStringList(conf.curlabset->list.keys());
+		// the user's set and the ROM's names, again when a label was added or another set picked
+		if (cmp->property("labGen").toUInt() != labels_gen()) {
+			QStringList names = conf.curlabset ? conf.curlabset->list.keys() : QStringList();
+			names += labels_rom_names();
+			names.removeDuplicates();
+			mod->setStringList(names);
+			cmp->setProperty("labGen", labels_gen());
+		}
 		cmp->setCompletionPrefix(pre);
 		if (cmp->completionCount() < 1) {
 			cmp->popup()->hide();
 			return;
 		}
 		cmp->complete();
-		cmp->popup()->setCurrentIndex(cmp->completionModel()->index(0, 0));	// Enter takes the first
+		// Enter takes the name typed in full, else the first that starts with it, else
+		// the first: START is START, not ARC_START before it
+		QAbstractItemModel* cm = cmp->completionModel();
+		int pick = -1;
+		int same = -1;
+		for (int i = 0; i < cm->rowCount(); i++) {
+			QString nm = cm->index(i, 0).data().toString();
+			if (nm == pre) {		// labels are told apart by case: start is not START
+				same = i;
+				break;
+			}
+			if ((same < 0) && (nm.compare(pre, Qt::CaseInsensitive) == 0)) same = i;
+			if ((pick < 0) && nm.startsWith(pre, Qt::CaseInsensitive)) pick = i;
+		}
+		if (same >= 0) pick = same;
+		cmp->popup()->setCurrentIndex(cm->index(qMax(pick, 0), 0));
 	});
 	QObject::connect(cmp, QOverload<const QString&>::of(&QCompleter::activated), edt, [edt, word](const QString& lab) {
 		int s, e;

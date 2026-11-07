@@ -956,6 +956,7 @@ void xm_set_roms(const xRomset& rs, bool poweron) {
 	conf.roms = rs;
 	Computer* comp = conf.zx;
 	mac_load_rom(comp, rs.roms, rs.gsFile, rs.fntFile, withfnt);
+	labels_rom_scan(comp);
 	emu_unlock();
 	if (!romMissing.isEmpty())
 		QTimer::singleShot(0, QCoreApplication::instance(), mac_rom_warn);

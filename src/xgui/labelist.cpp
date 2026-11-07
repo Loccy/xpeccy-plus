@@ -10,6 +10,7 @@
 
 xLabelistModel::xLabelistModel(QObject* p):QAbstractListModel(p) {
 	cpuMode = false;
+	romMode = false;
 }
 
 int xLabelistModel::rowCount(const QModelIndex&) const {
@@ -30,7 +31,9 @@ void xLabelistModel::reset(QString f) {
 	// list = conf.labels.keys().filter(f, Qt::CaseInsensitive);
 	fstr = f;
 	xLabelSet* set = conf.curlabset;
-	if (set) {
+	if (romMode) {
+		list = filter(labels_rom_names(), f);
+	} else if (set) {
 		list = filter(set->list.keys(), f);
 //		list.sort();		// useless
 	} else {
@@ -62,9 +65,9 @@ QVariant xLabelistModel::data(const QModelIndex& idx, int role) const {
 	switch (role) {
 		case Qt::DisplayRole:
 			str = list.at(row);
-			xadr = find_label(str);
+			xadr = romMode ? labels_rom_cell(str) : find_label(str);
 			if (cpuMode) {
-				zadr = comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
+				zadr = (xadr.type == MEM_ROM) ? xadr.adr : comp_find_xadr(conf.zx, xadr.type, xadr.abs, MEM_VIEW_READ);
 				if (zadr < 0) {
 					if ((conf.zx->hw->id == HW_ZXNEXT) && (xadr.type == MEM_RAM) && (xadr.abs >= 0x40000))
 						adrstr = QString("%0:%1").arg(gethexbyte((xadr.abs - 0x40000) >> 13), dbg_adr(xadr.abs & 0x1fff));
@@ -104,6 +107,7 @@ xLabeList::xLabeList(QWidget* p):QDialog(p) {
 	ui.setupUi(this);
 	mod = new xLabelistModel();
 	ui.list->setModel(mod);
+	romIdx = -1;
 
 	connect(ui.name, SIGNAL(textChanged(QString)), mod, SLOT(reset(QString)));
 	// a double click or Enter, as the platform has it; a double click also emits
@@ -120,15 +124,34 @@ xLabeList::xLabeList(QWidget* p):QDialog(p) {
 void xLabeList::listDoubleClicked(QModelIndex idx) {
 	if (!idx.isValid()) return;
 	QString str = mod->list.at(idx.row());
+	if (mod->romMode) {		// a label of the user's of that name is not the one picked
+		xAdr xadr = label_home(labels_rom_cell(str));	// paged out: where its ROM runs
+		if (xadr.adr >= 0) emit adrSelected(xadr.adr);
+		return;
+	}
 	emit labSelected(str);
 //	close();
 }
 
+// the ROM labels are only looked at: the user's set stays in effect
 void xLabeList::changeLabelSet() {
+	bool rom = (romIdx >= 0) && (ui.cbLabelSet->currentIndex() == romIdx);
+	setRomMode(rom);
+	if (rom) {
+		mod->reset(ui.name->text());
+		return;
+	}
 	QString str = getRFSData(ui.cbLabelSet);
 	setLabelSet(str);
 	mod->reset(ui.name->text());
 	emit labSetChanged();
+}
+
+// the ROM labels are only looked at: no editing the set
+void xLabeList::setRomMode(bool rom) {
+	mod->romMode = rom;
+	ui.tbEditGrp->setEnabled(!rom);
+	ui.tbDelGrp->setEnabled(!rom);
 }
 
 void xLabeList::newGroup() {
@@ -166,6 +189,12 @@ void xLabeList::fillSetList() {
 	foreach(xLabelSet* set, conf.labsets) {
 		ui.cbLabelSet->addItem(set->name, set->name);
 	}
+	romIdx = -1;
+	if (!labels_rom_names().isEmpty()) {
+		romIdx = ui.cbLabelSet->count();
+		ui.cbLabelSet->addItem("ROM labels (read-only)", QString());
+	}
+	setRomMode(false);
 	if (conf.curlabset) {
 		setRFIndex(ui.cbLabelSet, conf.curlabset->name, 0);
 	} else {

@@ -498,6 +498,7 @@ void saveConfig() {
 	fprintf(cfile, "regs.layout = %i\n", conf.dbg.reglayout);
 	fprintf(cfile, "regs.split = %s\n", YESNO(conf.dbg.regsplit));
 	fprintf(cfile, "labels.image = %s\n", YESNO(conf.dbg.imglabels));
+	fprintf(cfile, "labels.rom = %s\n", YESNO(conf.dbg.romlabels));
 	fprintf(cfile, "dim.address = %s\n", YESNO(conf.dbg.dimadr));
 	fprintf(cfile, "dim.opcodes = %s\n", YESNO(conf.dbg.dimops));
 	fprintf(cfile, "numbers = %s\n", dbg_numfmt_name(conf.dbg.numfmt));
@@ -648,6 +649,12 @@ static QString sysConfigDir() {
 #endif
 }
 
+// the installed configuration, whatever --confdir says: next to the binary on Windows
+QString xconf_install_dir() {
+	QString dir = sysConfigDir();
+	return dir.isEmpty() ? QCoreApplication::applicationDirPath() + "/config" : dir;
+}
+
 // add to the config directory whatever the installed configuration has and it
 // lacks, so files an update brings along show up. Files already there are left
 // alone, edits included.
@@ -661,6 +668,7 @@ static void seedConfigDir(const QString& src) {
 	while (it.hasNext()) {
 		QString path = it.next();
 		QString rel = sdir.relativeFilePath(path);
+		if ((rel == "labels") || rel.startsWith("labels/")) continue;	// read where installed
 		if (it.fileInfo().isDir()) {
 			QDir().mkpath(dst + "/" + rel);
 		} else if (!QFile::exists(dst + "/" + rel)) {
@@ -980,6 +988,7 @@ void loadConfig() {
 	conf.dbg.reglayout = DBG_REGS_AUTO;
 	conf.dbg.regsplit = 1;
 	conf.dbg.imglabels = 1;
+	conf.dbg.romlabels = 1;
 	conf.dbg.dimadr = 0;
 	conf.dbg.dimops = 1;
 	conf.dbg.synhl = 1;
@@ -1157,6 +1166,7 @@ void loadConfig() {
 						conf.dbg.reglayout = arg.i;
 					if (pnam == "regs.split") conf.dbg.regsplit = arg.b;
 					if (pnam == "labels.image") conf.dbg.imglabels = arg.b;
+					if (pnam == "labels.rom") conf.dbg.romlabels = arg.b;
 					if (pnam == "dim.address") conf.dbg.dimadr = arg.b;
 					if (pnam == "dim.opcodes") conf.dbg.dimops = arg.b;
 					if (pnam == "numbers") {

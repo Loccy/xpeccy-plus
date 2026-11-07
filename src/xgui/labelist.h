@@ -11,6 +11,7 @@ class xLabelistModel : public QAbstractListModel {
 	public:
 		xLabelistModel(QObject* = NULL);
 		QStringList list;
+		bool romMode;		// the ROM labels, not a set of the user's
 	public slots:
 		void reset(QString = QString());
 		void setCpuMode(bool);
@@ -30,6 +31,7 @@ class xLabeList : public QDialog {
 		void show();
 	signals:
 		void labSelected(QString);
+		void adrSelected(int);		// a CPU address: a ROM label's, not looked up by name
 		void labSetChanged();
 	private slots:
 		void listDoubleClicked(QModelIndex);
@@ -41,4 +43,6 @@ class xLabeList : public QDialog {
 		Ui::LabList ui;
 		xLabelistModel* mod;
 		void fillSetList();
+		void setRomMode(bool);
+		int romIdx;		// the ROM labels' line in the set list, -1: none
 };

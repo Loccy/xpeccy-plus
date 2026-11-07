@@ -28,6 +28,10 @@ before that point is upstream's history and is not repeated here.
 - **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
   programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`. An
   address can be a label, looked up when the cheat is ticked, so it follows a rebuilt program.
+- **ROM labels in the Debugger**: the 48K BASIC (names from SkoolKit by Richard Dymond, after
+  Logan and O'Hara's book), the +3DOS calls and the TR-DOS entry points are named with no
+  file loaded, on the clones' ROMs too. Your own labels win; Options > Debugger turns them off.
+- **A local label's global part is paler in the Debugger**: `draw` of `draw.loop`.
 
 ### Changed
 

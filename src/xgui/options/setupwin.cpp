@@ -1277,6 +1277,7 @@ void SetupWin::fillPages() {
 	ui.cbDbgFrame->setChecked(conf.dbg.showfrm);
 	ui.cbDbgRay->setChecked(conf.dbg.showray);
 	ui.cbImgLabels->setChecked(conf.dbg.imglabels);
+	ui.cbRomLabels->setChecked(conf.dbg.romlabels);
 	portwid->setPorts(getWatchPorts(conf.zx));
 	dbgfnt = conf.dbg.font;
 	ui.leDbgFont->setText(QString("%0, %1 pt").arg(dbgfnt.family()).arg(dbgfnt.pointSize()));
@@ -1688,6 +1689,10 @@ void SetupWin::applyGlobal() {
 	conf.dbg.showray = ui.cbDbgRay->isChecked() ? 1 : 0;
 	conf.dbg.imglabels = ui.cbImgLabels->isChecked() ? 1 : 0;
 	if (!conf.dbg.imglabels) labels_image(QString());	// the set from before is back now
+	if (conf.dbg.romlabels != (ui.cbRomLabels->isChecked() ? 1 : 0)) {
+		conf.dbg.romlabels = ui.cbRomLabels->isChecked() ? 1 : 0;
+		labels_touch();
+	}
 	QString name = getRFSData(ui.cbStyleSheet);
 	std::string style = name.isEmpty() ? std::string() : name.toStdString();
 	if (style != conf.style) {

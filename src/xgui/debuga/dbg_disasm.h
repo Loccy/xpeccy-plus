@@ -12,10 +12,14 @@
 #include "../../libxpeccy/spectrum.h"
 #include "../../xcore/xcore.h"
 #include "../classes.h"
+#include "../xgui.h"
 
 // the command column carries the label name for the syntax delegate
 
 #define X_LabelRole	(Qt::UserRole + 1)
+// how much of a local label (global.local) is drawn shaded: the label of a
+// label row, the label in the command
+#define X_PrefixRole	(Qt::UserRole + 2)
 
 // memory cell type (bits 4..7)
 
@@ -36,6 +40,9 @@ typedef struct {
 	QString bytes;			// all bytes inside command
 	QString command;		// command with replaced addr->label
 	QString label;			// label put into the command, if any
+	int lpre = 0;			// shaded part of the row's own label (label rows)
+	int opre = 0;			// ...and of the label in the command: in the same block only
+	int lrom = -1;			// the label in the command is a ROM label: its address
 	QString info;			// memory argument if any
 	QString icon;			// icon path if any
 } dasmData;
@@ -119,6 +126,20 @@ class xDisasmTable : public QTableView {
 		void resizeEvent(QResizeEvent*);
 		void focusOutEvent(QFocusEvent*);
 		void focusInEvent(QFocusEvent*);
+};
+
+// the label column: the global part of a local label (global.local) on its
+// own row is drawn shaded
+
+class xDasmLabel : public xItemDelegate {
+	public:
+		xDasmLabel() : xItemDelegate(XTYPE_LABEL) {}
+	protected:
+		void paint(QPainter*, const QStyleOptionViewItem&, const QModelIndex&) const override;
+		void drawDisplay(QPainter*, const QStyleOptionViewItem&, const QRect&, const QString&) const override;
+	private:
+		mutable int pre = 0;		// of the cell being painted
+		mutable QColor bgr;
 };
 
 // paints the command column token by token: constants take their own

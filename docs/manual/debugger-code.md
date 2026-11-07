@@ -40,7 +40,10 @@ named place is shown as the name plus the offset: `LD A,(table + 2)`.
 
 Some rows are not instructions:
 
-- a **label** row, in bold on a tinted background, names the address of the row under it;
+- a **label** row, in bold on a tinted background, names the address of the row under it.
+  In a local label such as `draw.loop`, under the label `draw`, the `draw` part is paler.
+  It is paler in an instruction too, when the instruction is in `draw`'s block - after
+  `draw` and before the next label that is not a local one;
 - a **comment** row, in gray, starts with `;`;
 - an `EQU` row follows an instruction when a label points inside it: `NAME` with
   `EQU $-2` says the label is two bytes before the next instruction. Programs that change
@@ -286,8 +289,9 @@ The {icon}`label` Labels menu of the toolbar has:
 ```
 
 When you type a name in the address or command column, after the second letter a list of
-the labels that contain those letters drops down. Enter picks the first one, or pick
-another with the arrow keys or the mouse. The same list appears in the
+the labels that contain those letters drops down. Enter picks the label you typed in full,
+else the first one that starts with your letters, else the first one; pick another with the
+arrow keys or the mouse. The same list appears in the
 [The Breakpoint Editor](debugger-breakpoints.md#the-breakpoint-editor).
 
 ### Label files
@@ -336,6 +340,31 @@ back to the same place. Only Xpeccy+ reads such lines.
 Labels typed in the listing go into the set in effect, or into a new set called `noname`
 when there is none.
 
+### ROM labels
+
+```{index} ROM labels, label; ROM
+```
+
+Known ROMs come with labels of their own, with no file loaded: `LD_BYTES` at 0556 of the
+48K BASIC, `DOS_OPEN` in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS. The 48K BASIC
+names are also in the 48 BASIC of the 128K, +2, +3 and the clones; a routine a clone
+changed has no name there. A ROM is known by its contents, so a ROM file of yours with the
+same bytes has them too.
+
+They work as other labels do: in the listing, typed as an address, in breakpoints and
+conditions. A ROM that is not paged in still has its place, for a label of yours in it
+too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too, and so is
+`TRDOS_FUNCTION` typed as an address - the dump then shows what is paged in there now. A
+condition such as `PC == LD_BYTES`, or a breakpoint on it, holds only while that ROM is
+paged in.
+
+Your labels come first. A label of yours of the same name is the one an address or an
+instruction gets, and one at the same address is shown instead. A ROM label's name typed in
+the address column makes a label of yours, as a new name does; `@START` goes to the ROM's
+`START`. A ROM label cannot be removed, and **Save labels** does not save it. **ROM labels**
+on the **Debugger** page of **Options** switches them off. Where they come from, and their
+licenses, is in `config/labels/README.md` beside the program.
+
 ```{index} Auto-load labels, label; loading automatically
 ```
 
@@ -356,11 +385,14 @@ name from the same folder. These labels are in effect until the next file is ope
 opens the **Labels List**.
 
 - **Group** - the set of labels in effect. The buttons beside it: {icon}`edit` renames the
-  set, {icon}`add` adds a new empty set and {icon}`cancel` deletes the set.
+  set, {icon}`add` adds a new empty set and {icon}`cancel` deletes the set. The last line,
+  **ROM labels (read-only)**, lists the [ROM labels](#rom-labels): picking it leaves the
+  set in effect as it was.
 - The field under it filters the list: only labels that contain what you type are shown.
   The case of the letters matters.
 - The list shows each label's address and name. Double-click a label, or select it and
-  press Enter, and the listing goes there.
+  press Enter, and the listing goes there; to a label in a ROM that is not paged in, where
+  that ROM runs.
 - **Convert address to CPU address space** - shows where the CPU sees each label now, as
   `CPU:8010`. A label in a page that is not paged in keeps its page and offset.
 
@@ -482,7 +514,9 @@ separator** are kept between sessions.
 **Disasm to file** in the {icon}`floppy` floppy disk menu writes the listing to a text file
 you name: the selected block, or all 64K with nothing selected. The file starts with an
 `ORG` line; labels are written as `name:`, comments as they are, instructions after a tab.
-An assembler can read the file back.
+A [ROM label](#rom-labels) the instructions use gets an `EQU` line before the `ORG`, as
+`LD_BYTES EQU 0x0556`; if a label of yours in the block has its name, the instructions get
+its address instead. An assembler can read the file back.
 
 Ctrl+C copies the same text for the block, without the first line.
 

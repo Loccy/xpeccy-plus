@@ -11,6 +11,7 @@ xConfig conf;
 
 QString gethexbyte(int value) { return QString("%1").arg(value & 0xff, 2, 16, QChar('0')).toUpper(); }
 QString gethexword(int value) { return QString("%1").arg(value & 0xffff, 4, 16, QChar('0')).toUpper(); }
+QString xconf_install_dir() { return QString(); }
 
 static int failures;
 

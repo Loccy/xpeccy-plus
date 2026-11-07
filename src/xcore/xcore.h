@@ -260,11 +260,24 @@ xLabelSet* setLabelSet(QString);
 
 void add_label(xAdr, QString, xLabelSet* = nullptr);
 void del_label(QString);
-QString find_label(xAdr);
+QString find_label(xAdr, bool* rom = nullptr);	// rom: the name is a ROM label's
 xAdr find_label(QString);
 xAdr find_label_cell(QString);	// the label's cell, without working out where the CPU sees it now
 xAdr label_cpu(xAdr);		// ...and that, for a cell find_label_cell() gave
 unsigned labels_gen();		// changes whenever the labels in effect do
+void labels_touch();		// ...and makes it change
+// the labels of known ROMs, below the user's: found again when the ROM changes
+void labels_rom_scan(Computer*);	// under emu_lock
+void labels_rom_check(Computer*);	// ...if a snapshot put a ROM in since
+QList<int> labels_rom_cells(const QString&);	// a ROM label's cells, a bank each
+bool labels_rom_only(const QString&);	// a ROM label's name, not one of the user's
+xAdr label_home(xAdr);			// a label in ROM paged out: where its ROM runs, for typing
+QString xconf_install_dir();		// config of the installed program
+QStringList labels_rom_names();		// every ROM label's name: the list, completion
+xAdr labels_rom_cell(const QString&);	// a ROM label's cell, the one paged in if any
+// "global.local": how much of it is the global, 0 if not local; the global a cell is under
+int label_local_prefix(const QString&);
+QString label_block(xAdr);
 void clear_labels();
 void clear_all_labels();
 
@@ -1137,6 +1150,7 @@ struct xConfig {
 		unsigned evonames:1;	// ZX Evolution panel: fields by their names in the docs, not in words
 		unsigned nxdetach:1;	// ZX Next panel: shown in a window of its own
 		unsigned imglabels:1;	// an image's .labels comes with it
+		unsigned romlabels:1;	// known ROMs name their routines
 		QFont font;
 		int numfmt;		// how addresses and the listing's values are written, CPU_NUM_*
 		int hexfmt;		// the hex form the decimal switch goes back to
