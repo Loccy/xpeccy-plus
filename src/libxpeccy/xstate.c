@@ -210,7 +210,15 @@ void xstate_destroy(xState* st) {
 	free(st);
 }
 
+void (*xstate_fm_back)(Computer*) = NULL;
+
 int xstate_save(xState* st, Computer* comp) {
+	if (!st) return 0;
+	if (xstate_fm_back) xstate_fm_back(comp);
+	return xstate_save_as_is(st, comp);
+}
+
+int xstate_save_as_is(xState* st, Computer* comp) {
 	if (!st) return 0;
 	st->m.count = 0;
 	if (comp->ts) ts_state_capture(comp->ts);

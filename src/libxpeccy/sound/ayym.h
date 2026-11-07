@@ -58,9 +58,14 @@ void ym2203_wr(aymChip*, int, int);
 void ym2203_flush(aymChip*);		// count the time sync has put by, see ay_flush()
 int ym2203_fm_out(aymChip*);		// the fm half; the SSG one is ym_vol()
 void ym2203_free(aymChip*);		// drop the core, if this chip ever had one
+void ym2203_make(aymChip*);		// the core a first flush would make, made now
 int ym2203_state_size(aymChip*, void**);	// its state as bytes: how many, where
 void ym2203_state_pack(aymChip*);	// the core into those bytes
 void ym2203_state_unpack(aymChip*);	// and back out of them
+void ym2203_state_load(aymChip*, const void*, int);	// a core made from bytes another chip packed
+// Set by the sound code: 1 when a copy of this chip makes its sound elsewhere, so the
+// core here need only keep the status byte (timers, busy) and the SSG half going
+extern int (*ym2203_lite)(aymChip*);
 
 typedef void(*sccbwr)(aymChip*, int, int);
 typedef int(*sccbrd)(aymChip*, int);
@@ -150,6 +155,9 @@ void ym2203_poke_reg(aymChip*, int, int);	// write an FM register from outside
 struct aymChip {
 	unsigned coarse:1;	// 4-bit DAC volume
 	unsigned blk_fm:1;	// 1:block fm output
+	// the fm core ran its timers only (ym2203_lite): its state is not the chip's,
+	// a copy that made the sound holds that (sound.cpp)
+	unsigned fm_stale:1;
 	int stereo;
 	int sep;		// stereo separation: 0 = mono, 100 = full panorama
 	int wait;		// waiting. chip is busy when >0
@@ -246,8 +254,10 @@ sndPair tsGetVolume(TSound*);
 // A chip's registers changed other than by its time: whatever follows the chips
 // (sound.cpp's mirror) is told here, after the change. NULL: nothing follows.
 // AYL_TYPE: chip_set_type() - the type, the clock and the tick's fraction set anew;
-// AYL_WR: ay_wr(), a port write - a: the address, b: the byte
-enum {AYL_POKE = 0, AYL_ECNT, AYL_TYPE, AYL_WR};	// a: register, b: value / a: chanE.cnt / -
+// AYL_WR: ay_wr() or ym2203_wr(), a port write - a: the address, b: the byte;
+// AYL_FMPOKE: ym2203_poke_reg() - a: register, b: value;
+// AYL_BLK: blk_fm set (tsOut, TSFM), the chip flushed first - a: the new value
+enum {AYL_POKE = 0, AYL_ECNT, AYL_TYPE, AYL_WR, AYL_FMPOKE, AYL_BLK};	// a: register, b: value / a: chanE.cnt / -
 extern void (*ay_log)(aymChip*, int what, int a, int b);
 aymChip* ts_chip(TSound*, int);		// chip 0..3, NULL for anything else
 
