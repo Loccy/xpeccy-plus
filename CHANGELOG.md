@@ -25,6 +25,8 @@ before that point is upstream's history and is not repeated here.
 - **Number tips over the Debugger's dumps**: rest the mouse on a byte of DUMP, REG-DUMP,
   the disk dump or CMOS for its address, label, value and the word read from it. Number
   tips in Options > Debugger turns them off.
+- **The Debugger's FDD panel has a code page for its text column**, as DUMP has, and says
+  when the drive is empty instead of showing a track of FF.
 - **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
   programs that start Xpeccy+ with a game and its pokes: `--poke "Lives=35899,0"`. An
   address can be a label, looked up when the cheat is ticked, so it follows a rebuilt program.
@@ -38,6 +40,8 @@ before that point is upstream's history and is not repeated here.
   CP866 and KOI8-R are still in its list.
 - **The Watcher uses the Debugger's font and shows 16 bytes a watch**; its registers look
   as in the Debugger.
+- **The Debugger's CPU panel fills its column**: the registers centered, the flags spread
+  over the row. With the Auto layout it no longer squeezes the stack under it.
 - **The ZX Spectrum Next runs much faster, with the same picture and sound**: games and demos
   20-50 % faster, and up to 1.7 times in the Windows builds, which are now laid out by a
   profile of real programs - the other machines gain 6-14 % there too.
@@ -61,6 +65,8 @@ before that point is upstream's history and is not repeated here.
 
 - **The Debugger's first open under a style draws PC in its own font**: PC (and at times
   IR and IM) came in the interface font, in a narrower field, until the next step.
+- **A middle click clears DUMP's selection on any byte**, not only on the first eight of a
+  row; Ctrl and Shift clicks mark the block there too.
 - **The Watcher's memory rows change while the machine runs**, as its registers do.
 - **A `.pok` named on the command line before the image is kept**: the image's own cheat
   file took its place.
