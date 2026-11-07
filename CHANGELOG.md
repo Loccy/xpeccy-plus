@@ -28,8 +28,7 @@ before that point is upstream's history and is not repeated here.
 - **ROM labels in the Debugger**: the 48K BASIC (names from SkoolKit by Richard Dymond, after
   Logan and O'Hara's book), the +3DOS calls and the TR-DOS entry points are named with no
   file loaded, on the clones' ROMs too. Your own labels win; Options > Debugger turns them off.
-- **A local label's global part is paler in the Debugger**: `draw` of `draw.loop`, on its own
-  row and in an instruction of the same block.
+- **A local label's global part is paler in the Debugger**: `draw` of `draw.loop`.
 
 ### Changed
 
