@@ -10,8 +10,7 @@ while the machine runs. Open it with **Tools > Watcher** in the main window, or
 **Watcher** under the {icon}`other` **Tools** button over the listing.
 
 1. **CPU** - the registers, hex or decimal as in the [CPU panel](debugger-cpu.md); IFF1 and
-   IFF2 are marks. Rest the mouse on a value for its tip, which follows it as the machine
-   runs (see [Typing a number](debugger-code.md#typing-a-number)).
+   IFF2 are marks.
 2. **MEMORY** - the watches, two rows each.
 3. The four memory banks, from `#0000` to `#C000`: ROM or RAM, and the page.
 

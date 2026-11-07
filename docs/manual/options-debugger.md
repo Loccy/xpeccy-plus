@@ -24,7 +24,7 @@ The font, the colors and what the Debugger shows.
 - **Stack offset** - where the **STACK** panel starts, from -16 to 16 bytes from SP. See
   [STACK panel](debugger-stack.md).
 - **Number tips** - a number's hex, decimal and binary in a tip when the mouse rests on
-  it: in the listing, the dumps and the registers. On by default. See
+  it: in the listing and the dumps. On by default. See
   [Typing a number](debugger-code.md#typing-a-number).
 
 **State info** - which blocks the **MEMMAP** panel shows: **Ports**, **Signals**, **Frame**

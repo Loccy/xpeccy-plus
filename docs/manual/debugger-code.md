@@ -143,11 +143,9 @@ the same tip, over the number.
 ```{index} number tip, Number tips
 ```
 
-The registers of the [CPU panel](debugger-cpu.md) and the [Watcher](debugger-watcher.md)
-have it too: a byte register as a byte, a pair as a word with the label there - but not
-**AF** and **IR**, which hold no address. A byte of **DUMP**, **REG-DUMP**, the disk dump
-of the [FDD panel](debugger-fdd.md) and [CMOS](debugger-cmos.md) says where it is, its
-label, and the word read from it, low byte first:
+A byte of **DUMP**, **REG-DUMP**, the disk dump of the [FDD panel](debugger-fdd.md) and
+[CMOS](debugger-cmos.md) has it too, with where it is, its label, and the word read from
+it, low byte first:
 
 ```
 #5CB4  P_RAMT
@@ -461,8 +459,8 @@ A right-click on the listing opens a shorter menu: **Breakpoints**, **View**,
 - **Syntax colors** - numbers in their own color and labels in bold, inside the
   instructions. On by default. The color is **Const** on the **Debugger** page of
   **Options**.
-- **Number tips** - the tip over a number the mouse rests on, in the listing, the dumps
-  and the registers (see [Typing a number](#typing-a-number)). On by default, and the same
+- **Number tips** - the tip over a number the mouse rests on, in the listing and the dumps
+  (see [Typing a number](#typing-a-number)). On by default, and the same
   switch as on the **Debugger** page of **Options**.
 - **Block separator** - the empty row after each return and jump. On by default.
 - **Show segment** - addresses as the memory and page they are in: `RAM:05:0000` is the
