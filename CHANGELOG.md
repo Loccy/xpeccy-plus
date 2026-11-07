@@ -44,8 +44,9 @@ before that point is upstream's history and is not repeated here.
   same picture and sound. A frame in which nothing on screen changes is not drawn again.
 - **Sound is made on a core of its own**: the sound chips, the mixing and the filter run
   beside the emulation, not in it - up to a quarter faster on a computer with two cores or
-  more, and a third to a half faster with TurboSound FM, the SAA or General Sound fitted,
-  with the sound the same to the bit. With **Sound > Enabled** off no sound is worked out
+  more, and a third to a half faster with TurboSound FM, the SAA or General Sound fitted
+  (with TurboSound FM a fifth to a third faster in fast forward and Fast Mode too), with
+  the sound the same to the bit. With **Sound > Enabled** off no sound is worked out
   at all.
 - **The file dialog keeps its sort and view (List or Detail) between runs**: sorted by
   **Date Modified** once, a Downloads folder opens with the newest file at the top.
