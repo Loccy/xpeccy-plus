@@ -69,11 +69,11 @@ The last column says more about the instruction at PC:
 
 ## Hex or decimal
 
-```{index} hex or decimal, decimal numbers, Numbers (Debugger), Decimal numbers
+```{index} hex or decimal, decimal numbers, Number format, Numbers (Debugger), Decimal numbers
 ```
 
 Addresses, and the numbers in the commands of the listing, are written in one of four
-forms, picked by **Numbers** on the **Debugger** page of **Options**:
+forms, picked by **Number format** on the **Debugger** page of **Options**:
 
 | Form | An address | A byte |
 |---|---|---|
@@ -139,6 +139,27 @@ BIN: 01011100 10110100
 
 Rest the mouse on an address of the listing, or on a number or a label in a command, for
 the same tip, over the number.
+
+```{index} number tip, Number tips
+```
+
+The registers of the [CPU panel](debugger-cpu.md) and the [Watcher](debugger-watcher.md)
+have it too: a byte register as a byte, a pair as a word with the label there - but not
+**AF** and **IR**, which hold no address. A byte of **DUMP**, **REG-DUMP**, the disk dump
+of the [FDD panel](debugger-fdd.md) and [CMOS](debugger-cmos.md) says where it is, its
+label, and the word read from it, low byte first:
+
+```
+#5CB4  P_RAMT
+HEX: #FF (WORD: #FFFF)
+DEC: 255 (WORD: 65535)
+BIN: 11111111
+```
+
+The place of a disk byte is its track and offset, `00:#0040`, and of a CMOS byte its
+address, `CMOS #0E`; neither has a label. A tip left open follows the value while the
+machine runs or steps. **Number tips** (see [The Options menu](#the-options-menu)) turns
+these tips off; the one under a field being typed into stays.
 
 ## Moving around
 
@@ -432,7 +453,7 @@ A right-click on the listing opens a shorter menu: **Breakpoints**, **View**,
 
 ### The Options menu
 
-```{index} Dim address, Dim opcodes, Syntax colors, Block separator, Show segment
+```{index} Dim address, Dim opcodes, Syntax colors, Number tips, Block separator, Show segment
 ```
 
 - **Dim address** - the addresses in a paler color, so the instructions stand out.
@@ -440,6 +461,9 @@ A right-click on the listing opens a shorter menu: **Breakpoints**, **View**,
 - **Syntax colors** - numbers in their own color and labels in bold, inside the
   instructions. On by default. The color is **Const** on the **Debugger** page of
   **Options**.
+- **Number tips** - the tip over a number the mouse rests on, in the listing, the dumps
+  and the registers (see [Typing a number](#typing-a-number)). On by default, and the same
+  switch as on the **Debugger** page of **Options**.
 - **Block separator** - the empty row after each return and jump. On by default.
 - **Show segment** - addresses as the memory and page they are in: `RAM:05:0000` is the
   first byte of RAM page 5, `ROM:00:0038` a byte of ROM page 0, and `DIV:` a byte of a
@@ -449,8 +473,8 @@ A right-click on the listing opens a shorter menu: **Breakpoints**, **View**,
 - **Runtime mapping**, **Clear mapping** - see [How memory is shown](#how-memory-is-shown).
 - **Reset panel layout** - see [Arranging the panels](debugger.md#arranging-the-panels).
 
-**Dim address**, **Dim opcodes**, **Syntax colors** and **Block separator** are kept
-between sessions.
+**Dim address**, **Dim opcodes**, **Syntax colors**, **Number tips** and **Block
+separator** are kept between sessions.
 
 ## Saving the listing
 
