@@ -154,7 +154,7 @@ void DebugWin::toggleNumFmt() {
 }
 
 void DebugWin::showNumFmt() {
-	actNumTips->setChecked(conf.dbg.numtips);	// Options may have moved it
+	numTipsAct->setChecked(conf.dbg.numtips);	// Options may have moved it
 	ui_asm.tbNumbers->setText((conf.dbg.numfmt == CPU_NUM_DEC) ? "DEC" : "HEX");
 	QString key = shortcut_key(XCUT_DBG_NUMBERS);
 	ui_asm.tbNumbers->setToolTip(QString("Hex or decimal addresses and values%0")
@@ -752,12 +752,12 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	ui_asm.tbDbgOpt->addAction(ui_asm.actDimAddr);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actDimOps);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actSyntax);
-	actNumTips = new QAction("Number tips", this);
-	actNumTips->setCheckable(true);
-	actNumTips->setChecked(conf.dbg.numtips);
-	actNumTips->setToolTip("A number's hex, decimal and binary under the mouse");
-	connect(actNumTips, &QAction::toggled, this, [](bool on) { conf.dbg.numtips = on ? 1 : 0; });
-	ui_asm.tbDbgOpt->addAction(actNumTips);
+	numTipsAct = new QAction("Number tips", this);
+	numTipsAct->setCheckable(true);
+	numTipsAct->setChecked(conf.dbg.numtips);
+	numTipsAct->setToolTip("A number's hex, decimal and binary under the mouse");
+	connect(numTipsAct, &QAction::toggled, this, [](bool on) { conf.dbg.numtips = on ? 1 : 0; });
+	ui_asm.tbDbgOpt->addAction(numTipsAct);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actBlockSep);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actShowSeg);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actRomWr);
@@ -1547,9 +1547,7 @@ void DebugWin::reFormFlags(int width) {
 		ui_cpu.flagsGrid->addWidget(dbgFlagBox[i], (p / per) * 2 + 1, p % per + ofs, Qt::AlignCenter);
 	}
 	if (width > 0) {
-		// At least as wide as the registers above, and spread over the whole
-		// panel: the register columns are centered in their halves, so the
-		// middle of the row stays under the split between them
+		// over the whole panel, its middle under the split between the register columns
 		int cells = width - FLAG_SPACING * (per - 1);
 		// hand the remainder out a pixel at a time: dropping it would leave the
 		// row short and its middle no longer under the register column split
@@ -1614,15 +1612,10 @@ int DebugWin::regsLayoutWidth(int cols) {
 // needs - so whatever changes an input calls this instead of picking a policy.
 void DebugWin::applyCpuWidthLimits() {
 	if (!regPairW) return;			// nothing measured yet
-	// no maximum: it clamps the whole dock column - the stack under the panel
-	// is squeezed, the disassembler under it collapses. Wider than the
-	// registers need, the panel centers them
+	// no maximum: it would clamp the whole dock column; extra width centers the registers
 	wid_cpu->setMaximumWidth(QWIDGETSIZE_MAX);
-	if (conf.dbg.reglayout == DBG_REGS_AUTO) {
-		wid_cpu->setMinimumWidth(regsLayoutWidth(cpuWideDock ? 2 : 1));
-	} else {
-		wid_cpu->setMinimumWidth(regsLayoutWidth(conf.dbg.reglayout));
-	}
+	int lay = conf.dbg.reglayout;
+	wid_cpu->setMinimumWidth(regsLayoutWidth((lay == DBG_REGS_AUTO) ? (cpuWideDock ? 2 : 1) : lay));
 }
 
 void DebugWin::reFormCPU(xRegBunch* b) {
@@ -1676,11 +1669,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 			ui_cpu.formRegs->setColumnMinimumWidth(i * RCOL_STEP + 2, RCOL_GAP);
 		ui_cpu.formRegs->setColumnStretch(regCols * RCOL_STEP - 1, 1);	// packed to the left
 	} else {
-		// The panel is as wide as its dock column, which the panels under it
-		// may widen: each register column is centered in its half (in the whole
-		// row for one), as the flags under them spread over the row. Both
-		// columns are as wide as the widest register, so the halves are alike
-		// and the split between them stays in the middle
+		// each register column centered in its half, alike, so the split stays in the middle
 		base = 1;
 		for (i = 0; i < regCols; i++) {
 			ui_cpu.formRegs->setColumnMinimumWidth(base + i * RCOL_STEP, labw);

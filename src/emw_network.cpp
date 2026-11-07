@@ -456,9 +456,8 @@ void MainWin::socketRead() {
 			sock->write("\r\n");
 		}
 	} else if (com == "tip") {
-		// tip X Y TITLE: what a mouse resting at a point of a window asks for - the
-		// QHelpEvent Qt sends after the pause, which it does only for the active
-		// window. Coordinates as winshot's; the answer is the tip shown, or nothing
+		// tip X Y TITLE: the tip a resting mouse gets at winshot's X Y (Qt sends it only
+		// to the active window, which a hidden desktop never has); answers it or nothing
 		QString name = prm.mid(3).join(" ");
 		QWidget* win = NULL;
 		foreach(QWidget* w, QApplication::topLevelWidgets()) {
@@ -471,8 +470,7 @@ void MainWin::socketRead() {
 			QPoint pos(prm[1].toInt(), prm[2].toInt());
 			QWidget* at = win->childAt(pos);
 			if (!at) at = win;
-			// a tip up from before goes at once (hideText lets it linger), so
-			// the answer is this event's tip or none
+			// a tip from before goes at once: hideText lets it linger
 			foreach(QWidget* w, QApplication::topLevelWidgets())
 				if (w->isVisible() && w->inherits("QTipLabel")) w->hide();
 			QHelpEvent hev(QEvent::ToolTip, at->mapFrom(win, pos), win->mapToGlobal(pos));

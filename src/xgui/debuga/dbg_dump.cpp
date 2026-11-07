@@ -130,14 +130,15 @@ QString xDumpModel::cellTip(int adr, const QString& note) const {
 	QString lab;
 	int area = dump_view_area(mode);
 	int ofs = dump_page_ofs(comp, area, adr);
+	int shown = (adr % pgsize) + pgbase;	// the address column's
 	xAdr xa;
 	xa.bank = -1;
-	xa.adr = ofs;		// see find_label: an offset, not a CPU address
+	xa.adr = shown;		// find_label takes a CPU address label only if this cell is there now
 	if (comp_cell_xadr(comp, area, page, ofs, &xa.type, &xa.abs))
 		lab = find_label(xa);
 	int hi = comp_cell_peek(comp, area, page, ofs + 1);
 	if (hi >= 0) word = lo | ((hi & 0xff) << 8);
-	return dbg_byte_tip(lo, word, gethexbyte(page).append(":").append(dbg_word((adr % pgsize) + pgbase)), lab, note);
+	return dbg_byte_tip(lo, word, gethexbyte(page).append(":").append(dbg_word(shown)), lab, note);
 }
 
 void xDumpModel::mwr(int adr, unsigned char bt) {
@@ -619,12 +620,12 @@ void xDumpTable::mouseMoveEvent(QMouseEvent* ev) {
 	if ((col < 0) || (col >= model->columnCount())) return;
 	int adr;
 	adr = model->dmpadr + (row * model->dmpsize);
-	if ((col > 0) && (col < 17)) {
+	if ((col > 0) && (col <= model->dmpsize)) {
 		adr += col - 1;
 	}
 	adr %= model->maxadr;
 	if ((ev->modifiers() == Qt::NoModifier) && (ev->buttons() & Qt::LeftButton) && (adr != blockStart) && (adr != blockEnd) && (adr != markAdr)) {
-		if ((col == 0) || (col > 17))
+		if ((col == 0) || (col > model->dmpsize))
 			adr += model->dmpsize;
 		if (adr < blockStart) {
 			blockStart = adr;

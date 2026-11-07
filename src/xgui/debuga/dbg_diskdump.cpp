@@ -116,7 +116,10 @@ void xDiskDump::paintEvent(QPaintEvent* ev) {
 	if (mod->hasDisk()) return;
 	QPainter pnt(viewport());
 	pnt.setPen(palette().color(QPalette::Disabled, QPalette::Text));
-	pnt.drawText(viewport()->rect(), Qt::AlignCenter, QString("No disk in drive %0").arg(QChar('A' + (drv & 3))));
+	Floppy* flp = conf.zx->dif->flp[drv & 3];
+	QChar name('A' + (drv & 3));
+	pnt.drawText(viewport()->rect(), Qt::AlignCenter, flp->fitted ? QString("No disk in drive %0").arg(name)
+		: QString("No drive %0 on this machine").arg(name));
 }
 
 // the base sets the scroll range and the row header's height, which bounds the painted rows
@@ -231,9 +234,7 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 			// column writes it - a place in the track, not a CPU address
 			if (!conf.dbg.numtips || (col == 0) || (col > rowBytes)) break;
 			if (offset >= flp->trklen) break;
-			res = dbg_byte_tip(flp->data[trk].byte[offset],
-				(offset + 1 < flp->trklen) ? flp->data[trk].byte[offset] | (flp->data[trk].byte[offset + 1] << 8) : -1,
-				QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
+			res = dbg_buf_tip(flp->data[trk].byte, offset, flp->trklen, QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
 			break;
 		case Qt::TextAlignmentRole:
 			// same rule as the memory dump: everything right, so a wider cell

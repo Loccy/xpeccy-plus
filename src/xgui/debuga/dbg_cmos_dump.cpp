@@ -24,8 +24,7 @@ QVariant xCmosDumpModel::data(const QModelIndex& idx, int role) const {
 		case Qt::ToolTipRole:
 			// the byte and the word read on from it, at the cell's place in the CMOS
 			if ((col == 0) || !conf.dbg.numtips) break;
-			res = dbg_byte_tip(cm[adr], (adr < 0xff) ? cm[adr] | (cm[adr + 1] << 8) : -1,
-				QString("CMOS #%0").arg(gethexbyte(adr)));
+			res = dbg_buf_tip(cm, adr, sizeof(conf.zx->cmos.data), QString("CMOS #%0").arg(gethexbyte(adr)));
 			break;
 		case Qt::TextAlignmentRole:
 			if (col != 0) res = Qt::AlignCenter;

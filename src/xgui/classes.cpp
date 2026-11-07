@@ -1338,6 +1338,10 @@ QString dbg_cpu_byte_tip(int adr, const QString& note) {
 	return dbg_byte_tip(lo, lo | (hi << 8), dbg_word(adr), find_label(comp_get_xadr(comp, adr, MEM_VIEW_READ)), note);
 }
 
+QString dbg_buf_tip(const unsigned char* buf, int ofs, int len, const QString& where) {
+	return dbg_byte_tip(buf[ofs], (ofs + 1 < len) ? buf[ofs] | (buf[ofs + 1] << 8) : -1, where);
+}
+
 void reg_field_setup(xHexSpin* fld, int size, int flag) {
 	int mx;
 	switch (size) {
