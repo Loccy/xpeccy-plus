@@ -220,7 +220,7 @@ bool dbg_read_adr(const QString& txt, int* val, xAdr* lab, QString* name) {
 	}
 	if (lab) *lab = xa;
 	if (xa.type < 0) return ok;
-	*val = xa.adr;
+	*val = label_home(xa).adr;
 	if (name) *name = nm;
 	return true;
 }
@@ -730,7 +730,7 @@ int str_to_adr(Computer* comp, QString str, bool typed) {
 	} else if (str.startsWith("0x")) {			// 0xnnnn : hex adr
 		adr = str.toInt(&flag, 16);
 	} else {
-		xAdr xadr = find_label(str);			// NAME : label name
+		xAdr xadr = label_home(find_label(str));	// NAME : label name
 		if (xadr.type >= 0) {
 			adr = xadr.adr;
 			flag = true;

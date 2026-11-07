@@ -603,8 +603,7 @@ unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsi
 						stk[sp] = xadr.abs;
 					} else {
 						xadr = label_cpu(xadr);
-						if ((memType == XE_CPU_HOME) && (xadr.type == MEM_ROM) && (xadr.adr < 0))
-							xadr.adr = xadr.abs & 0x3fff;
+						if (memType == XE_CPU_HOME) xadr = label_home(xadr);
 						if (xadr.type < 0 || xadr.adr < 0) err = true;
 						stk[sp] = xadr.adr;
 					}

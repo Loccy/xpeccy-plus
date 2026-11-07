@@ -667,6 +667,7 @@ static void seedConfigDir(const QString& src) {
 	while (it.hasNext()) {
 		QString path = it.next();
 		QString rel = sdir.relativeFilePath(path);
+		if ((rel == "labels") || rel.startsWith("labels/")) continue;	// read where installed
 		if (it.fileInfo().isDir()) {
 			QDir().mkpath(dst + "/" + rel);
 		} else if (!QFile::exists(dst + "/" + rel)) {

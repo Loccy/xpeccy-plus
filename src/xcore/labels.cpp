@@ -42,10 +42,11 @@ void labels_touch() {
 	labGen++;
 }
 
-// ROM labels: res/labels/*.labels name the routines of known ROMs. A list is
-// for the 16K banks whose MD5 its "@rom" lines give; a patched bank leaves out
-// the names whose code changed. They are found by the bytes, so a ROM file of
-// the user's with the same bytes has them too.
+// ROM labels: res/labels/*.labels (built in) and config/labels/*.labels of the
+// installed program (lists under licenses of their own) name the routines of
+// known ROMs. A list is for the 16K banks whose MD5 its "@rom" lines give; a
+// patched bank leaves out the names whose code changed. They are found by the
+// bytes, so a ROM file of the user's with the same bytes has them too.
 
 struct romLabList {
 	QList<QPair<int, QString> > labs;		// offset in the bank, name
@@ -66,6 +67,7 @@ static void rom_lists_read() {
 	QStringList paths;
 	foreach(QString dname, QStringList() << ":/res/labels" << (xconf_install_dir() + "/labels")) {
 		QDir dir(dname);
+		if (!dir.exists()) xlog(XLG_FILE, XLL_WARN, "ROM labels: no %s", dname.toLocal8Bit().constData());
 		foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name))
 			paths.append(dir.filePath(fn));
 	}
@@ -255,7 +257,7 @@ void add_label(xAdr xadr, QString name, xLabelSet* set) {
 	labGen++;
 }
 
-QString find_label(xAdr xadr) {
+static QString find_label_user(xAdr xadr) {
 	QString lab;
 	xLabelSet* set = conf.curlabset;
 	if (set) {
@@ -271,10 +273,30 @@ QString find_label(xAdr xadr) {
 			if ((now.type == xadr.type) && (now.abs == xadr.abs)) lab = conf.labmap[MEM_IO].value(xadr.adr);
 		}
 	}
-	// the user's labels first, then the ROM's
+	return lab;
+}
+
+// the user's labels first, then the ROM's
+QString find_label(xAdr xadr) {
+	QString lab = find_label_user(xadr);
 	if (lab.isEmpty() && (xadr.type == MEM_ROM) && conf.dbg.romlabels)
 		lab = romByAbs.value(xadr.abs);
 	return lab;
+}
+
+// the name find_label() gives this cell is a ROM label's
+bool label_from_rom(xAdr xadr) {
+	return (xadr.type == MEM_ROM) && conf.dbg.romlabels && romByAbs.contains(xadr.abs) && find_label_user(xadr).isEmpty();
+}
+
+// A ROM label paged out names where its ROM runs, 0000-3FFF, when an address is
+// typed or assembled: CALL TRDOS_FUNCTION from BASIC. Breakpoints and conditions
+// keep label_cpu()'s, only where it is now; a label of the user's in ROM too
+xAdr label_home(xAdr xadr) {
+	if ((xadr.type == MEM_ROM) && (xadr.adr < 0) && romByAbs.contains(xadr.abs)
+			&& !(conf.labmap.contains(MEM_ROM) && conf.labmap[MEM_ROM].contains(xadr.abs)))
+		xadr.adr = xadr.abs & 0x3fff;
+	return xadr;
 }
 
 // the cell a label names, its CPU address as it was when the label was read
@@ -304,12 +326,8 @@ xAdr label_cpu(xAdr xadr) {
 	return xadr;
 }
 
-// A ROM label paged out names where its ROM runs, 0000-3FFF: CALL TRDOS_FUNCTION
-// from BASIC. Conditions go by label_cpu(), only where it is now
 xAdr find_label(QString nm) {
-	xAdr xadr = label_cpu(find_label_cell(nm));
-	if ((xadr.type == MEM_ROM) && (xadr.adr < 0)) xadr.adr = xadr.abs & 0x3fff;
-	return xadr;
+	return label_cpu(find_label_cell(nm));
 }
 
 // A local label, SjASMPlus's "global.local": the length of the part before the

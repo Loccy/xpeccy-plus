@@ -361,6 +361,7 @@ void placeLabel(Computer* comp, dasmData& drow) {
 				replace_number(drow.command, dasm_word(drow.oadr, drow.fmt),
 					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
+				if (label_from_rom(xadr)) drow.lrom = (drow.oadr - shift) & 0xffff;
 			}
 			work = 0;
 		}
@@ -492,6 +493,7 @@ int dasmSome(Computer* comp, int adr, dasmData& drow, int fmt) {
 	drow.fmt = (fmt < 0) ? conf.dbg.numfmt : fmt;
 	drow.label.clear();
 	drow.opre = 0;
+	drow.lrom = -1;
 	drow.bytes.clear();
 	drow.adr = adr;
 	drow.flag = (mode == XVIEW_CPU) ? getBrkView(comp, adr, dasm_access(comp, adr)) : getBrk(comp, adr);

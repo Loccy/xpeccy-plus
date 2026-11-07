@@ -1595,14 +1595,17 @@ void label_complete(QLineEdit* edt) {
 		// the first: START is START, not ARC_START before it
 		QAbstractItemModel* cm = cmp->completionModel();
 		int pick = -1;
+		int same = -1;
 		for (int i = 0; i < cm->rowCount(); i++) {
 			QString nm = cm->index(i, 0).data().toString();
-			if (nm.compare(pre, Qt::CaseInsensitive) == 0) {
-				pick = i;
+			if (nm == pre) {		// labels are told apart by case: start is not START
+				same = i;
 				break;
 			}
+			if ((same < 0) && (nm.compare(pre, Qt::CaseInsensitive) == 0)) same = i;
 			if ((pick < 0) && nm.startsWith(pre, Qt::CaseInsensitive)) pick = i;
 		}
+		if (same >= 0) pick = same;
 		cmp->popup()->setCurrentIndex(cm->index(qMax(pick, 0), 0));
 	});
 	QObject::connect(cmp, QOverload<const QString&>::of(&QCompleter::activated), edt, [edt, word](const QString& lab) {

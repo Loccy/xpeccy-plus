@@ -269,6 +269,8 @@ void labels_touch();		// ...and makes it change
 // the labels of known ROMs, below the user's: found again when the ROM changes
 void labels_rom_scan(Computer*);	// under emu_lock
 bool labels_rom_only(const QString&);	// a ROM label's name, not one of the user's
+bool label_from_rom(xAdr);		// find_label(xAdr) names it from the ROM's
+xAdr label_home(xAdr);			// a ROM label paged out: where its ROM runs, for typing
 QString xconf_install_dir();		// config of the installed program
 QStringList labels_rom_names();
 xAdr labels_rom_cell(const QString&);

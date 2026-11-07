@@ -2407,8 +2407,7 @@ void DebugWin::saveDasm() {
 					}
 				} else {
 					strm << "\t" << dasm_export(drow);
-					if (!drow.label.isEmpty() && labels_rom_only(drow.label))
-						romUsed[drow.label] = find_label(drow.label).adr;
+					if (drow.lrom >= 0) romUsed[drow.label] = drow.lrom;
 				}
 				strm << "\n";
 			}
@@ -2420,7 +2419,7 @@ void DebugWin::saveDasm() {
 		out << "; Created by Xpeccy+ Debugger\n\n";
 		bool equ = false;
 		for (QMap<QString, int>::const_iterator it = romUsed.constBegin(); it != romUsed.constEnd(); it++) {
-			if (defined.contains(it.key()) || (it.value() < 0)) continue;
+			if (defined.contains(it.key())) continue;
 			out << it.key() << "\tEQU 0x" << gethexword(it.value()) << "\n";
 			equ = true;
 		}
