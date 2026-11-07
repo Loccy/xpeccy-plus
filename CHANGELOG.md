@@ -21,10 +21,8 @@ before that point is upstream's history and is not repeated here.
   tape then starts over at its end, for a game that loads its levels from side B again and again.
 - **Decimal numbers in the Debugger**: a toolbar button and Ctrl+Shift+H switch hex and
   decimal, the hex form is picked in Options > Debugger, and a tip shows a number in hex,
-  decimal and binary.
-- **Number tips over the Debugger's dumps**: rest the mouse on a byte of DUMP, REG-DUMP,
-  the disk dump or CMOS for its address, label, value and the word read from it. Number
-  tips in Options > Debugger turns them off.
+  decimal and binary - over a byte of the dumps with its address, label and the word read
+  from it. Number tips in Options > Debugger turns the tips off.
 - **The Debugger's FDD panel has a code page for its text column**, as DUMP has, and says
   when the drive is empty instead of showing a track of FF.
 - **`--poke` on the command line** fills the Cheats window as a `.pok` file would, for
@@ -63,8 +61,6 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
-- **The Debugger's first open under a style draws PC in its own font**: PC (and at times
-  IR and IM) came in the interface font, in a narrower field, until the next step.
 - **A middle click clears DUMP's selection on any byte**, not only on the first eight of a
   row; Ctrl and Shift clicks mark the block there too.
 - **The Watcher's memory rows change while the machine runs**, as its registers do.
