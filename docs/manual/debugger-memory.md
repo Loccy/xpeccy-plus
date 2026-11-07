@@ -32,6 +32,10 @@ The addresses are in the form picked for the Debugger: see
 In the text column a byte below 32, and 127, shows as a dot. **Auto** puts as many groups of four
 bytes on a row as the panel is wide enough for.
 
+Rest the mouse on a byte, here or in **REG-DUMP**, for its address and label, its value in
+hex, decimal and binary, and the word read from it (see
+[Typing a number](debugger-code.md#typing-a-number)).
+
 ### Moving around
 
 ```{index} Go to address, DUMP panel; go to address

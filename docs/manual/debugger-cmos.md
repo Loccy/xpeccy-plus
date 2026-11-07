@@ -18,7 +18,9 @@ number at the start of a row is the address of its first byte. It is on a tab be
 - any machine with the **SMUC** hard disk interface, such as the
   **Scorpion ZS 256 Turbo+**.
 
-Double-click a byte and type a new value in hex to change it.
+Double-click a byte and type a new value in hex to change it. Rest the mouse on it for its
+value in hex, decimal and binary and the word read from it (see
+[Typing a number](debugger-code.md#typing-a-number)).
 
 The time and date in bytes 00 to 09 are not kept here. When the machine reads them, it
 gets the time of your computer's clock, so the panel shows only what a program wrote

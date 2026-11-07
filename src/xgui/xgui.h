@@ -229,10 +229,26 @@ void dbg_num_field(QLineEdit*);
 // what a number is: hex, decimal and binary, a line each; for an address (or a
 // word, which may be one) the label there above them. name: the label it was typed as
 QString dbg_num_tip(int val, bool adr, const QString& name = QString(), bool label = true);
+// a dump byte's tip: where it is (and its label), the byte with the word read
+// from there (word < 0: none) in hex and decimal, the byte in binary; a note
+// line over them
+QString dbg_byte_tip(int val, int word, const QString& where, const QString& label = QString(), const QString& note = QString());
+// ...for the byte at a CPU address, as the CPU reads it now
+QString dbg_cpu_byte_tip(int adr, const QString& note = QString());
+// ...for byte ofs of a buffer of len bytes, the word too while it fits
+QString dbg_buf_tip(const unsigned char* buf, int ofs, int len, const QString& where);
 // a number's tip at a rectangle of a widget, nothing: hidden. above: over a
 // number pointed at, gone when the mouse leaves it; else under a field being
 // typed into, there until hidden. The other side at a screen edge
 void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above);
+// a table's cell tip (ToolTipRole) over the cell, for a viewport's tooltip
+// event: true when it was the hover's. dbg_cell_tips() makes every cell of a table show its own;
+// dbg_cell_tip_follow() after a table's refresh puts the new value into a tip
+// still up over it
+class QAbstractItemView;
+bool dbg_cell_tip(QAbstractItemView* view, QEvent* ev);
+void dbg_cell_tips(QAbstractItemView* view);
+void dbg_cell_tip_follow(QAbstractItemView* view);
 // a register's field (XHS_NUMS) for its size and flags (xRegister): its range,
 // the debugger's base, Split pairs and the width those make
 void reg_field_setup(xHexSpin* fld, int size, int flag);

@@ -1114,6 +1114,7 @@ struct xConfig {
 		unsigned dimadr:1;	// address column drawn dimmed
 		unsigned dimops:1;	// opcode bytes column drawn dimmed
 		unsigned synhl:1;	// syntax colors in the command column
+		unsigned numtips:1;	// a number's tip on hover: the listing and the dumps
 		unsigned blocksep:1;	// empty line after RET/JP/JR
 		unsigned romwr:1;
 		unsigned showmmap:1;	// blocks of the misc panel

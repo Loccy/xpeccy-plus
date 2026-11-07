@@ -1,6 +1,7 @@
 //#include "dbg_widgets.h"
 #include "dbg_cmos_dump.h"
 #include "../../xcore/xcore.h"
+#include "../xgui.h"
 
 xCmosDumpModel::xCmosDumpModel(QObject *p):xTableModel(p) {
 }
@@ -17,7 +18,14 @@ QVariant xCmosDumpModel::data(const QModelIndex& idx, int role) const {
 	QVariant res;
 	int row = idx.row();
 	int col = idx.column();
+	int adr = (row << 3) + col - 1;
+	unsigned char* cm = conf.zx->cmos.data;
 	switch(role) {
+		case Qt::ToolTipRole:
+			// the byte and the word read on from it, at the cell's place in the CMOS
+			if ((col == 0) || !conf.dbg.numtips) break;
+			res = dbg_buf_tip(cm, adr, sizeof(conf.zx->cmos.data), QString("CMOS #%0").arg(gethexbyte(adr)));
+			break;
 		case Qt::TextAlignmentRole:
 			if (col != 0) res = Qt::AlignCenter;
 			break;
@@ -65,7 +73,7 @@ Qt::ItemFlags xCmosDumpModel::flags(const QModelIndex& idx) const {
 // table
 
 xCmosDumpTable::xCmosDumpTable(QWidget* p):QTableView(p) {
-
+	dbg_cell_tips(this);
 }
 
 void xCmosDumpTable::resizeEvent(QResizeEvent* e) {
@@ -87,4 +95,5 @@ xCmosDumpWidget::xCmosDumpWidget(QString i, QString t, QWidget* p):xDockWidget(i
 
 void xCmosDumpWidget::draw() {
 	ui.tabCmos->update();
+	dbg_cell_tip_follow(ui.tabCmos);
 }
