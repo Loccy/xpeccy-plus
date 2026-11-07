@@ -52,13 +52,6 @@ QColor bg_tint(const QColor&);
 #define XHS_ADDR (1<<8)		// an address: base and sign as the debugger writes numbers
 #define XHS_NUMS (1<<9)		// the base the debugger writes numbers in, no sign (a register)
 
-// xHexSpin::setNumTip: what the field's tip on hover says
-enum {
-	XHS_TIP_NONE = 0,	// its own tooltip, if any
-	XHS_TIP_NUM,		// the value in hex, decimal and binary
-	XHS_TIP_LABEL		// ...and the label at it, when it is a word
-};
-
 class xHexSpin : public QLineEdit {
 	Q_OBJECT
 	public:
@@ -75,7 +68,6 @@ class xHexSpin : public QLineEdit {
 		void setLit(bool);
 		int getMax();
 		void numFmt();		// XHS_ADDR: the debugger's numbers moved
-		void setNumTip(int);	// XHS_TIP_*: the value's tip on hover
 	signals:
 		void valueChanged(int);
 	public slots:
@@ -89,8 +81,6 @@ class xHexSpin : public QLineEdit {
 		bool isblank;		// holding nothing, with XHS_BLANK
 		bool fixing = false;	// putting back a text that was refused: not a new one
 		int fmtSeen = -1;	// the debugger's numbers numFmt() last set
-		int numTip = 0;		// XHS_TIP_*
-		void showNumTip();
 		int hsflag;
 		int base;
 		int value;
@@ -115,7 +105,6 @@ class xHexSpin : public QLineEdit {
 		int splitBytes();
 		bool wholeFieldLit();
 	protected:
-		bool event(QEvent*);
 		void changeEvent(QEvent*);
 		void keyPressEvent(QKeyEvent*);
 		void focusInEvent(QFocusEvent*);
@@ -259,8 +248,8 @@ bool dbg_cell_tip(QAbstractItemView* view, QEvent* ev);
 void dbg_cell_tips(QAbstractItemView* view);
 void dbg_cell_tip_follow(QAbstractItemView* view);
 // a register's field (XHS_NUMS) for its size and flags (xRegister): its range,
-// the debugger's base, Split pairs and the width those make; name: its tip
-void reg_field_setup(xHexSpin* fld, int size, int flag, const QString& name = QString());
+// the debugger's base, Split pairs and the width those make
+void reg_field_setup(xHexSpin* fld, int size, int flag);
 // what a register that is no number is for (IM, IFF1, IFF2), empty for the rest
 QString dbg_reg_tip(const QString& name);
 

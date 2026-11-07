@@ -1644,7 +1644,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		dbgRegLabs[cnt]->setProperty("regid", b->regs[cnt].id);
 		dbgRegLabs[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
 		dbgRegBits[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
-		reg_field_setup(dbgRegEdit[cnt], b->regs[cnt].size, b->regs[cnt].flag, b->regs[cnt].name);	// before it is measured
+		reg_field_setup(dbgRegEdit[cnt], b->regs[cnt].size, b->regs[cnt].flag);	// before it is measured
 		if (dbgRegLabs[cnt]->sizeHint().width() > labw) labw = dbgRegLabs[cnt]->sizeHint().width();
 		if (dbgRegEdit[cnt]->minimumWidth() > fldw) fldw = dbgRegEdit[cnt]->minimumWidth();
 		cnt++;

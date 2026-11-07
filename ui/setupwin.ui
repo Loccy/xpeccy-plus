@@ -3145,7 +3145,7 @@ It goes on until the panel runs out of height</string>
                       </property>
                       <property name="toolTip">
                        <string>A number's hex, decimal and binary
-under the mouse: listing, dumps, registers</string>
+under the mouse: the listing and the dumps</string>
                       </property>
                      </widget>
                     </item>

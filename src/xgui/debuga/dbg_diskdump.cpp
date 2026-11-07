@@ -203,15 +203,19 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 			fnt.setBold(true);
 			res = fnt;
 			break;
-		case Qt::ToolTipRole:
+		case Qt::ToolTipRole: {
 			// the byte, and the word read on from it; its place as the first
-			// column writes it - a place in the track, not a CPU address
+			// column writes it - a place in the track, not a CPU address.
+			// An empty drive's bytes read FF, as shown
 			if (!conf.dbg.numtips || (col == 0) || (col > rowBytes)) break;
-			if (!flp->insert || (offset >= flp->trklen)) break;
-			res = dbg_byte_tip(flp->data[trk].byte[offset],
-				(offset + 1 < flp->trklen) ? flp->data[trk].byte[offset] | (flp->data[trk].byte[offset + 1] << 8) : -1,
-				QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
+			if (offset >= flp->trklen) break;
+			int lo = flp->insert ? flp->data[trk].byte[offset] : 0xff;
+			int word = -1;
+			if (offset + 1 < flp->trklen)
+				word = lo | ((flp->insert ? flp->data[trk].byte[offset + 1] : 0xff) << 8);
+			res = dbg_byte_tip(lo, word, QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
 			break;
+		}
 		case Qt::TextAlignmentRole:
 			// same rule as the memory dump: everything right, so a wider cell
 			// shows its extra space in front of the value

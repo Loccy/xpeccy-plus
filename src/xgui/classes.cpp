@@ -268,30 +268,6 @@ void xHexSpin::changeEvent(QEvent* ev) {
 	}
 }
 
-void xHexSpin::setNumTip(int mode) {
-	numTip = mode;
-}
-
-// The field whose value's tip is up, and what it said: still up while the tip
-// says it - one owner, as two fields may say the same
-static QPointer<xHexSpin> spinTipOwner;
-static QString spinTipText;
-
-// The value's tip, built when the mouse rests on the field; a field without one,
-// or with the tips off, keeps its own tooltip
-bool xHexSpin::event(QEvent* ev) {
-	if ((ev->type() != QEvent::ToolTip) || (numTip == XHS_TIP_NONE) || !conf.dbg.numtips || isblank)
-		return QLineEdit::event(ev);
-	showNumTip();
-	return true;
-}
-
-void xHexSpin::showNumTip() {
-	spinTipText = dbg_num_tip(value, max > 0xff, QString(), numTip == XHS_TIP_LABEL);
-	spinTipOwner = this;
-	dbg_show_tip(this, rect(), spinTipText, true);
-}
-
 void xHexSpin::focusInEvent(QFocusEvent* ev) {
 	startEdit();
 	QLineEdit::focusInEvent(ev);
@@ -403,7 +379,6 @@ void xHexSpin::setValue(int nval) {
 	nval = minMaxCorrect(nval, min, max);
 	unblank();
 	int oldMask = chgMask;
-	int was = value;
 	if ((value == nval) && !(hsflag & XHS_UPD)) {
 		chgMask = 0;
 	} else {
@@ -424,14 +399,6 @@ void xHexSpin::setValue(int nval) {
 	// would stay on screen. Ask for one whenever the mask moved.
 	if (chgMask != oldMask) update();
 	updatePal();
-	// a tip held open follows the value, as the Watcher's move every frame
-	if ((spinTipOwner == this) && (value != was)) {
-		if (QToolTip::isVisible() && (QToolTip::text() == spinTipText)) {
-			showNumTip();
-		} else {
-			spinTipOwner = nullptr;
-		}
-	}
 }
 
 // The whole field lit means the whole value changed; one byte of it means only
@@ -1371,7 +1338,7 @@ QString dbg_cpu_byte_tip(int adr, const QString& note) {
 	return dbg_byte_tip(lo, lo | (hi << 8), dbg_word(adr), find_label(comp_get_xadr(comp, adr, MEM_VIEW_READ)), note);
 }
 
-void reg_field_setup(xHexSpin* fld, int size, int flag, const QString& name) {
+void reg_field_setup(xHexSpin* fld, int size, int flag) {
 	int mx;
 	switch (size) {
 		case REG_BIT: mx = 1; break;
@@ -1387,9 +1354,6 @@ void reg_field_setup(xHexSpin* fld, int size, int flag, const QString& name) {
 	// the rest are bytes that move on their own
 	fld->setSplit(conf.dbg.regsplit && !(flag & REG_TYPE_M));
 	fld->refitWidth();
-	// a pair that may hold an address has its label in the tip; AF and IR do not
-	bool adr = (mx == 0xffff) && !name.startsWith("AF") && (name != "IR");
-	fld->setNumTip((mx > 0xffff) ? XHS_TIP_NONE : adr ? XHS_TIP_LABEL : XHS_TIP_NUM);
 }
 
 QString dbg_reg_tip(const QString& name) {

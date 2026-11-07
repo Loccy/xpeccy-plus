@@ -64,7 +64,7 @@ void xWatcher::fitColumns() {
 void xWatcher::setupRegs(const xRegBunch& regs) {
 	setupKey = conf.dbg.numfmt * 2 + conf.dbg.regsplit;
 	for (int i = 0; (i < regValues.size()) && (regs.regs[i].id != REG_EOT); i++)
-		reg_field_setup(regValues[i], regs.regs[i].size, regs.regs[i].flag, regs.regs[i].name);
+		reg_field_setup(regValues[i], regs.regs[i].size, regs.regs[i].flag);
 }
 
 void xWatcher::setRegs(const xRegBunch& regs) {
