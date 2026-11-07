@@ -54,11 +54,10 @@ needs the very same ROM:
   share their ROMs, but a +3's disk system is set up for its drive. One stopped in a
   48 BASIC routine needs the same editor: a 128K one runs on the 128K and the clones, not
   on the +2, +2A or +3.
-- A `.sna` names no model. For one taken in the menu or editor, Xpeccy+ tells the model
-  from the snapshot: a +2, a +2A or a +3 by what the ROM left in memory, a 128K, a Pentagon
-  or a Scorpion by the menu on its screen. When the snapshot does not tell, **Auto** asks
-  which machine to use, as **Ask** does. To keep the model for sure, save as `.z80` or
-  `.szx`.
+- A `.sna` names no model. For one taken in the menu or editor, Xpeccy+ tells a +2, a +2A
+  or a +3 by what the ROM left in memory. A 128K and its clones share that code, so for
+  them, and whenever the snapshot does not tell, **Auto** asks which machine to use, as
+  **Ask** does. To keep the model, save as `.z80` or `.szx`.
 - A program running in RAM stays on the current machine, unless it keeps the 128K
   editor's ROM paged in, which the +2, +2A and +3 do not have.
 
