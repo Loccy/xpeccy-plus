@@ -178,13 +178,15 @@ static int fm_sna_guess(const char* path) {
 		idx[n++] = i;
 	}
 	int ed = (n > 0) ? sna_editor_of(path, eds, n) : -1;
+	// the 128K's #5B00 routines are the +2's: one told apart needs both to compare
+	if ((ed >= 0) && (idx[ed] < 2) && (img[0].empty() || img[1].empty())) ed = -1;
 	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[idx[ed]]);
 	if (ed < 0) return SNAP_HW_128K | SNAP_UNSURE;
 	switch (idx[ed]) {
 		case 1: return SNAP_HW_PLUS2 | SNAP_IN_ROM;
 		case 2: return (sna_plus3_drive(path) ? SNAP_HW_PLUS3 : SNAP_HW_PLUS2A) | SNAP_IN_ROM;
 	}
-	return SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY | SNAP_UNSURE;
+	return SNAP_HW_128K | SNAP_EDITOR | SNAP_UNSURE;
 }
 
 xFileMacPick fm_pick(int ftype, const char* path) {
@@ -207,14 +209,14 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 			target = id;
 		}
 	}
-	// a model only guessed at is never switched to unasked
-	pick.unsure = (snap & SNAP_UNSURE) != 0;
-	if (pick.unsure && (pref == FM_AUTO)) pref = FM_ASK;
 	// one machine for the whole format, unless it cannot take this very file
 	if ((pref != FM_AUTO) && (pref != FM_ASK) && fm_runs(pref, row->need, snap)) {
 		if (pref != conf.macId) pick.target = pref;
 		return pick;
 	}
+	// a model only guessed at is never switched to unasked
+	pick.unsure = (snap & SNAP_UNSURE) != 0;
+	if (pick.unsure) pref = FM_ASK;
 	auto fits = [&](const std::string& id) {
 		return fm_runs(id, row->need, snap) && ((row->need != FMN_EXACT) || fm_exact_on(id, snap, target));
 	};

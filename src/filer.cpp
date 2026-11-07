@@ -945,6 +945,10 @@ bool media_machine(Computer* comp, const QString& path, int id, int drv, int run
 	QString local = arc_local(path, &err);		// its bytes say which machine
 	if (local.isEmpty()) return true;			// opening it says why not
 	xFileMacPick pick = fm_pick(inf->id, local.toLocal8Bit().data());
+	if (!pick.ask.empty() && as_headless) {		// no one to ask: the answer offered
+		if (!pick.keep) *mac = pick.ask.front();
+		return true;
+	}
 	if (!pick.ask.empty())
 		return media_ask_machine(path, pick, mac);
 	*mac = pick.target;

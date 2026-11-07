@@ -700,6 +700,10 @@ int main(int ac,char** av) {
 	// a second of that.
 	app.d_style();
 
+	// a file named below picks its machine with no one to ask (the exact rule is set
+	// again once every option is read)
+	media_autorun_headless(bench);
+
 	// before the window: it is made with the GL view or without it
 	QString glWhy;
 #if defined(USEOPENGL) && !BLOCKGL

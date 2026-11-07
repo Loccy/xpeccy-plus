@@ -106,13 +106,13 @@ int snap_rom_flags(int pc, int p7ffd) {
 
 // One stopped in its ROM goes on only on the model it names: the clones patch
 // the very menu (the Pentagon's TR-DOS item), and the +2's editor is another
-// build. A model guessed (SNAP_FAMILY) asks for the editor only.
-static int snap_on_model(int snap, int family, int hwid, int model) {
+// build.
+static int snap_on_model(int snap, int hwid, int model) {
 	int ed = snap_editor(hwid, model);
 	switch (snap) {
-		case SNAP_HW_128K: return family ? (ed == ED_SINCLAIR) : ((hwid == HW_ZX128) && (ed == ED_SINCLAIR));
+		case SNAP_HW_128K: return (hwid == HW_ZX128) && (ed == ED_SINCLAIR);
 		case SNAP_HW_PLUS2: return ed == ED_PLUS2;
-		case SNAP_HW_PENTAGON: return family ? (ed == ED_SINCLAIR) : ((hwid == HW_PENT) || (hwid == HW_P1024));
+		case SNAP_HW_PENTAGON: return (hwid == HW_PENT) || (hwid == HW_P1024);
 	}
 	return 0;
 }
@@ -122,14 +122,13 @@ static int snap_on_model(int snap, int family, int hwid, int model) {
 int snapHwRuns(int snap, int hwid, int model) {
 	int rom = snap & SNAP_IN_ROM;
 	int editor = snap & SNAP_EDITOR;
-	int family = snap & SNAP_FAMILY;
 	snap = SNAP_HW_OF(snap);
 	if (snap >= SNAP_HW_CORE) return hwid == snap - SNAP_HW_CORE;
 	switch (snap) {
 		case SNAP_HW_128K:
 		case SNAP_HW_PENTAGON:
 		case SNAP_HW_PLUS2:
-			if (rom) return snap_on_model(snap, family, hwid, model);
+			if (rom) return snap_on_model(snap, hwid, model);
 			if (editor) return snap_editor(hwid, model) == ((snap == SNAP_HW_PLUS2) ? ED_PLUS2 : ED_SINCLAIR);
 			return hwid != HW_ZX48;
 		// one ROM, but a +3 in its editor has +3DOS set up for a drive the +2A lacks

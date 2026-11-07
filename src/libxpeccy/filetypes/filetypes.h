@@ -319,13 +319,11 @@ enum {
 
 // or'ed into what a file's probe says of a 128K snapshot: SNAP_EDITOR, the 128
 // editor is paged in, so a machine needs that editor; SNAP_IN_ROM, it was running
-// the ROM, so it goes on only on the model it names - with SNAP_FAMILY the model
-// is a guess, and any with its editor will do
+// the ROM, so it goes on only on the model it names
 #define SNAP_EDITOR	0x10000
 #define SNAP_IN_ROM	0x20000
-#define SNAP_FAMILY	0x40000
 #define SNAP_UNSURE	0x80000		// tied to its ROM, but which model's the file does not tell
-#define SNAP_HW_OF(snap)	((snap) & ~(SNAP_EDITOR | SNAP_IN_ROM | SNAP_FAMILY | SNAP_UNSURE))
+#define SNAP_HW_OF(snap)	((snap) & ~(SNAP_EDITOR | SNAP_IN_ROM | SNAP_UNSURE))
 
 int snapHwRuns(int snap, int hwid, int model);	// model: the machine's snapModel
 int snapHwIs(int snap, int hwid);
@@ -355,7 +353,8 @@ int saveSNA(Computer*, const char*, int);
 int loadSNA_f(Computer*, FILE*, size_t);
 int snaGetHardware(const char*);
 int sna_editor_of(const char* name, const unsigned char* const* eds, int count);
-int sna_plus3_drive(const char* name);int sna_hardware_of(size_t);
+int sna_plus3_drive(const char* name);
+int sna_hardware_of(size_t);
 
 int loadSPG(Computer*,const char*, int);
 
