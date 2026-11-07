@@ -63,9 +63,17 @@ before that point is upstream's history and is not repeated here.
   **Date Modified** once, a Downloads folder opens with the newest file at the top.
 - **File > Open has one Disk type instead of Disk A to Disk D**: a disk opened there goes
   into drive A; a drive's own **Open...** puts it into that drive.
+- **Ask in Options > File types asks every time there is a choice**, with the model named in
+  the file at the top. It does not ask on that very model, or when only one machine can run
+  the file. *(reported by ZXLion)*
 
 ### Fixed
 
+- **A 128K snapshot taken in the BASIC editor no longer stays on a +2, +2A or +3**, whose
+  ROMs differ from the 128K's: the RUN waiting in it was lost on the +2 and the +2A reset.
+  Auto opens it on the model it names. *(reported by ZXLion)*
+- **48K and 128K snapshots run on the +2A and +3**: a 48K `.z80` or a 128K `.sna` in
+  48 BASIC reset the machine there.
 - **A middle click clears DUMP's selection on any byte**, not only on the first eight of a
   row; Ctrl and Shift clicks mark the block there too.
 - **The Watcher's memory rows change while the machine runs**, as its registers do.
