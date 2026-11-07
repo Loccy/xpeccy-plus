@@ -703,13 +703,17 @@ int asmAddr(Computer* comp, QVariant val, xAdr xadr) {
 	QString lab;
 	QString str = val.toString();
 	int adr;
+	// a ROM label's name makes a label of the user's: @name goes to the ROM
+	bool romName = !str.startsWith('@') && labels_rom_only(str);
 	if (str.startsWith('@')) {			// @label will not create new label, just jump if it exists
 		adr = str_to_adr(comp, str.mid(1), true);
+	} else if (romName) {
+		adr = -1;
 	} else {
 		adr = str_to_adr(comp, str, true);
 	}
 	if (adr < 0) {
-		if (find_label(str).type >= 0) return -1;
+		if (!romName && (find_label(str).type >= 0)) return -1;
 		if ((str.at(0).isLetter() || (str.at(0) == '_')) && !str.contains('$') && !str.contains(' ')) {
 			lab = find_label(xadr);
 			if (!lab.isEmpty()) {						// remove current label
@@ -805,7 +809,7 @@ static QString asm_operand(QString op) {
 	}
 	xExpr exp = xexpr_compile(in.toLocal8Bit().data());
 	bool err = false;
-	int val = (int)xexpr_eval(exp, conf.zx, &err);
+	int val = (int)xexpr_eval(exp, conf.zx, &err, 0, 0, XE_CPU_HOME);
 	if (err || !xexpr_ok(exp)) return QString();
 	QString num = idx.isEmpty() ? QString("0x%0").arg(val & 0xffff, 0, 16)
 		: QString("%0%1").arg((val < 0) ? "-" : "+").arg(QString("0x%0").arg(qAbs(val) & 0xff, 0, 16));

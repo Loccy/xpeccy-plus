@@ -57,13 +57,20 @@ static QHash<int, QString> romByAbs;		// ROM cell -> name, for the machine in us
 static QMap<QString, QList<int> > romByName;	// name -> its cells, lowest first
 static QList<QByteArray> romBanks;		// the MD5s they were found by
 
+// The lists of Xpeccy+ are built in; one under a license of its own (the 48K
+// BASIC's, GPL) is a file in config/labels of the installed program, read as it is
 static void rom_lists_read() {
 	static bool done = false;
 	if (done) return;
 	done = true;
-	QDir dir(":/res/labels");
-	foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name)) {
-		QFile file(dir.filePath(fn));
+	QStringList paths;
+	foreach(QString dname, QStringList() << ":/res/labels" << (xconf_install_dir() + "/labels")) {
+		QDir dir(dname);
+		foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name))
+			paths.append(dir.filePath(fn));
+	}
+	foreach(QString path, paths) {
+		QFile file(path);
 		if (!file.open(QFile::ReadOnly)) continue;
 		romLabList lst;
 		while (!file.atEnd()) {
@@ -115,11 +122,16 @@ void labels_rom_scan(Computer* comp) {
 			}
 		}
 	}
-	if (!romByAbs.isEmpty()) xlog(XLG_FILE, XLL_INFO, "ROM labels: %i", romByAbs.size());
+	if (!romByAbs.isEmpty()) xlog(XLG_FILE, XLL_INFO, "ROM labels: %i", (int)romByAbs.size());
 }
 
 QStringList labels_rom_names() {
 	return conf.dbg.romlabels ? romByName.keys() : QStringList();
+}
+
+bool labels_rom_only(const QString& nm) {
+	if (!conf.dbg.romlabels || !romByName.contains(nm)) return false;
+	return !conf.curlabset || !conf.curlabset->list.contains(nm);
 }
 
 // the cell of a ROM label: the one paged in now if the name is in more banks
@@ -292,8 +304,12 @@ xAdr label_cpu(xAdr xadr) {
 	return xadr;
 }
 
+// A ROM label paged out names where its ROM runs, 0000-3FFF: CALL TRDOS_FUNCTION
+// from BASIC. Conditions go by label_cpu(), only where it is now
 xAdr find_label(QString nm) {
-	return label_cpu(find_label_cell(nm));
+	xAdr xadr = label_cpu(find_label_cell(nm));
+	if ((xadr.type == MEM_ROM) && (xadr.adr < 0)) xadr.adr = xadr.abs & 0x3fff;
+	return xadr;
 }
 
 // A local label, SjASMPlus's "global.local": the length of the part before the

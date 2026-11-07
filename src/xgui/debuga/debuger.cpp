@@ -2381,12 +2381,14 @@ void DebugWin::saveDasm() {
 	QList<dasmData> list;
 	Computer* comp = conf.zx;
 	if (file.open(QFile::WriteOnly)) {
-		QTextStream strm(&file);
+		QString body;
+		QTextStream strm(&body);
 		int adr = (blockStart < 0) ? 0 : (blockStart & comp->mem->busmask);
 		int end = (blockEnd < 0) ? comp->mem->busmask : (blockEnd & comp->mem->busmask);
+		int org = adr;
 		int work = 1;
-		strm << "; Created by Xpeccy+ Debugger\n\n";
-		strm << "\tORG 0x" << gethexword(adr) << "\n\n";
+		QSet<QString> defined;
+		QMap<QString, int> romUsed;		// ROM labels the code names: an EQU each, or it does not assemble
 		while ((adr <= end) && work) {
 			list = getDisasm(comp, adr);
 			foreach (drow, list) {
@@ -2395,20 +2397,37 @@ void DebugWin::saveDasm() {
 				if (drow.isequ) {
 					strm << drow.aname << ":";
 					strm << dasm_export(drow);
+					defined.insert(drow.aname);
 				} else if (drow.islab) {
 					if (drow.iscom) {
 						strm << drow.aname;
 					} else {
 						strm << drow.aname << ":";
+						defined.insert(drow.aname);
 					}
 				} else {
 					strm << "\t" << dasm_export(drow);
+					if (!drow.label.isEmpty() && labels_rom_only(drow.label))
+						romUsed[drow.label] = find_label(drow.label).adr;
 				}
 				strm << "\n";
 			}
 			if (dasm_has_separator(list))
 				strm << "\n";
 		}
+		strm.flush();
+		QTextStream out(&file);
+		out << "; Created by Xpeccy+ Debugger\n\n";
+		bool equ = false;
+		for (QMap<QString, int>::const_iterator it = romUsed.constBegin(); it != romUsed.constEnd(); it++) {
+			if (defined.contains(it.key()) || (it.value() < 0)) continue;
+			out << it.key() << "\tEQU 0x" << gethexword(it.value()) << "\n";
+			equ = true;
+		}
+		if (equ) out << "\n";
+		out << "\tORG 0x" << gethexword(org) << "\n\n";
+		out << body;
+		out.flush();
 		file.close();
 	} else {
 		shitHappens("Can't write to file");

@@ -1591,7 +1591,19 @@ void label_complete(QLineEdit* edt) {
 			return;
 		}
 		cmp->complete();
-		cmp->popup()->setCurrentIndex(cmp->completionModel()->index(0, 0));	// Enter takes the first
+		// Enter takes the name typed in full, else the first that starts with it, else
+		// the first: START is START, not ARC_START before it
+		QAbstractItemModel* cm = cmp->completionModel();
+		int pick = -1;
+		for (int i = 0; i < cm->rowCount(); i++) {
+			QString nm = cm->index(i, 0).data().toString();
+			if (nm.compare(pre, Qt::CaseInsensitive) == 0) {
+				pick = i;
+				break;
+			}
+			if ((pick < 0) && nm.startsWith(pre, Qt::CaseInsensitive)) pick = i;
+		}
+		cmp->popup()->setCurrentIndex(cm->index(qMax(pick, 0), 0));
 	});
 	QObject::connect(cmp, QOverload<const QString&>::of(&QCompleter::activated), edt, [edt, word](const QString& lab) {
 		int s, e;

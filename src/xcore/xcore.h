@@ -268,6 +268,8 @@ unsigned labels_gen();		// changes whenever the labels in effect do
 void labels_touch();		// ...and makes it change
 // the labels of known ROMs, below the user's: found again when the ROM changes
 void labels_rom_scan(Computer*);	// under emu_lock
+bool labels_rom_only(const QString&);	// a ROM label's name, not one of the user's
+QString xconf_install_dir();		// config of the installed program
 QStringList labels_rom_names();
 xAdr labels_rom_cell(const QString&);
 // "global.local": how much of it is the global, 0 if not local; the global a cell is under

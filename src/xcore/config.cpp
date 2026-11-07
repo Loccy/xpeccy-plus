@@ -648,6 +648,12 @@ static QString sysConfigDir() {
 #endif
 }
 
+// the installed configuration, whatever --confdir says: next to the binary on Windows
+QString xconf_install_dir() {
+	QString dir = sysConfigDir();
+	return dir.isEmpty() ? QCoreApplication::applicationDirPath() + "/config" : dir;
+}
+
 // add to the config directory whatever the installed configuration has and it
 // lacks, so files an update brings along show up. Files already there are left
 // alone, edits included.

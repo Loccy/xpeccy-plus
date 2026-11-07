@@ -32,7 +32,6 @@
         <file>res/shaders/widetridot-nocurve-crisp.txt</file>
         <file>res/shaders/widetridot-nocurve-light.txt</file>
         <file>res/shaders/zx-rf-artifact.txt</file>
-        <file>res/labels/48.labels</file>
         <file>res/labels/plus3dos.labels</file>
         <file>res/labels/trdos.labels</file>
         <file>res/styles/Dark.pal</file>
