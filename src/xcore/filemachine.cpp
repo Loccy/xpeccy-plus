@@ -152,37 +152,37 @@ void fm_save(FILE* file) {
 }
 
 // A 128K .sna in its editor names no model, so the editor is told from the file
-// against the three in the ROM folder; a file that does not tell runs anywhere
-// a 128K does, as the user picks.
+// against the ones in the ROM folder; a file that does not tell runs anywhere a
+// 128K does, as the user picks.
 static int fm_sna_guess(const char* path) {
 	static const char* names[] = {"128-0.rom", "plus2-0.rom", "plus3-0.rom"};
 	static const int snaps[] = {SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY,
 		SNAP_HW_PLUS2 | SNAP_IN_ROM | SNAP_FAMILY, SNAP_HW_PLUS2A};
-	static std::vector<unsigned char> img[3];
+	std::vector<unsigned char> img[3];
 	const unsigned char* eds[3];
+	int idx[3];
 	int n = 0;
 	for (int i = 0; i < 3; i++) {
-		if (img[i].size() != MEM_16K) {
-			img[i].clear();
-			FILE* file = fopen((conf.path.romDir + SLASH + names[i]).c_str(), "rb");
-			if (file) {
-				img[i].resize(MEM_16K);
-				if (fread(img[i].data(), 1, MEM_16K, file) != MEM_16K) img[i].clear();
-				fclose(file);
-			}
+		FILE* file = fopen((conf.path.romDir + SLASH + names[i]).c_str(), "rb");
+		if (!file) continue;
+		img[i].resize(MEM_16K);
+		if (fread(img[i].data(), 1, MEM_16K, file) == MEM_16K) {
+			eds[n] = img[i].data();
+			idx[n++] = i;
 		}
-		if (img[i].size() != MEM_16K) return SNAP_HW_128K;
-		eds[n++] = img[i].data();
+		fclose(file);
 	}
-	int ed = sna_editor_of(path, eds, n);
-	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[ed]);
-	return (ed < 0) ? SNAP_HW_128K : snaps[ed];
+	int ed = (n > 0) ? sna_editor_of(path, eds, n) : -1;
+	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[idx[ed]]);
+	return (ed < 0) ? SNAP_HW_128K : snaps[idx[ed]];
 }
 
 xFileMacPick fm_pick(int ftype, const char* path) {
 	xFileMacPick pick;
 	const xFileMac* row = fm_row(ftype);
 	if (!row) return pick;
+	std::string pref = fm_pref(row->key);
+	if (pref == FM_KEEP) return pick;
 	int snap = SNAP_HW_UNKNOWN;
 	std::string target = row->target ? row->target : "";
 	if (row->probe) {
@@ -197,8 +197,6 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 			target = id;
 		}
 	}
-	std::string pref = fm_pref(row->key);
-	if (pref == FM_KEEP) return pick;
 	// one machine for the whole format, unless it cannot take this very file
 	if ((pref != FM_AUTO) && (pref != FM_ASK) && fm_runs(pref, row->need, snap)) {
 		if (pref != conf.macId) pick.target = pref;
@@ -211,7 +209,7 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	std::vector<std::string> can;
 	auto add = [&](const std::string& id) {
 		if (!id.empty() && (id != conf.macId) && (std::find(can.begin(), can.end(), id) == can.end())
-				&& fm_runs(id, row->need, snap))
+				&& fits(id))
 			can.push_back(id);
 	};
 	// Ask, whenever there is a choice: not when the running machine is the model

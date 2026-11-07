@@ -94,8 +94,8 @@ static int snap_editor(int hwid, int model) {
 
 // pc is where the machine was: for a snapshot taken as the interrupt came (PC
 // #0038) the caller passes the address on top of the stack. Under #4000 it was
-// running the ROM, and the stack may hold the editor's addresses too. One in RAM
-// with 48 BASIC paged is a program running, and 48 BASIC is the same everywhere.
+// running the ROM - 48 BASIC too, as 128 BASIC calls it and keeps the editor's
+// addresses on the stack. One in RAM with 48 BASIC paged is a program running.
 int snap_rom_flags(int pc, int p7ffd) {
 	return ((p7ffd & 0x10) ? 0 : SNAP_EDITOR) | ((pc < 0x4000) ? SNAP_IN_ROM : 0);
 }
