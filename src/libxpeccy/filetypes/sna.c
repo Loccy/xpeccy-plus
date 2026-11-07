@@ -91,7 +91,7 @@ int loadSNA_f(Computer* comp, FILE* file, size_t fileSize) {
 		comp->tsconf.p21af &= ~0x08;		// rom @ 0000
 		comp->tsconf.Page0 &= 0xfc;		// set page0 if 21af.b2=1
 		comp->tsconf.Page0 |= ((comp->flgROM) ? 1 : 0) | (comp->flgDOS ? 0 : 2);
-		snap_plus3_basic48(comp, SNAP_HW_128K);
+		snap_plus3_basic48(comp, SNAP_HW_128K, tmp);
 		comp->hw->out(comp, 0x7ffd, tmp);
 
 		for (tmp2 = 0; tmp2 < 8; tmp2++) {
@@ -120,16 +120,101 @@ int loadSNA(Computer* comp, const char* name, int drv) {
 	return res;
 }
 
+// A .sna names no model, and 48 BASIC is the same on all of them: only one
+// running the 128 editor (7FFD bit 4 clear, the PC in ROM) is in a ROM of its own
+// model, and sna_editor_of() is left to say which. One running a program is
+// left to any 128K.
 int snaGetHardware(const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return SNAP_HW_UNKNOWN;
 	size_t size = fgetSize(file);
 	int res = sna_hardware_of(size);
 	unsigned char buf[3];			// 49179: PC, 49181: 7FFD
-	if ((res == SNAP_HW_128K) && !fseek(file, 49179, SEEK_SET) && (fread(buf, 1, 3, file) == 3))
-		res |= snap_in_rom(buf[0] | (buf[1] << 8), buf[2]);
+	if ((res == SNAP_HW_128K) && !fseek(file, 49179, SEEK_SET) && (fread(buf, 1, 3, file) == 3)
+			&& !(buf[2] & 0x10)) {
+		int pc = buf[0] | (buf[1] << 8);
+		unsigned char hd[2];		// 23: SP
+		if ((pc == 0x0038) && !fseek(file, 23, SEEK_SET) && (fread(hd, 1, 2, file) == 2)) {
+			int sp = hd[0] | (hd[1] << 8);	// as the interrupt came: where it came at
+			int bank = buf[2] & 7;
+			// the file holds banks 5, 2 and the paged one, in that order
+			long top = (bank == 5) ? 0 : (bank == 2) ? 0x4000 : 0x8000;
+			long off = 27 + ((sp < 0xc000) ? sp - 0x4000 : top + (sp & 0x3fff));
+			if ((sp >= 0x4000) && (sp < 0xffff) && !fseek(file, off, SEEK_SET) && (fread(hd, 1, 2, file) == 2))
+				pc = hd[0] | (hd[1] << 8);
+		}
+		if (pc < 0x4000) res |= SNAP_IN_ROM;
+	}
 	fclose(file);
 	return res;
+}
+
+static int sna_after_call(const unsigned char* rom, int adr) {
+	static const unsigned char calls[] = {0xcd, 0xc4, 0xcc, 0xd4, 0xdc, 0xe4, 0xec, 0xf4, 0xfc};
+	if ((adr >= 1) && ((rom[adr - 1] & 0xc7) == 0xc7)) return 1;		// RST n
+	if (adr >= 3)
+		for (size_t i = 0; i < sizeof(calls); i++)
+			if (rom[adr - 3] == calls[i]) return 1;
+	return 0;
+}
+
+// Which of the 128 editors given (16K images) a 128K .sna with its editor paged
+// in was taken with, -1 when the file does not tell. First the routines the
+// editor copies to #5B00 at start - the +3's are its own, the 128K's and the
+// +2's the same - then the words on the stack that point into the ROM: a return
+// address follows a CALL or an RST in the editor that pushed it.
+int sna_editor_of(const char* name, const unsigned char* const* eds, int count) {
+	FILE* file = fopen(name, "rb");
+	if (!file) return -1;
+	static unsigned char buf[0x24000];
+	size_t len = fread(buf, 1, sizeof(buf), file);
+	fclose(file);
+	if ((len < 131103) || (buf[49181] & 0x10) || (count > 8)) return -1;
+	int bank = buf[49181] & 7;
+	const unsigned char* page[4] = {NULL, buf + 27, buf + 27 + 0x4000, buf + 27 + 0x8000};	// 5, 2, the paged one
+	if ((bank == 5) || (bank == 2)) page[3] = page[(bank == 5) ? 1 : 2];
+	int cand[8];
+	int n = 0;
+	const unsigned char* swp = page[1] + 0x1b00;
+	for (int i = 0; i < count; i++) {
+		cand[i] = 0;
+		for (int a = 0; a <= 0x4000 - 32; a++) {
+			if (!memcmp(eds[i] + a, swp, 32)) {
+				cand[i] = 1;
+				n++;
+				break;
+			}
+		}
+	}
+	if (n == 1) {
+		for (int i = 0; i < count; i++)
+			if (cand[i]) return i;
+	}
+	if (n == 0) {				// overwritten: let the stack alone decide
+		for (int i = 0; i < count; i++) cand[i] = 1;
+	}
+	int sp = buf[23] | (buf[24] << 8);
+	int score[8] = {0};
+	for (int k = 0; k < 16; k++) {
+		int adr = (sp + 2 * k) & 0xffff;
+		if ((adr < 0x4000) || (adr == 0xffff)) break;
+		const unsigned char* p = page[adr >> 14] + (adr & 0x3fff);
+		int w = p[0] | (p[1] << 8);
+		if ((w < 0x40) || (w >= 0x4000)) continue;
+		for (int i = 0; i < count; i++)
+			if (cand[i]) score[i] += sna_after_call(eds[i], w);
+	}
+	int best = -1;
+	int top = 0;
+	for (int i = 0; i < count; i++) {
+		if (score[i] > top) {
+			top = score[i];
+			best = i;
+		} else if (score[i] == top) {
+			best = -1;
+		}
+	}
+	return best;
 }
 
 int saveSNA(Computer* comp, const char* name, int drv) {

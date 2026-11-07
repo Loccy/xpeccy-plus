@@ -317,15 +317,19 @@ enum {
 	SNAP_HW_CORE = 0x100
 };
 
-// or'ed into what a file's probe says: the snapshot stopped inside its ROM - the
-// 128 editor paged in, or the PC there - so it goes on only on that very ROM
-#define SNAP_IN_ROM	0x10000
-#define SNAP_HW_OF(snap)	((snap) & ~SNAP_IN_ROM)
+// or'ed into what a file's probe says of a 128K snapshot: SNAP_EDITOR, the 128
+// editor is paged in, so a machine needs that editor; SNAP_IN_ROM, it was running
+// the ROM, so it goes on only on the model it names - with SNAP_FAMILY the model
+// is a guess, and any with its editor will do
+#define SNAP_EDITOR	0x10000
+#define SNAP_IN_ROM	0x20000
+#define SNAP_FAMILY	0x40000
+#define SNAP_HW_OF(snap)	((snap) & ~(SNAP_EDITOR | SNAP_IN_ROM | SNAP_FAMILY))
 
 int snapHwRuns(int snap, int hwid, int model);	// model: the machine's snapModel
 int snapHwIs(int snap, int hwid);
-int snap_in_rom(int pc, int p7ffd);		// SNAP_IN_ROM or 0, for a 128K-paging snapshot
-void snap_plus3_basic48(Computer* comp, int snap);
+int snap_rom_flags(int pc, int p7ffd);		// SNAP_EDITOR, SNAP_IN_ROM of a 128K snapshot
+void snap_plus3_basic48(Computer* comp, int snap, int p7ffd);	// 1FFD for a file that has none
 
 int loadSZX(Computer*, const char*, int);
 int loadSZX_buf(Computer*, const unsigned char*, size_t);
@@ -349,6 +353,7 @@ int loadSNA(Computer*,const char*, int);
 int saveSNA(Computer*, const char*, int);
 int loadSNA_f(Computer*, FILE*, size_t);
 int snaGetHardware(const char*);
+int sna_editor_of(const char* name, const unsigned char* const* eds, int count);
 int sna_hardware_of(size_t);
 
 int loadSPG(Computer*,const char*, int);

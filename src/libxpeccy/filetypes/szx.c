@@ -790,7 +790,7 @@ int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
 			&& snapHwRuns(snap, comp->hw->id, comp->snapModel)) {
 		comp->hw->out(comp, 0x1ffd, ld.p1ffd);
 	} else {
-		snap_plus3_basic48(comp, snap);
+		snap_plus3_basic48(comp, snap, (szx_is48(ld.mid) || (ld.p7ffd < 0)) ? 0x10 : ld.p7ffd);
 	}
 	// a 48K has no paging: its 7ffd byte is 0, and taken as one it would put
 	// the 128 rom in on a machine that has one

@@ -92,25 +92,42 @@ static int snap_editor(int hwid, int model) {
 	return ED_SINCLAIR;
 }
 
-// A 128K snapshot is in its ROM when the editor is paged in or the PC is under
-// #4000: then the stack may hold the editor's own addresses as well. One in RAM
+// pc is where the machine was: for a snapshot taken as the interrupt came (PC
+// #0038) the caller passes the address on top of the stack. Under #4000 it was
+// running the ROM, and the stack may hold the editor's addresses too. One in RAM
 // with 48 BASIC paged is a program running, and 48 BASIC is the same everywhere.
-int snap_in_rom(int pc, int p7ffd) {
-	return (!(p7ffd & 0x10) || (pc < 0x4000)) ? SNAP_IN_ROM : 0;
+int snap_rom_flags(int pc, int p7ffd) {
+	return ((p7ffd & 0x10) ? 0 : SNAP_EDITOR) | ((pc < 0x4000) ? SNAP_IN_ROM : 0);
+}
+
+// One stopped in its ROM goes on only on the model it names: the clones patch
+// the very menu (the Pentagon's TR-DOS item), and the +2's editor is another
+// build. A model guessed (SNAP_FAMILY) asks for the editor only.
+static int snap_on_model(int snap, int family, int hwid, int model) {
+	int ed = snap_editor(hwid, model);
+	switch (snap) {
+		case SNAP_HW_128K: return family ? (ed == ED_SINCLAIR) : ((hwid == HW_ZX128) && (ed == ED_SINCLAIR));
+		case SNAP_HW_PLUS2: return ed == ED_PLUS2;
+		case SNAP_HW_PENTAGON: return family ? (ed == ED_SINCLAIR) : ((hwid == HW_PENT) || (hwid == HW_P1024));
+	}
+	return 0;
 }
 
 // can a machine on that core run a snapshot taken on that hardware: the paging
-// has to be there, and for one stopped in its ROM, the very same editor
+// has to be there, the editor paged in, and for one running the ROM, that ROM
 int snapHwRuns(int snap, int hwid, int model) {
 	int rom = snap & SNAP_IN_ROM;
+	int editor = snap & SNAP_EDITOR;
+	int family = snap & SNAP_FAMILY;
 	snap = SNAP_HW_OF(snap);
 	if (snap >= SNAP_HW_CORE) return hwid == snap - SNAP_HW_CORE;
 	switch (snap) {
 		case SNAP_HW_128K:
 		case SNAP_HW_PENTAGON:
-			return rom ? (snap_editor(hwid, model) == ED_SINCLAIR) : (hwid != HW_ZX48);
 		case SNAP_HW_PLUS2:
-			return rom ? (snap_editor(hwid, model) == ED_PLUS2) : (hwid != HW_ZX48);
+			if (rom) return snap_on_model(snap, family, hwid, model);
+			if (editor) return snap_editor(hwid, model) == ((snap == SNAP_HW_PLUS2) ? ED_PLUS2 : ED_SINCLAIR);
+			return hwid != HW_ZX48;
 		case SNAP_HW_PLUS2A:
 		case SNAP_HW_PLUS3: return (hwid == HW_PLUS2A) || (hwid == HW_PLUS3);
 		case SNAP_HW_SCORPION: return (hwid == HW_SCORP) || (hwid == HW_SCORPTP);
@@ -141,16 +158,16 @@ int snapHwIs(int snap, int hwid) {
 	return 1;			// one nobody knows: leave the machine alone
 }
 
-// A snapshot of a machine with no 1FFD, loaded on a +2A/+3: the +3 ROM pages
+// A snapshot that says nothing of 1FFD, loaded on a +2A/+3: the +3 ROM pages
 // 48 BASIC (ROM 3) in by 1FFD bit 2 together with 7FFD bit 4 (its routine at
-// #3F2A), so a program it runs has 1FFD #04. Before 7FFD is written: the +3
-// takes 1FFD only while 7FFD is unlocked.
-void snap_plus3_basic48(Computer* comp, int snap) {
+// #3F2A), so a program it runs in 48 BASIC has 1FFD #04; with bit 4 clear it is
+// the editor, ROM 0, and 1FFD 0 (a .sna saved on a +2A in its menu). Before
+// 7FFD is written: the +3 takes 1FFD only while 7FFD is unlocked.
+void snap_plus3_basic48(Computer* comp, int snap, int p7ffd) {
 	snap = SNAP_HW_OF(snap);
 	if ((comp->hw->id != HW_PLUS2A) && (comp->hw->id != HW_PLUS3)) return;
-	if ((snap == SNAP_HW_PLUS2A) || (snap == SNAP_HW_PLUS3)) return;
 	if (snap >= SNAP_HW_CORE) return;	// a file of ours brings its machine's own ports
-	comp->hw->out(comp, 0x1ffd, 0x04);
+	comp->hw->out(comp, 0x1ffd, (p7ffd & 0x10) ? 0x04 : 0x00);
 }
 
 int fgetw(FILE* file) {

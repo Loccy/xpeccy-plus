@@ -151,6 +151,34 @@ void fm_save(FILE* file) {
 	}
 }
 
+// A 128K .sna in its editor names no model, so the editor is told from the file
+// against the three in the ROM folder; a file that does not tell runs anywhere
+// a 128K does, as the user picks.
+static int fm_sna_guess(const char* path) {
+	static const char* names[] = {"128-0.rom", "plus2-0.rom", "plus3-0.rom"};
+	static const int snaps[] = {SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY,
+		SNAP_HW_PLUS2 | SNAP_IN_ROM | SNAP_FAMILY, SNAP_HW_PLUS2A};
+	static std::vector<unsigned char> img[3];
+	const unsigned char* eds[3];
+	int n = 0;
+	for (int i = 0; i < 3; i++) {
+		if (img[i].size() != MEM_16K) {
+			img[i].clear();
+			FILE* file = fopen((conf.path.romDir + SLASH + names[i]).c_str(), "rb");
+			if (file) {
+				img[i].resize(MEM_16K);
+				if (fread(img[i].data(), 1, MEM_16K, file) != MEM_16K) img[i].clear();
+				fclose(file);
+			}
+		}
+		if (img[i].size() != MEM_16K) return SNAP_HW_128K;
+		eds[n++] = img[i].data();
+	}
+	int ed = sna_editor_of(path, eds, n);
+	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[ed]);
+	return (ed < 0) ? SNAP_HW_128K : snaps[ed];
+}
+
 xFileMacPick fm_pick(int ftype, const char* path) {
 	xFileMacPick pick;
 	const xFileMac* row = fm_row(ftype);
@@ -159,6 +187,8 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	std::string target = row->target ? row->target : "";
 	if (row->probe) {
 		snap = row->probe(path);
+		if ((ftype == FL_SNA) && (snap & SNAP_IN_ROM))
+			snap = fm_sna_guess(path);
 		target = fm_snap_target(snap);
 		// a file of ours names the very machine it was taken on
 		if ((SNAP_HW_OF(snap) >= SNAP_HW_CORE) && (ftype == FL_SZX)) {
