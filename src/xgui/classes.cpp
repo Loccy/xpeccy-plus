@@ -1309,11 +1309,11 @@ QWidget* xItemDelegate::createEditor(QWidget* par, const QStyleOptionViewItem&, 
 // all, type C000: #C000); Backspace or Delete on it takes it off, decimal then.
 // A label or a letter past F goes in without it. In decimal nothing is added.
 
-// a table, so the values line up whatever the font makes of the names
+// a table, so the values line up whatever the font makes of the names; the head
+// over it, not a row of it, where a long line would widen the names' column
 static QString tip_head(const QString& head) {
-	QString res("<table cellspacing=0 cellpadding=0>");
-	if (!head.isEmpty()) res.append(QString("<tr><td colspan=2>%0</td></tr>").arg(head));
-	return res;
+	QString res = head.isEmpty() ? QString() : QString("<div>%0</div>").arg(head);
+	return res + "<table cellspacing=0 cellpadding=0>";
 }
 
 static QString tip_row(const QString& name, const QString& val) {
