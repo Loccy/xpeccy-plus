@@ -15,6 +15,7 @@ xDiskDump::xDiskDump(QWidget*) {
 	rowBytes = 0;			// auto
 	mod = new xDiskDumpModel();
 	setModel(mod);
+	dbg_cell_tips(this);
 	setDrive(0);
 }
 
@@ -33,10 +34,6 @@ void xDiskDump::setTrack(int tr) {
 void xDiskDump::update() {
 	setDrive(drv);
 	dbg_cell_tip_follow(this);
-}
-
-bool xDiskDump::viewportEvent(QEvent* ev) {
-	return dbg_cell_tip(this, ev) || QTableView::viewportEvent(ev);
 }
 
 void xDiskDump::toTarget() {

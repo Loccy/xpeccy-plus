@@ -105,7 +105,6 @@ class xDumpTable:public QTableView {
 		void mouseReleaseEvent(QMouseEvent*);
 		void wheelEvent(QWheelEvent*);
 		void resizeEvent(QResizeEvent*);
-		bool viewportEvent(QEvent*);
 };
 
 #include "ui_form_dump.h"

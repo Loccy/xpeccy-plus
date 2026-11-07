@@ -272,22 +272,24 @@ void xHexSpin::setNumTip(int mode) {
 	numTip = mode;
 }
 
-// The value's tip, built when the mouse rests on the field; a field without one
-// keeps its own tooltip
+// The field whose value's tip is up, and what it said: still up while the tip
+// says it - one owner, as two fields may say the same
+static QPointer<xHexSpin> spinTipOwner;
+static QString spinTipText;
+
+// The value's tip, built when the mouse rests on the field; a field without one,
+// or with the tips off, keeps its own tooltip
 bool xHexSpin::event(QEvent* ev) {
-	if ((ev->type() != QEvent::ToolTip) || (numTip == XHS_TIP_NONE))
+	if ((ev->type() != QEvent::ToolTip) || (numTip == XHS_TIP_NONE) || !conf.dbg.numtips || isblank)
 		return QLineEdit::event(ev);
 	showNumTip();
 	return true;
 }
 
 void xHexSpin::showNumTip() {
-	QString txt;
-	if (conf.dbg.numtips && !isblank)
-		txt = dbg_num_tip(value, max > 0xff, QString(), numTip == XHS_TIP_LABEL);
-	dbg_show_tip(this, rect(), txt, true);
-	tipUp = !txt.isEmpty();
-	tipText = txt;
+	spinTipText = dbg_num_tip(value, max > 0xff, QString(), numTip == XHS_TIP_LABEL);
+	spinTipOwner = this;
+	dbg_show_tip(this, rect(), spinTipText, true);
 }
 
 void xHexSpin::focusInEvent(QFocusEvent* ev) {
@@ -423,11 +425,11 @@ void xHexSpin::setValue(int nval) {
 	if (chgMask != oldMask) update();
 	updatePal();
 	// a tip held open follows the value, as the Watcher's move every frame
-	if (tipUp && (value != was)) {
-		if (QToolTip::isVisible() && (QToolTip::text() == tipText)) {
+	if ((spinTipOwner == this) && (value != was)) {
+		if (QToolTip::isVisible() && (QToolTip::text() == spinTipText)) {
 			showNumTip();
 		} else {
-			tipUp = false;
+			spinTipOwner = nullptr;
 		}
 	}
 }
@@ -1361,6 +1363,14 @@ QString dbg_byte_tip(int val, int word, const QString& where, const QString& lab
 	return res;
 }
 
+QString dbg_cpu_byte_tip(int adr, const QString& note) {
+	Computer* comp = conf.zx;
+	adr &= 0xffff;
+	int lo = comp_peek(comp, adr, MEM_VIEW_READ, NULL) & 0xff;
+	int hi = comp_peek(comp, (adr + 1) & 0xffff, MEM_VIEW_READ, NULL) & 0xff;
+	return dbg_byte_tip(lo, lo | (hi << 8), dbg_word(adr), find_label(comp_get_xadr(comp, adr, MEM_VIEW_READ)), note);
+}
+
 void reg_field_setup(xHexSpin* fld, int size, int flag, const QString& name) {
 	int mx;
 	switch (size) {
@@ -1444,6 +1454,21 @@ bool dbg_cell_tip(QAbstractItemView* view, QEvent* ev) {
 	cellTipCol = idx.column();
 	cellTipText = txt;
 	return true;
+}
+
+// a table's viewport hands its tooltip events to dbg_cell_tip
+class xCellTipFilter : public QObject {
+	public:
+		xCellTipFilter(QAbstractItemView* p) : QObject(p) {}
+	protected:
+		bool eventFilter(QObject* obj, QEvent* ev) override {
+			QAbstractItemView* view = static_cast<QAbstractItemView*>(parent());
+			return (obj == view->viewport()) && dbg_cell_tip(view, ev);
+		}
+};
+
+void dbg_cell_tips(QAbstractItemView* view) {
+	view->viewport()->installEventFilter(new xCellTipFilter(view));
 }
 
 // one ToolTipRole a refresh, and only while the tip is up

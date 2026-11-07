@@ -1236,6 +1236,7 @@ int xDisasmTable::updContent() {
 			setCurrentIndex(model->index(r, 0));
 		}
 	}
+	dbg_cell_tip_follow(this);
 	return res;
 }
 
@@ -1559,14 +1560,9 @@ void xDisasmTable::focusInEvent(QFocusEvent* ev) {
 // the address column's tip over its address, as the command column has it over
 // the number pointed at
 bool xDisasmTable::viewportEvent(QEvent* ev) {
-	if (ev->type() != QEvent::ToolTip)
-		return QTableView::viewportEvent(ev);
-	QHelpEvent* hev = static_cast<QHelpEvent*>(ev);
-	QModelIndex idx = indexAt(hev->pos());
-	if (!idx.isValid() || (idx.column() != 0))
-		return QTableView::viewportEvent(ev);
-	dbg_show_tip(viewport(), visualRect(idx), idx.data(Qt::ToolTipRole).toString(), true);
-	return true;
+	if ((ev->type() == QEvent::ToolTip) && (columnAt(static_cast<QHelpEvent*>(ev)->pos().x()) == 0))
+		return dbg_cell_tip(this, ev);
+	return QTableView::viewportEvent(ev);
 }
 
 void xDisasmTable::mouseMoveEvent(QMouseEvent* ev) {

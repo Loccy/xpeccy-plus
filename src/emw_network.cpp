@@ -471,6 +471,10 @@ void MainWin::socketRead() {
 			QPoint pos(prm[1].toInt(), prm[2].toInt());
 			QWidget* at = win->childAt(pos);
 			if (!at) at = win;
+			// a tip up from before goes at once (hideText lets it linger), so
+			// the answer is this event's tip or none
+			foreach(QWidget* w, QApplication::topLevelWidgets())
+				if (w->isVisible() && w->inherits("QTipLabel")) w->hide();
 			QHelpEvent hev(QEvent::ToolTip, at->mapFrom(win, pos), win->mapToGlobal(pos));
 			QApplication::sendEvent(at, &hev);
 			QString txt = QToolTip::isVisible() ? QToolTip::text() : QString("nothing");

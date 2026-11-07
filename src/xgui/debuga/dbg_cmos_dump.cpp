@@ -74,11 +74,7 @@ Qt::ItemFlags xCmosDumpModel::flags(const QModelIndex& idx) const {
 // table
 
 xCmosDumpTable::xCmosDumpTable(QWidget* p):QTableView(p) {
-
-}
-
-bool xCmosDumpTable::viewportEvent(QEvent* ev) {
-	return dbg_cell_tip(this, ev) || QTableView::viewportEvent(ev);
+	dbg_cell_tips(this);
 }
 
 void xCmosDumpTable::resizeEvent(QResizeEvent* e) {

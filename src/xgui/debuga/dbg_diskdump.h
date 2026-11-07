@@ -36,7 +36,6 @@ class xDiskDump : public QTableView {
 		void layoutColumns();
 		xDiskDumpModel* mod;
 		void resizeEvent(QResizeEvent*);
-		bool viewportEvent(QEvent*);
 };
 
 #include "ui_form_fdddump.h"

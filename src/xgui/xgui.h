@@ -90,8 +90,6 @@ class xHexSpin : public QLineEdit {
 		bool fixing = false;	// putting back a text that was refused: not a new one
 		int fmtSeen = -1;	// the debugger's numbers numFmt() last set
 		int numTip = 0;		// XHS_TIP_*
-		bool tipUp = false;	// the value's tip was shown by this field
-		QString tipText;	// ...saying this: still up while the tip says it
 		void showNumTip();
 		int hsflag;
 		int base;
@@ -246,15 +244,19 @@ QString dbg_num_tip(int val, bool adr, const QString& name = QString(), bool lab
 // from there (word < 0: none) in hex and decimal, the byte in binary; a note
 // line over them
 QString dbg_byte_tip(int val, int word, const QString& where, const QString& label = QString(), const QString& note = QString());
+// ...for the byte at a CPU address, as the CPU reads it now
+QString dbg_cpu_byte_tip(int adr, const QString& note = QString());
 // a number's tip at a rectangle of a widget, nothing: hidden. above: over a
 // number pointed at, gone when the mouse leaves it; else under a field being
 // typed into, there until hidden. The other side at a screen edge
 void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above);
 // a table's cell tip (ToolTipRole) over the cell, from viewportEvent: true when
-// it was the hover's. dbg_cell_tip_follow() after a table's refresh puts the
-// new value into a tip still up over it
+// it was the hover's. dbg_cell_tips() makes every cell of a table show its own;
+// dbg_cell_tip_follow() after a table's refresh puts the new value into a tip
+// still up over it
 class QAbstractItemView;
 bool dbg_cell_tip(QAbstractItemView* view, QEvent* ev);
+void dbg_cell_tips(QAbstractItemView* view);
 void dbg_cell_tip_follow(QAbstractItemView* view);
 // a register's field (XHS_NUMS) for its size and flags (xRegister): its range,
 // the debugger's base, Split pairs and the width those make; name: its tip
