@@ -26,6 +26,8 @@
 #include <QCompleter>
 #include <QStringListModel>
 #include <QAbstractItemView>
+#include <QHelpEvent>
+#include <QPointer>
 #include <QActionGroup>
 #include <QMenu>
 #include <climits>
@@ -266,6 +268,28 @@ void xHexSpin::changeEvent(QEvent* ev) {
 	}
 }
 
+void xHexSpin::setNumTip(int mode) {
+	numTip = mode;
+}
+
+// The value's tip, built when the mouse rests on the field; a field without one
+// keeps its own tooltip
+bool xHexSpin::event(QEvent* ev) {
+	if ((ev->type() != QEvent::ToolTip) || (numTip == XHS_TIP_NONE))
+		return QLineEdit::event(ev);
+	showNumTip();
+	return true;
+}
+
+void xHexSpin::showNumTip() {
+	QString txt;
+	if (conf.dbg.numtips && !isblank)
+		txt = dbg_num_tip(value, max > 0xff, QString(), numTip == XHS_TIP_LABEL);
+	dbg_show_tip(this, rect(), txt, true);
+	tipUp = !txt.isEmpty();
+	tipText = txt;
+}
+
 void xHexSpin::focusInEvent(QFocusEvent* ev) {
 	startEdit();
 	QLineEdit::focusInEvent(ev);
@@ -377,6 +401,7 @@ void xHexSpin::setValue(int nval) {
 	nval = minMaxCorrect(nval, min, max);
 	unblank();
 	int oldMask = chgMask;
+	int was = value;
 	if ((value == nval) && !(hsflag & XHS_UPD)) {
 		chgMask = 0;
 	} else {
@@ -397,6 +422,14 @@ void xHexSpin::setValue(int nval) {
 	// would stay on screen. Ask for one whenever the mask moved.
 	if (chgMask != oldMask) update();
 	updatePal();
+	// a tip held open follows the value, as the Watcher's move every frame
+	if (tipUp && (value != was)) {
+		if (QToolTip::isVisible() && (QToolTip::text() == tipText)) {
+			showNumTip();
+		} else {
+			tipUp = false;
+		}
+	}
 }
 
 // The whole field lit means the whole value changed; one byte of it means only
@@ -1276,6 +1309,21 @@ QWidget* xItemDelegate::createEditor(QWidget* par, const QStyleOptionViewItem&, 
 // all, type C000: #C000); Backspace or Delete on it takes it off, decimal then.
 // A label or a letter past F goes in without it. In decimal nothing is added.
 
+// a table, so the values line up whatever the font makes of the names
+static QString tip_head(const QString& head) {
+	QString res("<table cellspacing=0 cellpadding=0>");
+	if (!head.isEmpty()) res.append(QString("<tr><td colspan=2>%0</td></tr>").arg(head));
+	return res;
+}
+
+static QString tip_row(const QString& name, const QString& val) {
+	return QString("<tr><td>%0&nbsp;</td><td>%1</td></tr>").arg(name, val);
+}
+
+static QString tip_bold(const QString& txt) {
+	return QString("<b>%0</b>").arg(txt.toHtmlEscaped());
+}
+
 QString dbg_num_tip(int val, bool adr, const QString& name, bool label) {
 	val &= 0xffff;
 	bool word = adr || (val > 0xff);
@@ -1284,19 +1332,36 @@ QString dbg_num_tip(int val, bool adr, const QString& name, bool label) {
 	QString lab;
 	if (word && label && conf.zx)
 		lab = name.isEmpty() ? find_label(comp_get_xadr(conf.zx, val, MEM_VIEW_READ)) : name;
-	// a table, so the values line up whatever the font makes of the names
-	QString row("<tr><td>%0&nbsp;</td><td><b>%1</b></td></tr>");
-	QString res("<table cellspacing=0 cellpadding=0>");
-	if (!lab.isEmpty())
-		res.append(QString("<tr><td colspan=2><b>%0</b></td></tr>").arg(lab.toHtmlEscaped()));
-	res.append(row.arg("HEX:", dbg_hex(val, word ? 4 : 2)));
-	res.append(row.arg("DEC:").arg(val));
-	res.append(row.arg("BIN:", bin));
+	QString res = tip_head(lab.isEmpty() ? QString() : tip_bold(lab));
+	res.append(tip_row("HEX:", tip_bold(dbg_hex(val, word ? 4 : 2))));
+	res.append(tip_row("DEC:", tip_bold(QString::number(val))));
+	res.append(tip_row("BIN:", tip_bold(bin)));
 	res.append("</table>");
 	return res;
 }
 
-void reg_field_setup(xHexSpin* fld, int size, int flag) {
+QString dbg_byte_tip(int val, int word, const QString& where, const QString& label, const QString& note) {
+	val &= 0xff;
+	QString head;
+	if (!note.isEmpty()) head = note.toHtmlEscaped() + "<br>";
+	head.append(tip_bold(where));
+	if (!label.isEmpty()) head.append("&nbsp;&nbsp;" + tip_bold(label));
+	QString hex = tip_bold(dbg_hex(val, 2));
+	QString dec = tip_bold(QString::number(val));
+	if (word >= 0) {
+		word &= 0xffff;
+		hex.append(QString(" (WORD: %0)").arg(tip_bold(dbg_hex(word, 4))));
+		dec.append(QString(" (WORD: %0)").arg(tip_bold(QString::number(word))));
+	}
+	QString res = tip_head(head);
+	res.append(tip_row("HEX:", hex));
+	res.append(tip_row("DEC:", dec));
+	res.append(tip_row("BIN:", tip_bold(QString::number(val, 2).rightJustified(8, '0'))));
+	res.append("</table>");
+	return res;
+}
+
+void reg_field_setup(xHexSpin* fld, int size, int flag, const QString& name) {
 	int mx;
 	switch (size) {
 		case REG_BIT: mx = 1; break;
@@ -1312,6 +1377,9 @@ void reg_field_setup(xHexSpin* fld, int size, int flag) {
 	// the rest are bytes that move on their own
 	fld->setSplit(conf.dbg.regsplit && !(flag & REG_TYPE_M));
 	fld->refitWidth();
+	// a pair that may hold an address has its label in the tip; AF and IR do not
+	bool adr = (mx == 0xffff) && !name.startsWith("AF") && (name != "IR");
+	fld->setNumTip((mx > 0xffff) ? XHS_TIP_NONE : adr ? XHS_TIP_LABEL : XHS_TIP_NUM);
 }
 
 QString dbg_reg_tip(const QString& name) {
@@ -1357,6 +1425,39 @@ void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above
 			pos.setX(scr.left());
 		tip->move(pos);
 	}
+}
+
+// The cell a table's tip is up over, for dbg_cell_tip_follow: the text tells it
+// is still the tip shown, not one of another widget's since
+static QPointer<QAbstractItemView> cellTipView;
+static int cellTipRow = -1;
+static int cellTipCol = -1;
+static QString cellTipText;
+
+bool dbg_cell_tip(QAbstractItemView* view, QEvent* ev) {
+	if (ev->type() != QEvent::ToolTip) return false;
+	QModelIndex idx = view->indexAt(static_cast<QHelpEvent*>(ev)->pos());
+	QString txt = idx.isValid() ? idx.data(Qt::ToolTipRole).toString() : QString();
+	dbg_show_tip(view->viewport(), view->visualRect(idx), txt, true);
+	cellTipView = view;
+	cellTipRow = idx.row();
+	cellTipCol = idx.column();
+	cellTipText = txt;
+	return true;
+}
+
+// one ToolTipRole a refresh, and only while the tip is up
+void dbg_cell_tip_follow(QAbstractItemView* view) {
+	if ((cellTipView != view) || cellTipText.isEmpty()) return;
+	if (!QToolTip::isVisible() || (QToolTip::text() != cellTipText)) {
+		cellTipView = nullptr;
+		return;
+	}
+	QModelIndex idx = view->model()->index(cellTipRow, cellTipCol);
+	QString txt = idx.isValid() ? idx.data(Qt::ToolTipRole).toString() : QString();
+	if (txt == cellTipText) return;
+	dbg_show_tip(view->viewport(), view->visualRect(idx), txt, true);
+	cellTipText = txt;
 }
 
 // A typed address's tip: a label, a number by the one rule, or a label behind

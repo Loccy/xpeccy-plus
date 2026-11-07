@@ -25,6 +25,11 @@ xRDumpTable::xRDumpTable(QWidget* p):QTableView(p) {
 
 void xRDumpTable::update() {
 	model->refill();
+	dbg_cell_tip_follow(this);
+}
+
+bool xRDumpTable::viewportEvent(QEvent* ev) {
+	return dbg_cell_tip(this, ev) || QTableView::viewportEvent(ev);
 }
 
 void xRDumpTable::resizeEvent(QResizeEvent* e) {
@@ -96,7 +101,16 @@ QVariant xRDumpModel::data(const QModelIndex& idx, int role) const {
 	if (row >= row_count) return res;
 	if (col >= col_count) return res;
 	int adr;
+	int lo;
 	switch(role) {
+		case Qt::ToolTipRole:
+			// as the memory dump's: the address, its label, the byte and the word
+			if ((col == 0) || !conf.dbg.numtips) break;
+			adr = (regs.at(row).value + col - 1) & 0xffff;
+			lo = comp_peek(conf.zx, adr, MEM_VIEW_READ, NULL) & 0xff;
+			res = dbg_byte_tip(lo, lo | ((comp_peek(conf.zx, (adr + 1) & 0xffff, MEM_VIEW_READ, NULL) & 0xff) << 8),
+				dbg_word(adr), find_label(comp_get_xadr(conf.zx, adr, MEM_VIEW_READ)));
+			break;
 		case Qt::TextAlignmentRole:
 			// right, like the other dumps: the extra width of a group's first
 			// cell then shows up as a gap in front of it

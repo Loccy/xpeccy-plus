@@ -26,6 +26,7 @@ class xRDumpTable : public QTableView {
 		void update();
 	private:
 		void resizeEvent(QResizeEvent*);
+		bool viewportEvent(QEvent*);
 		xRDumpModel* model;
 };
 

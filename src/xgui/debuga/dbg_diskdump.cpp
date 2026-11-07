@@ -32,6 +32,11 @@ void xDiskDump::setTrack(int tr) {
 
 void xDiskDump::update() {
 	setDrive(drv);
+	dbg_cell_tip_follow(this);
+}
+
+bool xDiskDump::viewportEvent(QEvent* ev) {
+	return dbg_cell_tip(this, ev) || QTableView::viewportEvent(ev);
 }
 
 void xDiskDump::toTarget() {
@@ -200,6 +205,15 @@ QVariant xDiskDumpModel::data(const QModelIndex& idx, int role) const {
 			fnt = conf.dbg.font;
 			fnt.setBold(true);
 			res = fnt;
+			break;
+		case Qt::ToolTipRole:
+			// the byte, and the word read on from it; its place as the first
+			// column writes it - a place in the track, not a CPU address
+			if (!conf.dbg.numtips || (col == 0) || (col > rowBytes)) break;
+			if (!flp->insert || (offset >= flp->trklen)) break;
+			res = dbg_byte_tip(flp->data[trk].byte[offset],
+				(offset + 1 < flp->trklen) ? flp->data[trk].byte[offset] | (flp->data[trk].byte[offset + 1] << 8) : -1,
+				QString("%0:%1").arg(gethexbyte(trk)).arg(dbg_word(offset)));
 			break;
 		case Qt::TextAlignmentRole:
 			// same rule as the memory dump: everything right, so a wider cell

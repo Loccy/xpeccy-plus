@@ -3080,11 +3080,11 @@ Tap or hold: a tap switches it, a longer press holds it</string>
                   <item row="1" column="2">
                    <widget class="QLabel" name="label_numbers">
                     <property name="text">
-                     <string>Numbers</string>
+                     <string>Number format</string>
                     </property>
                     <property name="toolTip">
-                     <string>How the debugger writes addresses and the listing's values.
-The button on the listing's bar switches hex and decimal</string>
+                     <string>How the debugger writes addresses and values.
+HEX/DEC on the listing's bar switches it</string>
                     </property>
                     <property name="indent">
                      <number>12</number>
@@ -3094,8 +3094,8 @@ The button on the listing's bar switches hex and decimal</string>
                   <item row="1" column="3">
                    <widget class="QComboBox" name="cbDbgNumbers">
                     <property name="toolTip">
-                     <string>How the debugger writes addresses and the listing's values.
-The button on the listing's bar switches hex and decimal</string>
+                     <string>How the debugger writes addresses and values.
+HEX/DEC on the listing's bar switches it</string>
                     </property>
                    </widget>
                   </item>
@@ -3132,6 +3132,24 @@ It goes on until the panel runs out of height</string>
                      <number>-2</number>
                     </property>
                    </widget>
+                  </item>
+                  <item row="3" column="2" colspan="2">
+                   <layout class="QHBoxLayout" name="hlDbgNumTips">
+                    <property name="leftMargin">
+                     <number>12</number>
+                    </property>
+                    <item>
+                     <widget class="QCheckBox" name="cbDbgNumTips">
+                      <property name="text">
+                       <string>Number tips</string>
+                      </property>
+                      <property name="toolTip">
+                       <string>A number's hex, decimal and binary
+under the mouse: listing, dumps, registers</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
                   </item>
                  </layout>
                 </widget>

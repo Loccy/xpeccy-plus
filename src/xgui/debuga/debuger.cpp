@@ -154,6 +154,7 @@ void DebugWin::toggleNumFmt() {
 }
 
 void DebugWin::showNumFmt() {
+	actNumTips->setChecked(conf.dbg.numtips);	// Options may have moved it
 	ui_asm.tbNumbers->setText((conf.dbg.numfmt == CPU_NUM_DEC) ? "DEC" : "HEX");
 	QString key = shortcut_key(XCUT_DBG_NUMBERS);
 	ui_asm.tbNumbers->setToolTip(QString("Hex or decimal addresses and values%0")
@@ -751,6 +752,12 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	ui_asm.tbDbgOpt->addAction(ui_asm.actDimAddr);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actDimOps);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actSyntax);
+	actNumTips = new QAction("Number tips", this);
+	actNumTips->setCheckable(true);
+	actNumTips->setChecked(conf.dbg.numtips);
+	actNumTips->setToolTip("A number's hex, decimal and binary under the mouse");
+	connect(actNumTips, &QAction::toggled, this, [](bool on) { conf.dbg.numtips = on ? 1 : 0; });
+	ui_asm.tbDbgOpt->addAction(actNumTips);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actBlockSep);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actShowSeg);
 	ui_asm.tbDbgOpt->addAction(ui_asm.actRomWr);
@@ -1637,7 +1644,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		dbgRegLabs[cnt]->setProperty("regid", b->regs[cnt].id);
 		dbgRegLabs[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
 		dbgRegBits[cnt]->setToolTip(dbg_reg_tip(b->regs[cnt].name));
-		reg_field_setup(dbgRegEdit[cnt], b->regs[cnt].size, b->regs[cnt].flag);	// before it is measured
+		reg_field_setup(dbgRegEdit[cnt], b->regs[cnt].size, b->regs[cnt].flag, b->regs[cnt].name);	// before it is measured
 		if (dbgRegLabs[cnt]->sizeHint().width() > labw) labw = dbgRegLabs[cnt]->sizeHint().width();
 		if (dbgRegEdit[cnt]->minimumWidth() > fldw) fldw = dbgRegEdit[cnt]->minimumWidth();
 		cnt++;

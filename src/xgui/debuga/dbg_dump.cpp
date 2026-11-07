@@ -111,6 +111,33 @@ int xDumpModel::mrd(int adr) const {
 	return res;
 }
 
+// A byte's tip: its address as the address column writes it, the label there,
+// and the word read on from it - into the next page in a page view
+QString xDumpModel::cellTip(int adr, const QString& note) const {
+	Computer* comp = conf.zx;
+	int lo = mrd(adr) & 0xff;
+	int word = -1;
+	QString where;
+	QString lab;
+	if (mode == XVIEW_CPU) {
+		where = dbg_word(adr);
+		lab = find_label(comp_get_xadr(comp, adr, MEM_VIEW_READ));
+		word = lo | ((mrd((adr + 1) % maxadr) & 0xff) << 8);
+	} else {
+		int area = dump_view_area(mode);
+		int ofs = dump_page_ofs(comp, area, adr);
+		where = gethexbyte(page).append(":").append(dbg_word((adr % pgsize) + pgbase));
+		xAdr xa;
+		xa.bank = -1;
+		xa.adr = ofs;		// see find_label: an offset, not a CPU address
+		if (comp_cell_xadr(comp, area, page, ofs, &xa.type, &xa.abs))
+			lab = find_label(xa);
+		int hi = comp_cell_peek(comp, area, page, ofs + 1);
+		if (hi >= 0) word = lo | ((hi & 0xff) << 8);
+	}
+	return dbg_byte_tip(lo, word, where, lab, note);
+}
+
 void xDumpModel::mwr(int adr, unsigned char bt) {
 	Computer* comp = conf.zx;
 	rzx_rec_touch();
@@ -208,9 +235,14 @@ QVariant xDumpModel::data(const QModelIndex& idx, int role) const {
 			break;
 		case Qt::ToolTipRole:
 			switch (fm) {
-				case TS_FM_CRAM: res = QString("FMAPS: CRAM, color #%0").arg(gethexbyte((cadr & 0x1ff) >> 1)); break;
-				case TS_FM_SFILE: res = QString("FMAPS: SFILE, sprite %0").arg((cadr & 0x1ff) / 6); break;
-				case TS_FM_REGS: res = QString("FMAPS: port #%0AF").arg(gethexbyte(cadr & 0xff)); break;
+				case TS_FM_CRAM: str = QString("FMAPS: CRAM, color #%0").arg(gethexbyte((cadr & 0x1ff) >> 1)); break;
+				case TS_FM_SFILE: str = QString("FMAPS: SFILE, sprite %0").arg((cadr & 0x1ff) / 6); break;
+				case TS_FM_REGS: str = QString("FMAPS: port #%0AF").arg(gethexbyte(cadr & 0xff)); break;
+			}
+			if ((col > 0) && (col < 17) && conf.dbg.numtips) {
+				res = cellTip(cadr, str);
+			} else if (!str.isEmpty()) {
+				res = str;
 			}
 			break;
 		case Qt::TextAlignmentRole:
@@ -334,6 +366,12 @@ void xDumpTable::setCodePage(int cp) {
 void xDumpTable::update() {
 	model->update();
 	QTableView::update();
+	dbg_cell_tip_follow(this);
+}
+
+// a byte's tip over the byte, as the listing has it over a number
+bool xDumpTable::viewportEvent(QEvent* ev) {
+	return dbg_cell_tip(this, ev) || QTableView::viewportEvent(ev);
 }
 
 void xDumpTable::setLimit(unsigned int lim) {

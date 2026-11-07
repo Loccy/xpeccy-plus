@@ -136,7 +136,7 @@ QVariant xDisasmModel::data(const QModelIndex& idx, int role) const {
 	switch(role) {
 		case Qt::ToolTipRole:
 			// the address as a number, on its own row and on a label's
-			if ((col == 0) && !dasm[row].iscom && !dasm[row].issep)
+			if ((col == 0) && !dasm[row].iscom && !dasm[row].issep && conf.dbg.numtips)
 				res = dbg_num_tip(dasm[row].adr, true);
 			break;
 		case Qt::EditRole:
@@ -1083,6 +1083,10 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyleOptionViewItem& option, const QModelIndex& idx) {
 	if (ev->type() != QEvent::ToolTip)
 		return QStyledItemDelegate::helpEvent(ev, view, option, idx);
+	if (!conf.dbg.numtips) {
+		QToolTip::hideText();
+		return true;
+	}
 	QStyleOptionViewItem opt = option;
 	initStyleOption(&opt, idx);
 	QString text = opt.text;

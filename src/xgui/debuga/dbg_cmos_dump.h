@@ -23,6 +23,7 @@ class xCmosDumpTable : public QTableView {
 		xCmosDumpTable(QWidget* = nullptr);
 	private:
 		void resizeEvent(QResizeEvent*);
+		bool viewportEvent(QEvent*);
 };
 
 #include "ui_form_cmosdump.h"

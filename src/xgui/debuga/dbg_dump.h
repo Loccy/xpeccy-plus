@@ -64,6 +64,7 @@ class xDumpModel : public xTableModel {
 		int pgsize;
 		int mrd(int) const;
 		void mwr(int, unsigned char);
+		QString cellTip(int adr, const QString& note) const;
 };
 
 class xDumpTable:public QTableView {
@@ -104,6 +105,7 @@ class xDumpTable:public QTableView {
 		void mouseReleaseEvent(QMouseEvent*);
 		void wheelEvent(QWheelEvent*);
 		void resizeEvent(QResizeEvent*);
+		bool viewportEvent(QEvent*);
 };
 
 #include "ui_form_dump.h"

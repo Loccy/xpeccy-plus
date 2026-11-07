@@ -52,6 +52,13 @@ QColor bg_tint(const QColor&);
 #define XHS_ADDR (1<<8)		// an address: base and sign as the debugger writes numbers
 #define XHS_NUMS (1<<9)		// the base the debugger writes numbers in, no sign (a register)
 
+// xHexSpin::setNumTip: what the field's tip on hover says
+enum {
+	XHS_TIP_NONE = 0,	// its own tooltip, if any
+	XHS_TIP_NUM,		// the value in hex, decimal and binary
+	XHS_TIP_LABEL		// ...and the label at it, when it is a word
+};
+
 class xHexSpin : public QLineEdit {
 	Q_OBJECT
 	public:
@@ -68,6 +75,7 @@ class xHexSpin : public QLineEdit {
 		void setLit(bool);
 		int getMax();
 		void numFmt();		// XHS_ADDR: the debugger's numbers moved
+		void setNumTip(int);	// XHS_TIP_*: the value's tip on hover
 	signals:
 		void valueChanged(int);
 	public slots:
@@ -81,6 +89,10 @@ class xHexSpin : public QLineEdit {
 		bool isblank;		// holding nothing, with XHS_BLANK
 		bool fixing = false;	// putting back a text that was refused: not a new one
 		int fmtSeen = -1;	// the debugger's numbers numFmt() last set
+		int numTip = 0;		// XHS_TIP_*
+		bool tipUp = false;	// the value's tip was shown by this field
+		QString tipText;	// ...saying this: still up while the tip says it
+		void showNumTip();
 		int hsflag;
 		int base;
 		int value;
@@ -105,6 +117,7 @@ class xHexSpin : public QLineEdit {
 		int splitBytes();
 		bool wholeFieldLit();
 	protected:
+		bool event(QEvent*);
 		void changeEvent(QEvent*);
 		void keyPressEvent(QKeyEvent*);
 		void focusInEvent(QFocusEvent*);
@@ -229,13 +242,23 @@ void dbg_num_field(QLineEdit*);
 // what a number is: hex, decimal and binary, a line each; for an address (or a
 // word, which may be one) the label there above them. name: the label it was typed as
 QString dbg_num_tip(int val, bool adr, const QString& name = QString(), bool label = true);
+// a dump byte's tip: where it is (and its label), the byte with the word read
+// from there (word < 0: none) in hex and decimal, the byte in binary; a note
+// line over them
+QString dbg_byte_tip(int val, int word, const QString& where, const QString& label = QString(), const QString& note = QString());
 // a number's tip at a rectangle of a widget, nothing: hidden. above: over a
 // number pointed at, gone when the mouse leaves it; else under a field being
 // typed into, there until hidden. The other side at a screen edge
 void dbg_show_tip(QWidget* wid, const QRect& at, const QString& text, bool above);
+// a table's cell tip (ToolTipRole) over the cell, from viewportEvent: true when
+// it was the hover's. dbg_cell_tip_follow() after a table's refresh puts the
+// new value into a tip still up over it
+class QAbstractItemView;
+bool dbg_cell_tip(QAbstractItemView* view, QEvent* ev);
+void dbg_cell_tip_follow(QAbstractItemView* view);
 // a register's field (XHS_NUMS) for its size and flags (xRegister): its range,
-// the debugger's base, Split pairs and the width those make
-void reg_field_setup(xHexSpin* fld, int size, int flag);
+// the debugger's base, Split pairs and the width those make; name: its tip
+void reg_field_setup(xHexSpin* fld, int size, int flag, const QString& name = QString());
 // what a register that is no number is for (IM, IFF1, IFF2), empty for the rest
 QString dbg_reg_tip(const QString& name);
 
