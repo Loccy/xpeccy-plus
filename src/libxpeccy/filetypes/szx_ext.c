@@ -747,7 +747,7 @@ void szx_set_machine(const char* id) {
 void szx_ext_save(szxBuf* b, Computer* comp) {
 	size_t mark;
 	int i;
-	if (xstate_chips_back) xstate_chips_back(comp);	// a YM2203's fm, from the copy that made the sound
+	if (xstate_fm_back) xstate_fm_back(comp);	// a YM2203's fm, from the copy that made the sound
 	sb_put(b, szx_ext_tag, sizeof(szx_ext_tag));
 	// the Next's picture walks the counted dots with the board's state: done before
 	// any of it is taken (VID below does the same for every machine)

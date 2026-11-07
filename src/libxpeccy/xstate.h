@@ -49,7 +49,7 @@ int xstate_load(xState*, Computer*);
 // fm is kept beside it (rewind's)
 int xstate_save_as_is(xState*, Computer*);
 // set by the sound code: brings that fm back from the copy, before a save that keeps it
-extern void (*xstate_chips_back)(Computer*);
+extern void (*xstate_fm_back)(Computer*);
 
 // 1 when a frame may be run and then thrown away: everything it can touch is
 // either inside the snapshot or unmoved by an extra frame of emulation. This is

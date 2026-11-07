@@ -109,6 +109,7 @@ static void rw_marks_apply() {
 			if (it->id == m.id) {
 				it->snd = m.snd;
 				std::swap(it->fm, fm);
+				rw_mem += snd_fm_capture_bytes(it->fm);
 				break;
 			}
 			if (it->id < m.id) break;
@@ -143,6 +144,7 @@ static void entry_drop(rwEntry& e) {
 	for (rwPage* pg : e.pages)
 		page_drop(pg);
 	e.pages.clear();
+	rw_mem -= snd_fm_capture_bytes(e.fm);
 	snd_fm_capture_free(e.fm);
 	e.fm = NULL;
 }
@@ -369,12 +371,14 @@ static void rw_play_stop() {
 	rw_wait = 0;
 }
 
-// the picture of snapshot back: 1 when there is one to show
 static int rw_load(Computer* comp, int back, long long* phase);
 
-// a picture: its frame is thrown away, so the sound thread's copy is left alone
+// The picture of snapshot back: 1 when there is one to show. Its frame is thrown away,
+// so the sound thread's copy is left alone; the machine's fm is made whole from the
+// mark for it, as a let-go that cannot load the snapshot again goes on from here
 static int rw_show(Computer* comp, int back, long long* phase) {
 	if (!rw_load(comp, back, phase)) return 0;
+	snd_fm_restore(comp, rw_at(back)->fm);
 	vid_set_nodraw(comp->vid, 0);		// fast mode may have left it off
 	return xstate_run_frame(comp);
 }
@@ -512,7 +516,7 @@ int rewind_load(Computer* comp, int back, long long* phase) {
 	rwEntry* e = rw_at(back);
 	if (e && (e->snd < 0)) rw_marks_settle();	// its mark not in yet
 	if (!rw_load(comp, back, phase)) return 0;
-	snd_fm_reseed(comp, rw_at(back)->fm);
+	snd_fm_reseed(comp, e->fm);
 	return 1;
 }
 

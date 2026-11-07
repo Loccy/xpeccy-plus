@@ -109,17 +109,21 @@ void snd_sync_wait();
 aymChip* snd_heard_chip(Computer*, int);
 // A YM2203's fm is made on the sound thread only: the machine's core runs its timers
 // (fm_stale). The debugger's view of it, from the copy that made the sound when there
-// is one. Under emu_lock
+// is one (under the sound thread's own lock); else the machine's, as it always was
 void snd_fm_view(Computer*, aymChip*, fmChan*);
 // The copy's fm as it stands, for rewind to keep with a snapshot (on the sound thread,
 // in a snd_q_call); NULL when it has none
 void* snd_fm_capture();
 void snd_fm_capture_free(void*);
+size_t snd_fm_capture_bytes(const void*);
 // A snapshot put back: the copy seeded from it at once, a stale fm from what was
 // captured there. Emulation thread
 void snd_fm_reseed(Computer*, const void*);
+// A snapshot shown: the machine's stale fm made whole from what was captured there
+void snd_fm_restore(Computer*, const void*);
 // Fast mode and sound off make no sub-samples to carry the machine's time to the sound
-// thread's copy of its chips: this hands it over in pieces. Emulation thread
+// thread's copy of its chips: this hands it over in pieces, and holds the machine
+// while the copy is too far behind. Emulation thread
 void snd_mirror_keep_up(Computer*);
 // fn(arg) runs on the sound thread, after the sub-samples queued so far
 void snd_q_call(void (*fn)(long long), long long arg);

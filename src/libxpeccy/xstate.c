@@ -210,11 +210,11 @@ void xstate_destroy(xState* st) {
 	free(st);
 }
 
-void (*xstate_chips_back)(Computer*) = NULL;
+void (*xstate_fm_back)(Computer*) = NULL;
 
 int xstate_save(xState* st, Computer* comp) {
 	if (!st) return 0;
-	if (xstate_chips_back) xstate_chips_back(comp);
+	if (xstate_fm_back) xstate_fm_back(comp);
 	return xstate_save_as_is(st, comp);
 }
 
