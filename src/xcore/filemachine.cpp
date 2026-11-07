@@ -103,7 +103,7 @@ static bool fm_names_model(const xFileMac* row) {
 // machine is one of the user's own rather than a model of the table.
 static bool fm_exact_on(const std::string& id, int snap, const std::string& target) {
 	if (target.empty() || (target == id)) return true;
-	if (snap >= SNAP_HW_CORE) return !xm_find(target);
+	if (SNAP_HW_OF(snap) >= SNAP_HW_CORE) return !xm_find(target);
 	for (int i = 0; fm_snap_tab[i].target; i++) {
 		if (id == fm_snap_tab[i].target) return false;
 	}
