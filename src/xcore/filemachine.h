@@ -8,7 +8,8 @@
 // the words below or to the id of a machine that always takes it. When this
 // is asked at all is media_machine()'s business, in filer.cpp.
 
-#define FM_AUTO	"auto"		// switch only when the running machine cannot take it, and back after
+#define FM_AUTO	"auto"		// switch only when the running machine cannot take it, and back after;
+				// ask when the file does not tell the model it needs
 #define FM_ASK	"ask"		// the user picks the machine, every time there is a choice
 #define FM_KEEP	"keep"		// never switch
 
@@ -51,6 +52,7 @@ typedef struct {
 	std::vector<std::string> ask;		// or let the user pick one of these, or keep the running one
 	bool runs = false;			// asking: the running machine can take the file
 	bool keep = false;			// asking: keeping it is the answer to offer
+	bool unsure = false;			// asking: the file does not tell its model
 } xFileMacPick;
 
 xFileMacPick fm_pick(int ftype, const char* path);

@@ -132,8 +132,9 @@ int snapHwRuns(int snap, int hwid, int model) {
 			if (rom) return snap_on_model(snap, family, hwid, model);
 			if (editor) return snap_editor(hwid, model) == ((snap == SNAP_HW_PLUS2) ? ED_PLUS2 : ED_SINCLAIR);
 			return hwid != HW_ZX48;
-		case SNAP_HW_PLUS2A:
-		case SNAP_HW_PLUS3: return (hwid == HW_PLUS2A) || (hwid == HW_PLUS3);
+		// one ROM, but a +3 in its editor has +3DOS set up for a drive the +2A lacks
+		case SNAP_HW_PLUS2A: return (hwid == HW_PLUS2A) || (!rom && (hwid == HW_PLUS3));
+		case SNAP_HW_PLUS3: return (hwid == HW_PLUS3) || (!rom && (hwid == HW_PLUS2A));
 		case SNAP_HW_SCORPION: return (hwid == HW_SCORP) || (hwid == HW_SCORPTP);
 		// pages past 128K through bits 6 and 7 of 7FFD
 		case SNAP_HW_PENT512: return (hwid == HW_PENT) || (hwid == HW_P1024);

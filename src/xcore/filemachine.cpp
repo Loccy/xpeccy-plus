@@ -198,8 +198,8 @@ static int fm_sna_clone(const char* path) {
 }
 
 // A 128K .sna in its editor names no model, so the editor is told from the file
-// against the ones in the ROM folder, then the model where the file can tell it;
-// a file that does not tell runs anywhere a 128K does, as the user picks.
+// against the ones in the ROM folder, then the model. Told, it is that model; one
+// that does not tell is SNAP_UNSURE, and the user is asked.
 static int fm_sna_guess(const char* path) {
 	static const char* names[] = {"128-0.rom", "plus2-0.rom", "plus3-0.rom"};
 	std::vector<unsigned char> img[3];
@@ -214,13 +214,13 @@ static int fm_sna_guess(const char* path) {
 	}
 	int ed = (n > 0) ? sna_editor_of(path, eds, n) : -1;
 	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[idx[ed]]);
-	if (ed < 0) return SNAP_HW_128K;
+	if (ed < 0) return SNAP_HW_128K | SNAP_UNSURE;
 	switch (idx[ed]) {
-		case 1: return SNAP_HW_PLUS2 | SNAP_IN_ROM | SNAP_FAMILY;
-		case 2: return sna_plus3_drive(path) ? SNAP_HW_PLUS3 : SNAP_HW_PLUS2A;
+		case 1: return SNAP_HW_PLUS2 | SNAP_IN_ROM;
+		case 2: return (sna_plus3_drive(path) ? SNAP_HW_PLUS3 : SNAP_HW_PLUS2A) | SNAP_IN_ROM;
 	}
 	int clone = fm_sna_clone(path);
-	return (clone < 0) ? (SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY) : clone;
+	return (clone < 0) ? (SNAP_HW_128K | SNAP_IN_ROM | SNAP_FAMILY | SNAP_UNSURE) : clone;
 }
 
 xFileMacPick fm_pick(int ftype, const char* path) {
@@ -243,6 +243,9 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 			target = id;
 		}
 	}
+	// a model only guessed at is never switched to unasked
+	pick.unsure = (snap & SNAP_UNSURE) != 0;
+	if (pick.unsure && (pref == FM_AUTO)) pref = FM_ASK;
 	// one machine for the whole format, unless it cannot take this very file
 	if ((pref != FM_AUTO) && (pref != FM_ASK) && fm_runs(pref, row->need, snap)) {
 		if (pref != conf.macId) pick.target = pref;

@@ -886,8 +886,11 @@ static bool media_ask_machine(const QString& path, const xFileMacPick& pick, std
 	QDialog dlg;
 	dlg.setWindowTitle("Choose a Machine");
 	QVBoxLayout* lay = new QVBoxLayout(&dlg);
-	QLabel* lab = new QLabel(pick.runs ? QString("Run <b>%1</b> on:").arg(name)
-		: QString("<b>%1</b> does not run on %2.<br>Run it on:").arg(name, curName.toHtmlEscaped()));
+	QString text = pick.runs ? QString("Run <b>%1</b> on:").arg(name)
+		: QString("<b>%1</b> does not run on %2.<br>Run it on:").arg(name, curName.toHtmlEscaped());
+	if (pick.unsure)
+		text = QString("The snapshot needs the ROM of the model it was taken on, and the file does not say which.<br>") + text;
+	QLabel* lab = new QLabel(text);
 	lab->setWordWrap(true);
 	lay->addWidget(lab);
 	QListWidget* list = new QListWidget;
