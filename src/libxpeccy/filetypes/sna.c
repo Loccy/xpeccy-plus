@@ -149,12 +149,15 @@ int snaGetHardware(const char* name) {
 	return res;
 }
 
-// a 128K .sna read whole, and where its RAM bank n is in it: 5, 2 and the paged
-// one first, then the others in order, the paged one left out
-static size_t sna_read(const char* name, unsigned char* buf, size_t size) {
+// a 128K .sna read whole - 147487 bytes when bank 2 or 5 is paged in, as it is
+// then written twice - and where its RAM bank n is in it: 5, 2 and the paged one
+// first, then the others in order, the paged one left out
+static unsigned char sna_buf[147487 + 1];
+
+static size_t sna_read(const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return 0;
-	size_t len = fread(buf, 1, size, file);
+	size_t len = fread(sna_buf, 1, sizeof(sna_buf), file);
 	fclose(file);
 	return len;
 }
@@ -176,10 +179,9 @@ static const unsigned char* sna_bank(const unsigned char* buf, size_t len, int n
 // A +3, not a +2A: +3DOS fills in drive A's entry in bank 7 (#E2DB: 4, 'A') only
 // when it finds the disk controller at start; a +2A has zeroes there.
 int sna_plus3_drive(const char* name) {
-	static unsigned char buf[0x24000];
-	size_t len = sna_read(name, buf, sizeof(buf));
+	size_t len = sna_read(name);
 	if (len < 131103) return 0;
-	const unsigned char* b7 = sna_bank(buf, len, 7);
+	const unsigned char* b7 = sna_bank(sna_buf, len, 7);
 	return b7 && (b7[0x22db] == 0x04) && (b7[0x22dc] == 'A');
 }
 
@@ -187,13 +189,11 @@ int sna_plus3_drive(const char* name) {
 // the space, 8 bytes each; inverse ones too): 24 lines of 32, a cell that is
 // not a character a space. out takes 24 * 33 bytes.
 void sna_screen_text(const char* name, const unsigned char* font, char* out) {
-	static unsigned char buf[0x24000];
 	memset(out, ' ', 24 * 33);
 	for (int r = 0; r < 24; r++) out[r * 33 + 32] = '\n';
 	out[24 * 33 - 1] = 0;
-	size_t len = sna_read(name, buf, sizeof(buf));
-	if (len < 49179) return;
-	const unsigned char* scr = buf + 27;
+	if (sna_read(name) < 49179) return;
+	const unsigned char* scr = sna_buf + 27;
 	for (int r = 0; r < 24; r++) {
 		for (int c = 0; c < 32; c++) {
 			unsigned char cell[8];
@@ -230,11 +230,8 @@ static int sna_after_call(const unsigned char* rom, int adr) {
 // +2's the same - then the words on the stack that point into the ROM: a return
 // address follows a CALL or an RST in the editor that pushed it.
 int sna_editor_of(const char* name, const unsigned char* const* eds, int count) {
-	FILE* file = fopen(name, "rb");
-	if (!file) return -1;
-	static unsigned char buf[0x24000];
-	size_t len = fread(buf, 1, sizeof(buf), file);
-	fclose(file);
+	size_t len = sna_read(name);
+	const unsigned char* buf = sna_buf;
 	if ((len < 131103) || (buf[49181] & 0x10) || (count > 8)) return -1;
 	int bank = buf[49181] & 7;
 	const unsigned char* page[4] = {NULL, buf + 27, buf + 27 + 0x4000, buf + 27 + 0x8000};	// 5, 2, the paged one
@@ -242,9 +239,12 @@ int sna_editor_of(const char* name, const unsigned char* const* eds, int count) 
 	int cand[8];
 	int n = 0;
 	const unsigned char* swp = page[1] + 0x1b00;
+	int flat = 1;				// cleared: it would match some ROM's filler
+	for (int a = 1; a < 32; a++)
+		if (swp[a] != swp[0]) flat = 0;
 	for (int i = 0; i < count; i++) {
 		cand[i] = 0;
-		for (int a = 0; a <= 0x4000 - 32; a++) {
+		for (int a = 0; !flat && (a <= 0x4000 - 32); a++) {
 			if (!memcmp(eds[i] + a, swp, 32)) {
 				cand[i] = 1;
 				n++;

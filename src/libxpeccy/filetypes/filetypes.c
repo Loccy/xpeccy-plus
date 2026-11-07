@@ -93,11 +93,15 @@ static int snap_editor(int hwid, int model) {
 }
 
 // pc is where the machine was: for a snapshot taken as the interrupt came (PC
-// #0038) the caller passes the address on top of the stack. Under #4000 it was
-// running the ROM - 48 BASIC too, as 128 BASIC calls it and keeps the editor's
-// addresses on the stack. One in RAM with 48 BASIC paged is a program running.
+// #0038) the caller passes the address on top of the stack. Running the editor
+// (paged in, the PC under #4000) it goes on only on its model: the clones patch
+// the very menu. With the editor paged in, or the PC in 48 BASIC - which 128
+// BASIC calls, its own addresses on the stack - it needs that editor. One in
+// RAM with 48 BASIC paged is a program running.
 int snap_rom_flags(int pc, int p7ffd) {
-	return ((p7ffd & 0x10) ? 0 : SNAP_EDITOR) | ((pc < 0x4000) ? SNAP_IN_ROM : 0);
+	int editor = !(p7ffd & 0x10);
+	int rom = (pc < 0x4000);
+	return ((editor || rom) ? SNAP_EDITOR : 0) | ((editor && rom) ? SNAP_IN_ROM : 0);
 }
 
 // One stopped in its ROM goes on only on the model it names: the clones patch

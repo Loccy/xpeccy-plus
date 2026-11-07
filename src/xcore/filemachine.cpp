@@ -5,6 +5,7 @@
 
 #include <map>
 #include <algorithm>
+#include <QFile>
 #include <QRegularExpression>
 
 // Which machine a file is opened on: what each format needs, what the user
@@ -154,12 +155,11 @@ void fm_save(FILE* file) {
 
 // a 16K image from the ROM folder, empty if it is not there
 static std::vector<unsigned char> fm_rom_image(const char* name) {
-	std::vector<unsigned char> img(MEM_16K);
-	FILE* file = fopen((conf.path.romDir + SLASH + name).c_str(), "rb");
-	if (!file) return std::vector<unsigned char>();
-	if (fread(img.data(), 1, MEM_16K, file) != MEM_16K) img.clear();
-	fclose(file);
-	return img;
+	QFile file(QString::fromUtf8(xm_rom_path(name).c_str()));
+	if (!file.open(QIODevice::ReadOnly)) return std::vector<unsigned char>();
+	QByteArray data = file.read(MEM_16K);
+	if (data.size() != MEM_16K) return std::vector<unsigned char>();
+	return std::vector<unsigned char>(data.begin(), data.end());
 }
 
 // The 128K editor and its clones are one code; a menu snapshot still tells them

@@ -194,6 +194,9 @@ int z80GetHardware(const char* name) {
 			if (w >= 0) pc = w;
 		}
 		res |= snap_rom_flags(pc, buf[35]);
+		// a Pentagon's PC in ROM may be in TR-DOS, which the file does not record
+		if ((res & SNAP_EDITOR) && (pc < 0x4000) && (SNAP_HW_OF(res) == SNAP_HW_PENTAGON))
+			res |= SNAP_IN_ROM;
 	}
 	fclose(file);
 	return res;
