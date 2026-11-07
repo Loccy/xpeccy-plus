@@ -39,6 +39,9 @@ typedef struct {
 	long long phase;	// see rewind_frame()
 	long long snd;		// rw_snd_w when it was taken, -1 until the sound thread says (rw_marks)
 	long long id;		// the take's number, for its mark
+	// a YM2203's fm there, as the sound thread's copy had it: the machine's own only
+	// ran its timers (fm_stale). Comes with the mark; NULL: none
+	void* fm;
 } rwEntry;
 
 static std::deque<rwEntry> rw_ring;
@@ -81,27 +84,36 @@ static struct alignas(64) {
 } rw_acc;
 static std::atomic<size_t> rw_snd_bytes(0);	// for the log, from the other thread
 
-// the sound thread's answers: a take's number and rw_snd_w there
+// the sound thread's answers: a take's number, rw_snd_w there and its copy's fm
+typedef struct {
+	long long id;
+	long long snd;
+	void* fm;
+} rwMark;
 static std::mutex rw_mark_lock;
-static std::vector<std::pair<long long, long long>> rw_marks;
+static std::vector<rwMark> rw_marks;
 static long long rw_takes = 0;
 
 static void rw_snd_mark(long long id) {
+	void* fm = snd_fm_capture();
 	std::lock_guard<std::mutex> lk(rw_mark_lock);
-	rw_marks.push_back(std::make_pair(id, rw_snd_w));
+	rw_marks.push_back({id, rw_snd_w, fm});
 }
 
 // the answers come in, onto the snapshots still held; the newest are at the back
 static void rw_marks_apply() {
 	std::lock_guard<std::mutex> lk(rw_mark_lock);
 	for (const auto& m : rw_marks) {
+		void* fm = m.fm;
 		for (auto it = rw_ring.rbegin(); it != rw_ring.rend(); ++it) {
-			if (it->id == m.first) {
-				it->snd = m.second;
+			if (it->id == m.id) {
+				it->snd = m.snd;
+				std::swap(it->fm, fm);
 				break;
 			}
-			if (it->id < m.first) break;
+			if (it->id < m.id) break;
 		}
+		snd_fm_capture_free(fm);	// one for a snapshot no longer held
 	}
 	rw_marks.clear();
 }
@@ -131,6 +143,8 @@ static void entry_drop(rwEntry& e) {
 	for (rwPage* pg : e.pages)
 		page_drop(pg);
 	e.pages.clear();
+	snd_fm_capture_free(e.fm);
+	e.fm = NULL;
 }
 
 static void rw_pop_front() {
@@ -205,9 +219,10 @@ static void rw_trim(Computer* comp) {
 
 static void rw_take(Computer* comp, long long phase) {
 	if (!rw_st) rw_st = xstate_create();
-	if (!rw_st || !xstate_save(rw_st, comp)) return;
+	if (!rw_st || !xstate_save_as_is(rw_st, comp)) return;
 	const unsigned char* data = NULL;
 	rwEntry e;
+	e.fm = NULL;		// the mark brings it
 	e.meta.resize(xstate_meta_size());
 	e.size = xstate_bytes(rw_st, &data, e.meta.data());
 	// a history in another layout could not be put back into this one
@@ -355,8 +370,11 @@ static void rw_play_stop() {
 }
 
 // the picture of snapshot back: 1 when there is one to show
+static int rw_load(Computer* comp, int back, long long* phase);
+
+// a picture: its frame is thrown away, so the sound thread's copy is left alone
 static int rw_show(Computer* comp, int back, long long* phase) {
-	if (!rewind_load(comp, back, phase)) return 0;
+	if (!rw_load(comp, back, phase)) return 0;
 	vid_set_nodraw(comp->vid, 0);		// fast mode may have left it off
 	return xstate_run_frame(comp);
 }
@@ -488,7 +506,17 @@ static void rw_unpage(const rwEntry* e, unsigned char* dst) {
 	}
 }
 
+// the machine carries on from there: the sound thread's copy is seeded at once, with
+// the fm its mark brought (the snapshot's own only ran its timers)
 int rewind_load(Computer* comp, int back, long long* phase) {
+	rwEntry* e = rw_at(back);
+	if (e && (e->snd < 0)) rw_marks_settle();	// its mark not in yet
+	if (!rw_load(comp, back, phase)) return 0;
+	snd_fm_reseed(comp, rw_at(back)->fm);
+	return 1;
+}
+
+static int rw_load(Computer* comp, int back, long long* phase) {
 	rwEntry* e = rw_at(back);
 	if (!e || !rw_st || comp->tape->rec) return 0;
 	if (rw_media_changed()) return 0;
@@ -526,7 +554,7 @@ int rewind_restore(Computer* comp, int back, long long* phase) {
 
 int rewind_matches(Computer* comp, int back) {
 	rwEntry* e = rw_at(back);
-	if (!e || !rw_st || !xstate_save(rw_st, comp)) return 0;
+	if (!e || !rw_st || !xstate_save_as_is(rw_st, comp)) return 0;
 	std::vector<unsigned char> meta(xstate_meta_size());
 	size_t size = xstate_bytes(rw_st, NULL, meta.data());
 	if (!xstate_same_layout(meta.data(), e->meta.data())) {

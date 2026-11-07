@@ -642,7 +642,7 @@ void xFMPage::op_edited(int op, int col, int val) {
 	if (hold || !chip) return;
 	// where an operator keeps its registers is in the view, so take a fresh
 	// one: this can be the first thing that happens to the page
-	ym2203_fm_view(chip, fmView);
+	if (conf.zx) snd_fm_view(conf.zx, chip, fmView);
 	int reg = fmColTab[col].reg + fmView[channel()].op[op].rofs;
 	int m = fmColTab[col].mask << fmColTab[col].shift;
 	pokeFM(chip, reg, (chip->reg[reg] & ~m) | ((val << fmColTab[col].shift) & m));
@@ -674,8 +674,13 @@ void xFMPage::draw() {
 		blank();
 		return;
 	}
-	// the state lives in the core, so ask for a copy of it first
-	ym2203_fm_view(chip, fmView);
+	// the state lives in the core - the one that makes the sound - so ask for a
+	// copy of it first
+	if (!conf.zx) {
+		blank();
+		return;
+	}
+	snd_fm_view(conf.zx, chip, fmView);
 	int c = channel();
 	fmChan* ch = &fmView[c];
 

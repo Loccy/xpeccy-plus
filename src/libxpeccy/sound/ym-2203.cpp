@@ -29,9 +29,18 @@ extern "C" {
 
 namespace {
 
+// ymfm's engine and one thing more: a sample counted without being made. Timer B's
+// first tick is cut short by the free running *16 count (engine_mode_write), and
+// that count is the one clock() keeps
+class xengine : public ymfm::fm_engine_base<ymfm::opn_registers> {
+public:
+	using fm_engine_base::fm_engine_base;
+	void count_clock() { m_total_clocks++; }
+};
+
 class xfm : public ymfm::ymfm_interface {
 public:
-	typedef ymfm::fm_engine_base<ymfm::opn_registers> engine;
+	typedef xengine engine;
 
 	xfm(aymChip* chip) : m_chip(chip), m_fm(*this) {
 		m_state.reserve(1024);		// enough that the first pack does not grow it
@@ -128,6 +137,10 @@ public:
 		// into gives the 1.75 MHz an AY has at 3.5). Nothing below looks at
 		// it, so the whole stretch is counted at once.
 		ay_tick_n(m_chip, (int)(left * m_ssgmul));
+		// the sound made elsewhere: the timers and busy are all the status byte
+		// needs, and ymfm's do not depend on clock() or output()
+		bool lite = ym2203_lite && ym2203_lite(m_chip);
+		if (lite) m_chip->fm_stale = 1;
 		while (left > 0) {
 			uint64_t step = m_fmper - m_fmcnt;	// to the next fm sample
 			if (step > left) step = left;
@@ -141,7 +154,7 @@ public:
 			// raises itself - CSM, off timer A - lasts one sample, so the
 			// sample after the timer has to be made to look written to or
 			// the key is never let go and the note never retriggers.
-			if (m_recheck) {
+			if (m_recheck && !lite) {
 				m_fm.invalidate_caches();
 				m_recheck = 0;
 			}
@@ -152,6 +165,10 @@ public:
 					if (t == 0) m_recheck = 1;
 					fired = 1;
 				}
+			}
+			if (lite) {
+				m_fm.count_clock();
+				continue;
 			}
 			// every channel is clocked whatever the debugger mutes, so a
 			// muted one comes back where it would have been
@@ -346,6 +363,8 @@ xfm* fm_of(aymChip* chip) {
 
 extern "C" {
 
+int (*ym2203_lite)(aymChip*) = NULL;
+
 void ym2203_free(aymChip* chip) {
 	if (!chip->fm) return;
 	delete (xfm*)chip->fm;
@@ -356,6 +375,7 @@ void ym2203_reset(aymChip* chip) {
 	ay_reset(chip);
 	chip->reg[0xff] = 0;
 	chip->wait = 0;
+	chip->fm_stale = 0;
 	fm_of(chip)->reset();
 }
 

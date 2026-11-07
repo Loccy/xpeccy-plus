@@ -44,6 +44,12 @@ void xstate_destroy(xState*);
 // saved (a profile or hardware switch in between), and then it changes nothing.
 int xstate_save(xState*, Computer*);
 int xstate_load(xState*, Computer*);
+// The chips as they stand, their fm too: a YM2203's may have run its timers only while
+// a copy made its sound (fm_stale). For a state never heard - run-ahead's - or one whose
+// fm is kept beside it (rewind's)
+int xstate_save_as_is(xState*, Computer*);
+// set by the sound code: brings that fm back from the copy, before a save that keeps it
+extern void (*xstate_chips_back)(Computer*);
 
 // 1 when a frame may be run and then thrown away: everything it can touch is
 // either inside the snapshot or unmoved by an extra frame of emulation. This is

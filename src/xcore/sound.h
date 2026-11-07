@@ -107,6 +107,17 @@ void snd_sync_wait();
 // the chip whose state is heard: the sound thread's copy when it mixes the machine
 // itself (the levels, peaks and envelope the debugger shows), else the machine's
 aymChip* snd_heard_chip(Computer*, int);
+// A YM2203's fm is made on the sound thread only: the machine's core runs its timers
+// (fm_stale). The debugger's view of it, from the copy that made the sound when there
+// is one. Under emu_lock
+void snd_fm_view(Computer*, aymChip*, fmChan*);
+// The copy's fm as it stands, for rewind to keep with a snapshot (on the sound thread,
+// in a snd_q_call); NULL when it has none
+void* snd_fm_capture();
+void snd_fm_capture_free(void*);
+// A snapshot put back: the copy seeded from it at once, a stale fm from what was
+// captured there. Emulation thread
+void snd_fm_reseed(Computer*, const void*);
 // fn(arg) runs on the sound thread, after the sub-samples queued so far
 void snd_q_call(void (*fn)(long long), long long arg);
 int snd_queued_bytes();		// handed over, not yet in the ring

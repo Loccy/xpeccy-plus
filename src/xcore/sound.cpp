@@ -7,6 +7,7 @@
 #include "vidrec.h"
 #include "xcore.h"
 #include "rewind.h"
+#include "../libxpeccy/xstate.h"
 
 #include <atomic>
 #include <climits>
@@ -382,14 +383,29 @@ void snd_q_call(void (*fn)(long long), long long arg) {
 // is copied over whole. Run-ahead's frames send nothing: they are thrown away, and
 // TSound.advNs goes back with the state. A YM2203's fm half keeps its state outside
 // the struct: it goes over packed, and the copy's chips have cores of their own.
+//
+// The fm is made here only. The machine's core runs its timers and nothing else
+// (ym2203_lite: the status byte is all the cpu sees of it) and is marked stale; the
+// copy's is the chip's state. It is taken back (snd_fm_back) where something keeps
+// the machine's: a save (xstate_chips_back), a seed of the same machine (options, a
+// mute). Rewind keeps the copy's beside each snapshot instead (snd_fm_capture), as a
+// wait at every one would put the two threads back in step.
 
 // the copy to start from
 typedef struct {
 	TSound ts;
 	aymChip chip[4];
 	std::vector<unsigned char> fm[4];	// a YM2203's core, packed; empty: the chip has none
+	long long extra[4];	// time on top of the chip's own: one taken from a capture
 	sndPair (*mix)(sndMix*, sndVolume*);
 } sndSeedCopy;
+
+// the copy's YM2203s at a point, for a seed to start from later (rewind)
+typedef struct {
+	int has[4];
+	aymChip chip[4];
+	std::vector<unsigned char> fm[4];
+} sndFmCap;
 
 // the producer's
 static struct alignas(64) {
@@ -425,8 +441,84 @@ static long long snd_mirror_adv(Computer* comp) {
 	return adv;
 }
 
-static void snd_mirror_seed(Computer* comp) {
+// set while the machine's fm is worked out in full here, on the way back from the copy
+static int snd_fm_full = 0;
+
+// ym2203_lite: the machine's chip, while the copy follows it. Not while a seed waits
+// to copy a core that is the chip's own (a load, a reset): that one stays whole
+static int snd_fm_lite(aymChip* chip) {
+	if ((chip >= &sm.chip[0]) && (chip < &sm.chip[4])) return 0;	// the copy's own
+	Computer* comp = mp.comp;
+	if (!comp || (comp != conf.zx) || snd_fm_full) return 0;
 	TSound* ts = comp->ts;
+	if ((chip != ts->chipA) && (chip != ts->chipB) && (chip != ts->chipC) && (chip != ts->chipD))
+		return 0;
+	return !comp->sndSeed || chip->fm_stale;
+}
+
+// time handed to a chip on top of what it holds, in pieces its int count takes
+static void snd_chip_add_time(aymChip* chip, long long ns) {
+	while (ns > 0) {
+		int k = (ns > (1 << 29)) ? (1 << 29) : (int)ns;
+		ay_sync_ns(chip, k);
+		ns -= k;
+	}
+}
+
+static void snd_fm_pack(aymChip* chip, std::vector<unsigned char>& out) {
+	void* p;
+	ym2203_state_pack(chip);
+	int n = ym2203_state_size(chip, &p);
+	out.assign((unsigned char*)p, (unsigned char*)p + n);
+}
+
+// The copy's fm core into the machine's chip, nothing else of the copy's: what the
+// gui sets on the machine's chip (stereo, a mute) may not have reached the copy yet.
+// The core is carried on, in a chip of its own, by the time the copy has not been
+// handed yet (TSound.advNs), and the machine's is counted up to that same point: the
+// two count it in different pieces, which comes out the same (ym2203_flush)
+static void snd_fm_adopt(Computer* comp, aymChip* dst, const aymChip* src) {
+	std::vector<unsigned char> fm;
+	snd_fm_pack((aymChip*)src, fm);
+	aymChip tmp = *src;
+	tmp.fm = NULL;
+	tmp.xrd = NULL;
+	tmp.xwr = NULL;
+	tmp.xptr = NULL;
+	ym2203_state_load(&tmp, fm.data(), (int)fm.size());
+	snd_chip_add_time(&tmp, comp->ts->advNs);
+	ay_flush(&tmp);
+	ay_flush(dst);
+	snd_fm_pack(&tmp, fm);
+	ym2203_free(&tmp);
+	ym2203_state_load(dst, fm.data(), (int)fm.size());
+	dst->fm_stale = 0;
+}
+
+// xstate_chips_back, and before a seed of the same machine: a stale fm back from the
+// copy, once it has taken everything handed over. Emulation thread, or under emu_lock
+static void snd_fm_back(Computer* comp) {
+	if (!sndThread || !comp || (comp != mp.comp)) return;
+	int any = 0;
+	for (int i = 0; i < 4; i++) {
+		aymChip* chip = snd_ts_chip(comp->ts, i);
+		if (chip && chip->fm && chip->fm_stale) any = 1;
+	}
+	if (!any) return;
+	snd_q_flush();
+	snd_sync_wait();
+	std::lock_guard<std::recursive_mutex> lk(sndWork);
+	if (!sm.on) return;
+	for (int i = 0; i < 4; i++) {
+		aymChip* chip = snd_ts_chip(comp->ts, i);
+		if (chip && chip->fm && chip->fm_stale && sm.chip[i].fm)
+			snd_fm_adopt(comp, chip, &sm.chip[i]);
+	}
+}
+
+static void snd_mirror_seed(Computer* comp, const sndFmCap* cap = NULL) {
+	TSound* ts = comp->ts;
+	if (!cap) snd_fm_back(comp);		// options, a mute: the copy has followed it
 	sndSeedCopy* c = new sndSeedCopy;
 	c->ts = *ts;
 	for (int i = 0; i < 4; i++) {
@@ -435,13 +527,28 @@ static void snd_mirror_seed(Computer* comp) {
 		// come in this step were due before its end (late), and they count up to
 		// there, not to the end
 		c->chip[i] = *chip;
-		// and its fm core as it stands with it: at that same last flush
-		if (chip->fm) {
-			void* p;
-			ym2203_state_pack(chip);
-			int n = ym2203_state_size(chip, &p);
-			c->fm[i].assign((unsigned char*)p, (unsigned char*)p + n);
+		c->extra[i] = 0;
+		if (!chip->fm) continue;
+		if (cap && cap->has[i] && chip->fm_stale) {
+			// the copy's as it was there, and the time it had not been handed yet;
+			// what the gui sets, as the machine's has it
+			c->chip[i] = cap->chip[i];
+			c->chip[i].stereo = chip->stereo;
+			c->chip[i].sep = chip->sep;
+			memcpy(c->chip[i].fm_off, chip->fm_off, sizeof(chip->fm_off));
+			c->chip[i].chanA.mute = chip->chanA.mute;
+			c->chip[i].chanB.mute = chip->chanB.mute;
+			c->chip[i].chanC.mute = chip->chanC.mute;
+			c->chip[i].chanN.mute = chip->chanN.mute;
+			c->chip[i].chanE.mute = chip->chanE.mute;
+			c->fm[i] = cap->fm[i];
+			c->extra[i] = ts->advNs;
+			continue;
 		}
+		if (chip->fm_stale)
+			xlog(XLG_SOUND, XLL_WARN, "sound: chip %i seeded with an fm half that only ran its timers", i);
+		// and its fm core as it stands with it: at that same last flush
+		snd_fm_pack(chip, c->fm[i]);
 	}
 	c->mix = comp->hw->sndmix;
 	ts->advNs = 0;
@@ -536,6 +643,8 @@ static void snd_mirror_take_seed(sndSeedCopy* c) {
 			// a core made new sets the status bits: back as the struct came
 			sm.chip[i].reg[0xff] = c->chip[i].reg[0xff];
 			sm.chip[i].wait = c->chip[i].wait;
+			sm.chip[i].fm_stale = 0;
+			snd_chip_add_time(&sm.chip[i], c->extra[i]);
 		}
 	}
 	sm.ts.chipA = &sm.chip[0];
@@ -556,6 +665,48 @@ static void snd_mirror_take_seed(sndSeedCopy* c) {
 aymChip* snd_heard_chip(Computer* comp, int i) {
 	if (sm.on && (mp.comp == comp) && (i >= 0) && (i < 4)) return &sm.chip[i];
 	return snd_ts_chip(comp->ts, i);
+}
+
+void snd_fm_view(Computer* comp, aymChip* chip, fmChan* out) {
+	int i = 0;
+	while ((i < 4) && (snd_ts_chip(comp->ts, i) != chip)) i++;
+	if ((i < 4) && sndThread && (mp.comp == comp)) {
+		// the sound thread works it under this lock, and nothing else does
+		std::lock_guard<std::recursive_mutex> lk(sndWork);
+		if (sm.on && sm.chip[i].fm) {
+			ym2203_fm_view(&sm.chip[i], out);
+			return;
+		}
+	}
+	ym2203_fm_view(chip, out);
+}
+
+// sound thread: rewind's mark of a snapshot
+void* snd_fm_capture() {
+	if (!sm.on) return NULL;
+	sndFmCap* c = NULL;
+	for (int i = 0; i < 4; i++) {
+		if (!sm.chip[i].fm) continue;
+		if (!c) {
+			c = new sndFmCap;
+			for (int k = 0; k < 4; k++) c->has[k] = 0;
+		}
+		c->has[i] = 1;
+		c->chip[i] = sm.chip[i];
+		snd_fm_pack(&sm.chip[i], c->fm[i]);
+	}
+	return c;
+}
+
+void snd_fm_capture_free(void* p) {
+	delete (sndFmCap*)p;
+}
+
+// Rewind put a snapshot back. A machine not mirrored, or another one, is seeded at
+// its next sample as it stands
+void snd_fm_reseed(Computer* comp, const void* cap) {
+	if (!sndThread || !cap || (mp.comp != comp) || !snd_mirror_fits(comp)) return;
+	snd_mirror_seed(comp, (const sndFmCap*)cap);
 }
 
 // the end of an emulation cycle: what it made goes to the sound thread
@@ -844,12 +995,16 @@ static void snd_thread_start() {
 	sm.m.dOut = 0xffffffff;
 	sm.m.dVol = -1;
 	ay_log = snd_ay_log;
+	ym2203_lite = snd_fm_lite;
+	xstate_chips_back = snd_fm_back;
 	sndQuit = 0;
 	sndThread = new std::thread(snd_thread_run);
 }
 
 static void snd_thread_stop() {
 	if (!sndThread) return;
+	if (conf.zx) snd_fm_back(conf.zx);	// the copy's fm is the chip's: kept past it
+	ym2203_lite = NULL;
 	snd_sync_wait();
 	sndQuit = 1;
 	{
@@ -890,10 +1045,14 @@ int sndSync(Computer* comp) {
 				// nothing to hear: only what the machine itself does at a sample
 				// (the Next's copper, AY clock, DACs) is done, the mix is not made
 				if (comp->hw->sndtake) comp->hw->sndtake(comp, &mp.take);
+				// the copy keeps following, fm and all: a state put back goes over
+				if ((mp.comp == comp) && comp->sndSeed && snd_mirror_fits(comp))
+					snd_mirror_seed(comp);
 				sp.quiet++;
 			} else if (snd_mirror_fits(comp)) {
 				snd_mirror_sample(comp, 0);
 			} else {
+				if (mp.comp == comp) snd_fm_back(comp);	// the copy goes, its fm stays
 				if (mp.comp) snd_mirror_off();
 				sndPair lev = comp->hw->vol(comp, &conf.snd.vol);
 				snd_q_push(lev.left, lev.right);

@@ -65,7 +65,7 @@ void xreplay_frame(Computer* comp) {
 	xreplay_mode = XRP_OFF;
 	if (!frame_init(f)) return;
 	if (!xstate_safe(comp) || rzx_playing || rzx_recording) return;
-	if (!xstate_save(f->st, comp)) return;
+	if (!xstate_save_as_is(f->st, comp)) return;		// its run is thrown away: no fm wanted
 	f->tick = comp->tickTotal;
 	f->media = x_media_writes;
 	f->ok = 1;
@@ -190,7 +190,7 @@ int xreplay_redraw(Computer* comp) {
 	if (ok) {
 		owner_set(comp, &own);
 		cpuGetRegs(comp->cpu);
-		ok = xstate_save(stEnd, comp);
+		ok = xstate_save_as_is(stEnd, comp);	// compared without the sound parts
 	} else {
 		snprintf(why, sizeof(why), "the run ends at T %" PRId64 " of %" PRId64 ", %i INs of %i%s",
 			(int64_t)comp->tickTotal, (int64_t)target, feedPos, frm[0].len + frm[1].len, feedFail ? ", past the log" : "");
