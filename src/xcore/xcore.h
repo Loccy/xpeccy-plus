@@ -268,6 +268,8 @@ unsigned labels_gen();		// changes whenever the labels in effect do
 void labels_touch();		// ...and makes it change
 // the labels of known ROMs, below the user's: found again when the ROM changes
 void labels_rom_scan(Computer*);	// under emu_lock
+void labels_rom_check(Computer*);	// ...if a snapshot put a ROM in since
+QList<int> labels_rom_cells(const QString&);	// a ROM label's cells, a bank each
 bool labels_rom_only(const QString&);	// a ROM label's name, not one of the user's
 xAdr label_home(xAdr);			// a label in ROM paged out: where its ROM runs, for typing
 QString xconf_install_dir();		// config of the installed program

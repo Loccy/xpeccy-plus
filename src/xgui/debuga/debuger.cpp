@@ -336,7 +336,7 @@ void DebugWin::start() {
 	frame_skip_stop(comp);		// ...the one Frame skip left undrawn too
 	if (!comp->vid->tail)
 		vid_dark_tail(comp->vid);
-	labels_rom_scan(comp);		// a snapshot an RZX played brought a ROM of its own
+	labels_rom_check(comp);		// a snapshot an RZX played brought a ROM of its own
 	emu_unlock();
 
 	this->move(conf.dbg.pos);
@@ -2389,7 +2389,7 @@ void DebugWin::saveDasm() {
 		int end = (blockEnd < 0) ? comp->mem->busmask : (blockEnd & comp->mem->busmask);
 		int org = adr;
 		int work = 1;
-		QSet<QString> defined;
+		QHash<QString, int> defined;		// a name the block gives a row: where
 		QMap<QString, int> romUsed;		// ROM labels the code names: an EQU each, or it does not assemble
 		QList<QPair<int, QString> > romLines;	// the lines that name one
 		while ((adr <= end) && work) {
@@ -2399,13 +2399,13 @@ void DebugWin::saveDasm() {
 					work = 0;		// address overfill (FFFF+)
 				if (drow.isequ) {
 					body.append(drow.aname + ":" + dasm_export(drow));
-					defined.insert(drow.aname);
+					defined.insert(drow.aname, drow.adr & 0xffff);
 				} else if (drow.islab) {
 					if (drow.iscom) {
 						body.append(drow.aname);
 					} else {
 						body.append(drow.aname + ":");
-						defined.insert(drow.aname);
+						defined.insert(drow.aname, drow.adr & 0xffff);
 					}
 				} else {
 					if (drow.lrom >= 0) {
@@ -2418,9 +2418,16 @@ void DebugWin::saveDasm() {
 			if (dasm_has_separator(list))
 				body.append(QString());
 		}
-		// a ROM label whose name the block gives a label of the user's: its address
+		// A ROM label's name the assembler would read as another place - a label of
+		// the user's has it, in the block or not, or the block defines it elsewhere -
+		// goes as its address. The block's own row of that ROM label is no clash
+		QSet<QString> clash;
+		for (QMap<QString, int>::const_iterator it = romUsed.constBegin(); it != romUsed.constEnd(); it++) {
+			if (!labels_rom_only(it.key()) || (defined.contains(it.key()) && (defined.value(it.key()) != it.value())))
+				clash.insert(it.key());
+		}
 		for (const QPair<int, QString>& rl : romLines) {
-			if (!defined.contains(rl.second)) continue;
+			if (!clash.contains(rl.second)) continue;
 			QRegularExpression word("(?<![\\w.])" + QRegularExpression::escape(rl.second) + "(?![\\w.])");
 			body[rl.first].replace(word, "0x" + gethexword(romUsed.value(rl.second)));
 		}
@@ -2428,7 +2435,7 @@ void DebugWin::saveDasm() {
 		out << "; Created by Xpeccy+ Debugger\n\n";
 		bool equ = false;
 		for (QMap<QString, int>::const_iterator it = romUsed.constBegin(); it != romUsed.constEnd(); it++) {
-			if (defined.contains(it.key())) continue;
+			if (defined.contains(it.key()) || clash.contains(it.key())) continue;
 			out << it.key() << "\tEQU 0x" << gethexword(it.value()) << "\n";
 			equ = true;
 		}

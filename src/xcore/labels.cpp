@@ -56,6 +56,7 @@ static QList<romLabList> romLists;
 static QHash<int, QString> romByAbs;		// ROM cell -> name, for the machine in use
 static QMap<QString, QList<int> > romByName;	// name -> its cells, lowest first
 static QList<QByteArray> romBanks;		// the MD5s they were found by
+static int romCustomSeen = 0;			// the machine's romCustom at that time
 
 // The lists of Xpeccy+ are built in (res/labels); one under a license of its own
 // (the 48K BASIC's, GPL) is a file in config/labels of the installed program
@@ -104,6 +105,7 @@ void labels_rom_scan(Computer* comp) {
 			banks.append(QCryptographicHash::hash(QByteArray::fromRawData((const char*)comp->mem->romData + bank, MEM_16K),
 				QCryptographicHash::Md5).toHex());
 	}
+	if (comp) romCustomSeen = comp->romCustom;
 	if (banks == romBanks) return;
 	romBanks = banks;
 	romByAbs.clear();
@@ -124,6 +126,17 @@ void labels_rom_scan(Computer* comp) {
 		}
 	}
 	if (!romByAbs.isEmpty()) xlog(XLG_FILE, XLL_INFO, "ROM labels: %i", (int)romByAbs.size());
+}
+
+// A ROM a snapshot put in since the last scan (an RZX loads its snapshots as it
+// plays): scan again. A byte written into the ROM is no reason to drop a bank's names
+void labels_rom_check(Computer* comp) {
+	if (comp && (comp->romCustom != romCustomSeen)) labels_rom_scan(comp);
+}
+
+// every cell of a ROM label's name, one a bank it is in
+QList<int> labels_rom_cells(const QString& nm) {
+	return conf.dbg.romlabels ? romByName.value(nm) : QList<int>();
 }
 
 QStringList labels_rom_names() {
@@ -270,6 +283,10 @@ void add_label(xAdr xadr, QString name, xLabelSet* set) {
 	if (set) {
 		if (set->list.contains(name))
 			del_label(name);
+		if (xadr.type == MEM_ROM) {		// a page past the ROM is the one it wraps to
+			xadr.abs = rom_abs(xadr.abs);
+			xadr.bank = xadr.abs >> 14;
+		}
 		set->list[name] = xadr;
 		conf.labmap[xadr.type][xadr.abs] = name;
 	}
@@ -279,6 +296,7 @@ void add_label(xAdr xadr, QString name, xLabelSet* set) {
 static QString find_label_user(xAdr xadr) {
 	QString lab;
 	xLabelSet* set = conf.curlabset;
+	if (xadr.type == MEM_ROM) xadr.abs = rom_abs(xadr.abs);
 	if (set) {
 		if (conf.labmap.contains(xadr.type)) {
 			if (conf.labmap[xadr.type].contains(xadr.abs)) {

@@ -1109,9 +1109,25 @@ int main(int ac,char** av) {
 		if (arg.first == "--bp") {
 			bool ok = true;
 			xAdr xadr = find_label(arg.second);
-			if (((xadr.type == MEM_ROM) || (xadr.type == MEM_RAM)) && (xadr.adr < 0)) {
-				// its bank is not paged in now: a breakpoint on the cell, where it runs
-				brkSet(BRK_MEMCELL, MEM_BRK_FETCH | ((xadr.type == MEM_ROM) ? MEM_BRK_ROM : MEM_BRK_RAM), xadr.abs, -1);
+			if ((xadr.type >= 0) && (xadr.adr < 0)) {
+				// its page is not paged in now: a breakpoint on the cell, where it runs;
+				// a ROM label's name in several banks (the Evo's 48 BASIC) on each
+				int area = -1;
+				switch (xadr.type) {
+					case MEM_ROM: area = MEM_BRK_ROM; break;
+					case MEM_RAM: area = MEM_BRK_RAM; break;
+					case MEM_SLOT: area = MEM_BRK_SLT; break;
+					case MEM_DIV: area = MEM_BRK_DIV; break;
+				}
+				if (area < 0) {
+					cli_warn(QString("--bp: %0 is not where a breakpoint can be put").arg(arg.second));
+					continue;
+				}
+				QList<int> cells;
+				if ((xadr.type == MEM_ROM) && labels_rom_only(arg.second)) cells = labels_rom_cells(arg.second);
+				if (cells.isEmpty()) cells.append(xadr.abs);
+				for (int abs : cells)
+					brkSet(BRK_MEMCELL, MEM_BRK_FETCH | area, abs, -1);
 				continue;
 			}
 			tmpi = (xadr.type >= 0) ? xadr.adr : str_num(arg.second, &ok);
