@@ -270,8 +270,9 @@ The {icon}`label` Labels menu of the toolbar has:
 ```
 
 When you type a name in the address or command column, after the second letter a list of
-the labels that contain those letters drops down. Enter picks the first one, or pick
-another with the arrow keys or the mouse. The same list appears in the
+the labels that contain those letters drops down. Enter picks the label you typed in full,
+else the first one that starts with your letters, else the first one; pick another with the
+arrow keys or the mouse. The same list appears in the
 [The Breakpoint Editor](debugger-breakpoints.md#the-breakpoint-editor).
 
 ### Label files
