@@ -28,8 +28,8 @@ The **File types** group has a row per format:
 
 - **Format** - the kind of file.
 - **Needs** - what a machine must have to run it: **any machine**, **Beta Disk (TR-DOS)**,
-  **+3 disk drive**, **TSConf**, **ZX Spectrum Next**, **read from the file** (a `.z80` or `.sna` names its
-  model), **exactly the one it was taken on** (SZX) or **exactly the one it was recorded
+  **+3 disk drive**, **TSConf**, **ZX Spectrum Next**, **read from the file** (a `.z80` names its
+  model, a `.sna` names only 48K or 128K), **exactly the one it was taken on** (SZX) or **exactly the one it was recorded
   on** (RZX).
 - **Opened on** - **Auto**, **Ask**, **Keep current**, or one machine from the list.
 
@@ -41,3 +41,25 @@ row back to **Auto**.
 
 Only a file that is about to run can switch the machine: a snapshot always, a tape or a disk
 only when it is run, and a disk only from drive A.
+
+```{index} snapshot; which machine runs it
+```
+
+A `.z80` or `.sna` snapshot runs on any machine with its memory paging. One taken inside
+the ROM - in the 128K menu or the BASIC editor, or in the middle of a ROM routine - also
+needs the very same ROM:
+
+- A `.z80` taken in the menu or editor opens on the model it names. Even the clones' ROMs
+  differ there: the Pentagon's menu has a TR-DOS item the 128K's has not. The +2A and +3
+  share their ROMs, but a +3's disk system is set up for its drive. One stopped in a
+  48 BASIC routine needs the same editor: a 128K one runs on the 128K and the clones, not
+  on the +2, +2A or +3.
+- A `.sna` names no model. For one taken in the menu or editor, Xpeccy+ tells a +2, a +2A
+  or a +3 by what the ROM left in memory. A 128K and its clones share that code, so for
+  them, and whenever the snapshot does not tell, **Auto** asks which machine to use, as
+  **Ask** does. To keep the model, save as `.z80` or `.szx`.
+- A program running in RAM stays on the current machine. A `.z80` of one that keeps the
+  128K editor's ROM paged in needs a machine with that editor, which the +2, +2A and +3
+  do not have; a `.sna` is looked at only when it was stopped inside the ROM.
+
+A machine of your own counts by its hardware, whatever ROM files it has.

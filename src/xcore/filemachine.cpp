@@ -5,6 +5,7 @@
 
 #include <map>
 #include <algorithm>
+#include <QFile>
 
 // Which machine a file is opened on: what each format needs, what the user
 // wants done about it, and the decision the two make together.
@@ -47,6 +48,7 @@ static const struct {
 };
 
 std::string fm_snap_target(int snap) {
+	snap = SNAP_HW_OF(snap);
 	int i = 0;
 	while ((fm_snap_tab[i].hw != SNAP_HW_UNKNOWN) && (fm_snap_tab[i].hw != snap))
 		i++;
@@ -76,18 +78,25 @@ const char* fm_need_text(int need) {
 	return fm_need_tab[need];
 }
 
-// a disk has to be started, not just read, so it asks the one table that knows
-static bool fm_takes(int hwid, int dif, int need, int snap) {
+// a disk has to be started, not just read, so it asks the one table that knows;
+// model is the machine's snapModel, which tells a +2 from a 128K
+static bool fm_takes(int hwid, int model, int dif, int need, int snap) {
 	switch (need) {
 		case FMN_TSCONF: return hwid == HW_TSLAB;
 		case FMN_NEXT: return hwid == HW_ZXNEXT;
 		case FMN_TRDOS: return autostart_can(hwid, dif, AS_DISK);
 		case FMN_PLUS3DOS: return autostart_can(hwid, dif, AS_DISK3);
-		case FMN_SNAPSHOT: return snapHwRuns(snap, hwid);
+		case FMN_SNAPSHOT: return snapHwRuns(snap, hwid, model);
 		case FMN_RZX:
 		case FMN_EXACT: return snapHwIs(snap, hwid);
 	}
 	return true;
+}
+
+// A snapshot names the model it was taken on - but a .sna, whose size only
+// says 48K or 128K, and a disk names a family at most
+static bool fm_names_model(const xFileMac* row) {
+	return row->probe && (row->ftype != FL_SNA);
 }
 
 // An SZX stands the machine at a point in its frame, so it is loaded on the
@@ -95,7 +104,7 @@ static bool fm_takes(int hwid, int dif, int need, int snap) {
 // machine is one of the user's own rather than a model of the table.
 static bool fm_exact_on(const std::string& id, int snap, const std::string& target) {
 	if (target.empty() || (target == id)) return true;
-	if (snap >= SNAP_HW_CORE) return !xm_find(target);
+	if (SNAP_HW_OF(snap) >= SNAP_HW_CORE) return !xm_find(target);
 	for (int i = 0; fm_snap_tab[i].target; i++) {
 		if (id == fm_snap_tab[i].target) return false;
 	}
@@ -106,11 +115,11 @@ static bool fm_exact_on(const std::string& id, int snap, const std::string& targ
 // it was set is not in its definition yet
 bool fm_runs(const std::string& id, int need, int snap) {
 	if ((id == conf.macId) && conf.zx)
-		return fm_takes(conf.zx->hw->id, conf.zx->dif->cfg, need, snap);	// out under a divMMC is still its
+		return fm_takes(conf.zx->hw->id, conf.zx->snapModel, conf.zx->dif->cfg, need, snap);	// out under a divMMC is still its
 	const xMachine* mac = xm_find(id);
 	if (!mac) return false;
 	HardWare* hw = findHardware(mac->hw.c_str());
-	return hw && fm_takes(hw->id, mac->disk, need, snap);
+	return hw && fm_takes(hw->id, mac->snapModel, mac->disk, need, snap);
 }
 
 void fm_clear() {
@@ -143,32 +152,102 @@ void fm_save(FILE* file) {
 	}
 }
 
+// a 16K image from the ROM folder, empty if it is not there
+static std::vector<unsigned char> fm_rom_image(const char* name) {
+	QFile file(QString::fromUtf8(xm_rom_path(name).c_str()));
+	if (!file.open(QIODevice::ReadOnly)) return std::vector<unsigned char>();
+	QByteArray data = file.read(MEM_16K);
+	if (data.size() != MEM_16K) return std::vector<unsigned char>();
+	return std::vector<unsigned char>(data.begin(), data.end());
+}
+
+// A 128K .sna in its editor names no model, so the editor is told from the file
+// against the ones in the ROM folder, then the model. Told, it is that model; one
+// that does not tell is SNAP_UNSURE, and the user is asked - the Sinclair editor's
+// too, as the 128K and the clones share it but not their menus.
+static int fm_sna_guess(const char* path) {
+	static const char* names[] = {"128-0.rom", "plus2-0.rom", "plus3-0.rom"};
+	std::vector<unsigned char> img[3];
+	const unsigned char* eds[3];
+	int idx[3];
+	int n = 0;
+	for (int i = 0; i < 3; i++) {
+		img[i] = fm_rom_image(names[i]);
+		if (img[i].empty()) continue;
+		eds[n] = img[i].data();
+		idx[n++] = i;
+	}
+	int ed = (n > 0) ? sna_editor_of(path, eds, n) : -1;
+	// the 128K's #5B00 routines are the +2's: one told apart needs both to compare
+	if ((ed >= 0) && (idx[ed] < 2) && (img[0].empty() || img[1].empty())) ed = -1;
+	xlog(XLG_FILE, XLL_INFO, "sna in its editor: %s", (ed < 0) ? "no model told" : names[idx[ed]]);
+	if (ed < 0) return SNAP_HW_128K | SNAP_UNSURE;
+	switch (idx[ed]) {
+		case 1: return SNAP_HW_PLUS2 | SNAP_IN_ROM;
+		case 2: return (sna_plus3_drive(path) ? SNAP_HW_PLUS3 : SNAP_HW_PLUS2A) | SNAP_IN_ROM;
+	}
+	return SNAP_HW_128K | SNAP_EDITOR | SNAP_UNSURE;
+}
+
 xFileMacPick fm_pick(int ftype, const char* path) {
 	xFileMacPick pick;
 	const xFileMac* row = fm_row(ftype);
 	if (!row) return pick;
+	std::string pref = fm_pref(row->key);
+	if (pref == FM_KEEP) return pick;
 	int snap = SNAP_HW_UNKNOWN;
 	std::string target = row->target ? row->target : "";
 	if (row->probe) {
 		snap = row->probe(path);
+		if ((ftype == FL_SNA) && (snap & SNAP_IN_ROM))
+			snap = fm_sna_guess(path);
 		target = fm_snap_target(snap);
 		// a file of ours names the very machine it was taken on
-		if ((snap >= SNAP_HW_CORE) && (ftype == FL_SZX)) {
+		if ((SNAP_HW_OF(snap) >= SNAP_HW_CORE) && (ftype == FL_SZX)) {
 			char id[256];
 			szx_machine_of(path, id, sizeof(id));
 			target = id;
 		}
 	}
-	std::string pref = fm_pref(row->key);
-	if (pref == FM_KEEP) return pick;
 	// one machine for the whole format, unless it cannot take this very file
 	if ((pref != FM_AUTO) && (pref != FM_ASK) && fm_runs(pref, row->need, snap)) {
 		if (pref != conf.macId) pick.target = pref;
 		return pick;
 	}
+	// a model only guessed at is never switched to unasked
+	pick.unsure = (snap & SNAP_UNSURE) != 0;
+	if (pick.unsure) pref = FM_ASK;
 	auto fits = [&](const std::string& id) {
 		return fm_runs(id, row->need, snap) && ((row->need != FMN_EXACT) || fm_exact_on(id, snap, target));
 	};
+	// the machines but the running one that can take the file, in this order
+	std::vector<std::string> can;
+	auto add = [&](const std::string& id) {
+		if (!id.empty() && (id != conf.macId) && (std::find(can.begin(), can.end(), id) == can.end())
+				&& fits(id))
+			can.push_back(id);
+	};
+	// Ask, whenever there is a choice: not when the running machine is the model
+	// the file names, nor when only one machine can take it. A file that names
+	// none has the machine Auto would go back to on top, and Keep for the answer
+	// when the running one can take it.
+	if (pref == FM_ASK) {
+		bool named = fm_names_model(row) && !target.empty();
+		if (named && (target == conf.macId)) return pick;
+		pick.runs = fits(conf.macId);
+		if (!named && fits(conf.macBase)) add(conf.macBase);
+		add(target);
+		foreach(const xMachine& mac, xm_list())
+			add(mac.id);
+		if (can.size() + (pick.runs ? 1 : 0) < 2) {
+			if (!pick.runs && !can.empty()) pick.target = can.front();
+			return pick;
+		}
+		pick.ask = can;
+		pick.keep = !named && pick.runs;
+		xlog(XLG_FILE, XLL_INFO, "%s on %s: asking", row->key, conf.macId.c_str());
+		return pick;
+	}
 	// The user's own machine when it can take the file: a machine a file
 	// switched to was for that file. Then the one running, if it can.
 	if (fits(conf.macBase)) {
@@ -180,21 +259,11 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	}
 	if (fits(conf.macId)) return pick;
 	// the one the file names, then every other one that can take it
-	std::vector<std::string> can;
-	auto add = [&](const std::string& id) {
-		if (!id.empty() && (std::find(can.begin(), can.end(), id) == can.end()) && fm_runs(id, row->need, snap))
-			can.push_back(id);
-	};
 	add(target);
 	foreach(const xMachine& mac, xm_list())
 		add(mac.id);
 	if (can.empty()) return pick;
-	if (pref == FM_ASK) {
-		pick.ask = can;
-	} else {
-		pick.target = can.front();
-	}
-	xlog(XLG_FILE, XLL_INFO, "%s does not run on %s: %s", row->key, conf.macId.c_str(),
-		pick.target.empty() ? "asking" : pick.target.c_str());
+	pick.target = can.front();
+	xlog(XLG_FILE, XLL_INFO, "%s does not run on %s: %s", row->key, conf.macId.c_str(), pick.target.c_str());
 	return pick;
 }
