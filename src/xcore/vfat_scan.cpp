@@ -499,23 +499,7 @@ bool sdc_mount_over(SDCard* sdc, const QString& sub, const QString& subName, con
 	QString path = QString::fromLocal8Bit(sdc->image);
 	vFat* vf = vfat_scan(path, sdc->vfat->writable, sub, subName, only);
 	if (!vf) return false;
-	if (entries) {
-		*entries = 0;
-		QByteArray name = subName.toUtf8();
-		int pin = -1;
-		for (int i = vf->node[0].child; (i >= 0) && (pin < 0); i = vf->node[i].next)
-			if (vf->node[i].pinned && (name == vf->node[i].name)) pin = i;
-		// down its own tree only: the card may be far bigger
-		QList<int> todo;
-		if (pin >= 0) todo.append(vf->node[pin].child);
-		while (!todo.isEmpty()) {
-			int i = todo.takeLast();
-			if (i < 0) continue;
-			(*entries)++;
-			todo.append(vf->node[i].next);
-			todo.append(vf->node[i].child);
-		}
-	}
+	if (entries) *entries = vfat_pin_entries(vf, vfat_pin_node(vf, subName.toUtf8().constData()));
 	vf->hold = sdc->vfat->hold;		// read again, not mounted anew: asked or not, as it was
 	vf->frozen = sdc->vfat->frozen;		// and made read-only or not
 	sdcSetFolder(sdc, path.toLocal8Bit().constData(), vf);

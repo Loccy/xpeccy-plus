@@ -277,6 +277,38 @@ void vfat_pin(vFat* vf, int idx, const char* hostpath) {
 	vf->node[idx].pinned = 1;
 }
 
+int vfat_pin_node(vFat* vf, const char* name) {
+	int i;
+	for (i = vf ? vf->node[0].child : -1; i >= 0; i = vf->node[i].next) {
+		if (vf->node[i].pinned && !strcmp(vf->node[i].name, name)) return i;
+	}
+	return -1;
+}
+
+// down its tree by the links, no stack: the next sibling, else up until there is one
+int vfat_pin_entries(vFat* vf, int pin) {
+	int n = 0;
+	int i;
+	if (!vf || (pin <= 0) || (pin >= vf->nodes)) return 0;
+	i = vf->node[pin].child;
+	while (i >= 0) {
+		n++;
+		if (vf->node[i].child >= 0) {
+			i = vf->node[i].child;
+			continue;
+		}
+		while ((i != pin) && (vf->node[i].next < 0)) i = vf->node[i].parent;
+		i = (i == pin) ? -1 : vf->node[i].next;
+	}
+	return n;
+}
+
+// the first child: the scan puts the file in before the guest can add anything
+int vfat_pin_file(vFat* vf, int pin) {
+	if (!vf || (pin <= 0) || (pin >= vf->nodes) || !vf->node[pin].cut) return -1;
+	return vf->node[pin].child;
+}
+
 // the root - the volume's or a pinned folder's own - then the host names down to the
 // node, parted by '/'
 int vf_path(vFat* vf, int idx, char* buf, int max) {

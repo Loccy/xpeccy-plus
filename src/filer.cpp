@@ -391,7 +391,7 @@ static bool pin_huge(const QString& dir) {
 static bool pin_put(Computer* comp, const QString& dir, const QString& name, const QString* only, const QString& why) {
 	int n = 0;
 	if (!sdc_mount_over(comp->sdc, dir, name, only, &n)) return false;
-	QString what = !only ? QString("%0 put on the card as /%1, %2 entries").arg(dir, name).arg(n)
+	QString what = !only ? QString("%0 put on the card as /%1, %2 entries").arg(dir, name, QString::number(n))
 		: (only->isEmpty() || !n) ? QString("%0 put on the card as an empty /%1").arg(dir, name)
 		: QString("%0 put on the card alone as /%1").arg(QDir(dir).filePath(*only), name);
 	if (!why.isEmpty()) what += ": " + why;
@@ -1110,10 +1110,8 @@ static void szx_card_mount(Computer* comp, bool load) {
 			xlog(XLG_FILE, XLL_WARN, "szx: SD card %s not found", c->path);
 		}
 	}
-	// the folder a program from elsewhere ran in, put on the card again (one at a time,
-	// as opening one does). One with the program's file alone is named by the file; a
-	// collection named whole (by a build of before PIN_MAX) goes on empty: the program is
-	// in memory, and which file it was the record does not say.
+	// the folder a program from elsewhere ran in, put on the card again by the same rule
+	// (one at a time, as opening one does); one named by a file holds that file alone
 	if (load && same() && comp->sdc->vfat && c->pins) {
 		QFileInfo hinf(QString::fromUtf8(c->pin[0].host));
 		QString name = QString::fromUtf8(c->pin[0].name);
@@ -1125,12 +1123,13 @@ static void szx_card_mount(Computer* comp, bool load) {
 		bool there = (node >= 0) && vf->node[node].pinned && vf->node[node].hroot
 			&& (QFileInfo(QString::fromUtf8(vf->node[node].hroot)).canonicalFilePath() == QFileInfo(dir).canonicalFilePath());
 		// a folder is there as the rule put it, whole or empty; a file, with that file in it
-		if (there && alone) {
-			int f = vf->node[node].child;
-			there = vf->node[node].cut && (f >= 0) && !vf->node[f].dead && (file == QString::fromUtf8(vf->node[f].name));
+		if (there) {
+			int f = vfat_pin_file(vf, node);
+			there = alone ? ((f >= 0) && (file == QString::fromUtf8(vf->node[f].name)))
+				: (!vf->node[node].cut || (vf->node[node].child < 0));
 		}
 		if (!there && !alone && !hinf.isDir()) {
-			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s not found", c->pin[0].host);
+			xlog(XLG_FILE, XLL_WARN, "szx: %s, the program's folder or file, not found", c->pin[0].host);
 		} else if (!there) {
 			QString why = (!alone && pin_huge(dir)) ? QString("it holds over %0 entries").arg(PIN_MAX) : QString();
 			bool cut = alone || !why.isEmpty();

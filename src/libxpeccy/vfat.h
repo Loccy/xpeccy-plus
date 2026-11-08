@@ -114,6 +114,12 @@ void vfat_set_root(vFat*, const char* root, const vfHost* host);
 // a folder of the tree that is somewhere else on the host: its files are read from there,
 // and what the guest does in it stays in the volume
 void vfat_pin(vFat*, int idx, const char* hostpath);
+// a pinned folder of the root by its name as put on: its node, -1 if none
+int vfat_pin_node(vFat*, const char* name);
+// the entries a pinned folder holds, down its tree
+int vfat_pin_entries(vFat*, int pin);
+// the program's file in a pinned folder that holds only it (cut): its node, -1 if none
+int vfat_pin_file(vFat*, int pin);
 // name: UTF-8, also the host name; returns node index, VF_FULL if the parent
 // directory has no room left, or -1 on failure
 int vfat_add(vFat*, int parent, const char* name, unsigned int size, unsigned int mtime, int isdir);
