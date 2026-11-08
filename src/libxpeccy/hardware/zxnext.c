@@ -1350,6 +1350,7 @@ static void nx_back(Computer* comp, int* h, int* v, int n) {
 
 static void nx_soft_reset(Computer* comp);
 static void nx_hard_reset(Computer* comp);
+static void nx_reset_core(Computer* comp, long long w);
 
 // The CLK_28 time a port 253B read samples the counters at: port_253b_dat follows the
 // register one CLK_28 behind, port_253b_dat_0 takes it on each falling cpu clock edge,
@@ -2562,16 +2563,13 @@ static void nx_hard_reset(Computer* comp) {
 	cpu_reset(comp->cpu);
 }
 
+// NR 02 b0: the write's own edge (nx_nr_land), the copper's or the CPU's
 static void nx_soft_reset(Computer* comp) {
-	NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
-	if (next_reset_open) return;
-	// NR 02 b0: the write's own edge (nx_nr_land), the copper's or the CPU's
-	long long up = nxv_before_reset(comp, NX.nrLastW);
-	nx_regs_reset(comp);
-	if (NX.speed) compSetHwTurbo(comp, 1.0);
-	nx_map_mem(comp);
-	nxv_reset(comp);
-	nxv_after_reset(comp, up);	// drawn on from there, as the dot after the reset did
+	if (next_reset_open) {
+		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
+		return;
+	}
+	nx_reset_core(comp, NX.nrLastW);
 	cpu_reset(comp->cpu);
 }
 
@@ -2784,15 +2782,23 @@ static void nx_reset(Computer* comp) {
 	comp->cpu->xinta = nx_inta;
 	int fw = !NX.powered && NX.firmware;
 	NX.firmware = 0;
+	nx_reset_core(comp, -1);
+	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
+}
+
+// The core's reset, i_RESET (zxnext.vhd 1730): power-on's, or the soft one, which the
+// RESET button, F4 and NR 02 b0 all make alike (nr_02_soft_reset, 6370), on edge w -
+// -1 for where the ray stands. The raster stays: it changes at a frame start only.
+static void nx_reset_core(Computer* comp, long long w) {
 	long long up = -1;
 	if (!NX.powered) {
 		nx_power(comp);
 	} else {
-		// the reset button: a soft reset (zxnext.vhd 1733-1738, 6370)
 		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
-		up = nxv_before_reset(comp, -1);	// the raster stays: it changes at a frame start only
+		up = nxv_before_reset(comp, w);
 		nx_regs_reset(comp);
 		nx_layout(comp);
+		compSetHwTurbo(comp, 1.0);	// 3.5 MHz again (nx_regs_reset's NR 07)
 	}
 	// a reset lets the I2C lines go (zxnext.vhd 3231-3252); the clock chip sees that
 	NX.i2cScl = NX.i2cSda = 1;
@@ -2804,9 +2810,8 @@ static void nx_reset(Computer* comp) {
 	comp_set_cont(comp, 0);		// the machine contends by itself (nx_cont)
 	nx_map_mem(comp);
 	nxv_reset(comp);
-	nxv_after_reset(comp, up);	// the button: drawn on from where the reset found the ray
+	nxv_after_reset(comp, up);	// drawn on from where the reset found the ray
 	nx_snd_reset(comp);
-	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
 }
 
 // CLK_28 of each video timing (nextreg.txt 0x11): the CPU, the raster and everything
