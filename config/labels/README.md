@@ -1,4 +1,4 @@
-# Built-in ROM labels
+# ROM labels
 
 Names for the routines of known ROMs, the ranges in them that are data, and the system
 variables of their systems, shown by the Debugger where the user has no label or mark of

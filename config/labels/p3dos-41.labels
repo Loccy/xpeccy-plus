@@ -1,8 +1,7 @@
 ; ZX Spectrum +2A/+3 v4.1 ROM 2 (+3DOS) labels for the Xpeccy+ debugger.
 ;
 ; The jump table at #0100: the names the +3 manual gives the +3DOS and disk
-; driver calls, part of Xpeccy+ (MIT). The rest:
-;
+; driver calls, part of Xpeccy+ (MIT). The rest: Klive's names.
 ;
 ; Names and data ranges from Klive IDE's ROM annotations, file spp3-41-2.rom.dis
 ; (https://github.com/Dotneteer/kliveide, src/public/roms, commit e227b87c,

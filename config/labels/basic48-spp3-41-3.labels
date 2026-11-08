@@ -23,12 +23,14 @@
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
 ;
+; Changed for Xpeccy+ on 2026-11-08: TAPE_KIND_MSGS and START_MESSAGES were one byte
+; early, on the end of the text before them; moved to #09C1 and #1539, where the 48K
+; list names them BLOCK_HDR and COPYRIGHT, so they are left out here.
+;
 ; @rom <MD5 of a 16K bank> <bundled image> [-NAME / -@ADDR: not in that bank]
 ; ADDR NAME: a name; START END VIEW: a data range
 @ns BASIC48
 @rom ef7bf942a1c1f9ed5d583d0a49e26db7 plus3-41.rom bank 3
-09C0 TAPE_KIND_MSGS
-1538 START_MESSAGES
 386E INT_KBD_MOTOR
 387C INT_KBD_END
 387F MOTOR_TIMEOUT
