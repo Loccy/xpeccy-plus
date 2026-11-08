@@ -30,14 +30,15 @@ before that point is upstream's history and is not repeated here.
   address can be a label, looked up when the cheat is ticked, so it follows a rebuilt program.
 - **ROM labels in the Debugger**: the 48K BASIC (names from SkoolKit by Richard Dymond, after
   Logan and O'Hara's book), the 128K editor, the +2 and all four +2A/+3 ROMs (from Klive IDE
-  by Istvan Novak), the +3DOS calls and TR-DOS's entry points, functions and commands are named with no file
-  loaded, on the clones' ROMs too. Your own labels win; Options > Debugger turns them off.
-- **Each ROM name has its system's prefix**, `BASIC48.LD_BYTES`; `LD_BYTES` alone works too
-  when only one system in the machine has it.
+  by Istvan Novak), the +3DOS calls and TR-DOS's entry points, functions and commands are
+  named with no file loaded, on the clones' ROMs too. Your own labels win; Options > Debugger
+  turns them off.
+- **Each ROM name has its system's prefix**, `BASIC48.LD_BYTES`; `LD_BYTES` alone works too:
+  of several systems that have it, the one whose ROM is paged in now.
 - **ROM data is shown as data**: the font as `DB`, keyword and message tables as `DC "..."`,
   the bytes after an error call as `DB`, so the code after them lines up.
-- **System variables are named in the Debugger's instructions**: `LD HL,(CH_ADD)` - for 48 BASIC,
-  the 128K, the +2A/+3 and TR-DOS. Options > Debugger > System variables.
+- **System variables are named in the Debugger's instructions**: `LD HL,(CH_ADD)` - for 48
+  BASIC, the 128K, the +2A/+3 and TR-DOS. Options > Debugger > System variables.
 - **A local label's global part is paler in the Debugger**: `draw` of `draw.loop`.
 
 ### Changed
