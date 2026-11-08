@@ -77,8 +77,9 @@ to your machine.
 
 The **File types** page of **Options** sets this for each kind of file:
 
-- **Auto** - switch only when needed, then back to your machine. A snapshot that needs the
-  ROM of its own model but does not say which one is asked about, as with **Ask**;
+- **Auto** - switch only when needed, then back to your machine. A `.z80` or `.szx`
+  snapshot opens on the model it names. A snapshot that needs the ROM of its own model but
+  does not say which one is asked about, as with **Ask**;
 - **Ask** - every time there is a choice, the **Choose a Machine** window lists the other
   machines that can run the file, the one named in the file first: **Switch** to the one
   picked, **Keep** the current one, or **Cancel** and not open the file. It does not ask
