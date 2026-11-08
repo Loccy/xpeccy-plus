@@ -151,12 +151,14 @@ The buttons at the right:
 - {icon}`fileopen` open (the folder) - loads a list from a `.xbrk` file, in place of the one
   you have;
 - {icon}`save-as` save (the floppy with a pencil) - writes the list to a `.xbrk` file;
-- {icon}`cancel` delete (the red cross, at the bottom) - removes the selected breakpoints.
+- {icon}`cancel` delete (the red cross, at the bottom) - removes the selected breakpoints;
+  **Del** in the list does the same.
 
 The right-click menu of the list has:
 
 - **Reset counter** - sets **Cnt** of the selected breakpoints back to 0, and also clears
   the hit count that `HITS` reads and what their spans measured;
+- **Delete breakpoint** - removes the selected breakpoints, as the delete button does;
 - **Open breakpoint log** - opens the [breakpoint log](#the-breakpoint-log) in the
   program your system opens `.log` files with. It is grayed out until something is written
   to the log.
