@@ -162,7 +162,7 @@ int cheats_open(const QString& path, bool picked) {
 // The names a .pok of the image may have: its own, then a TOSEC name without its
 // [tags], then cut after (date)(publisher) - the 2023 set names a game's pokes so
 static QStringList pok_names(const QString& base) {
-	static const QRegularExpression date("\\((19|20)[0-9x]{2}[^)]*\\)|\\(-\\)");
+	static const QRegularExpression date("\\((19|20)[0-9xX]{2}[^)]*\\)");
 	QStringList res = {base};
 	QString cut = base;
 	const int tag = cut.indexOf('[');
