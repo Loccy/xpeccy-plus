@@ -182,6 +182,12 @@ void hwOut(xPort* ptab, Computer* comp, int port, int val, int mult) {
 // +2A/+3's second ROM enable through the board's jumper. The Pentagons take it
 // on ZX-BUS, esxDOS names them. Their own Beta Disk traps #3Dxx too; the board's
 // /ROMCS wins there, as it does over a Beta 128 on a 128K (seen by the user).
+// The machines with the SD slot read through comp->sdc: a card in it means nothing to the others
+int hw_has_sd(const HardWare* hw) {
+	if (!hw) return 0;
+	return (hw->id == HW_PENTEVO) || (hw->id == HW_TSLAB) || (hw->id == HW_ZXNEXT);
+}
+
 int hw_takes_divmmc(const HardWare* hw) {
 	if (!hw) return 0;
 	switch (hw->id) {

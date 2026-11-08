@@ -729,6 +729,9 @@ struct FpsSample { int frames; qint64 ns; };
 static QList<FpsSample> fpsmem;
 #define FPS_WINDOW	(1000 / FPS_TICK_MS)	// samples kept: a 1 second window
 static int fpsFast = 0;				// the window was taken in fast mode
+static qint64 fpsTickNs = 0;			// when the last tick came
+static qint64 fpsFromNs = 0;			// ...and when the window was last started over by it
+#define FPS_LATE_NS	1000000000LL		// a tick this late: the window was held (a file read, a switch)
 
 #if defined(__WIN32) && STICKY_KEY
 
@@ -795,6 +798,15 @@ void MainWin::timerEvent(QTimerEvent* ev) {
 	Computer* comp = conf.zx;
 	if (ev->timerId() == secid) {		// 0.2 sec timer, fps counter
 		timedSave(FPS_TICK_MS);
+		// the window was held - a big folder read, a machine switch: that is no reading
+		// of how fast this computer is, so the count starts after it
+		qint64 now = paceClockNs();
+		if (fpsTickNs && (now - fpsTickNs > FPS_LATE_NS)) {
+			fpsmem.clear();
+			slowTicks = 0;
+			fpsFromNs = now;
+		}
+		fpsTickNs = now;
 		// printf("0.2 sec timer event\n");
 		// the rate jumps tenfold into and out of fast mode: start the window
 		// over rather than average across the jump
@@ -803,7 +815,7 @@ void MainWin::timerEvent(QTimerEvent* ev) {
 			fpsmem.clear();
 			updateHead();		// the thread ends it too: a pause asked for in it
 		}
-		if (!conf.emu.pause && conf.vid.fctime) {
+		if (!conf.emu.pause && conf.vid.fctime && (conf.vid.fctime > fpsFromNs)) {	// a frame from before the hold is not one
 			FpsSample cur = {conf.vid.fcount, conf.vid.fctime};
 			fpsmem.append(cur);
 			qint64 dtNs = cur.ns - fpsmem.first().ns;

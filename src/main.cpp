@@ -209,6 +209,15 @@ static void menu_relayout(QMenu* menu) {
 	QCoreApplication::sendEvent(menu, &ev);
 }
 
+// an item's name as QStyleSheetStyle measures it; a shortcut after a tab adds 12
+static int menu_text_width(QMenu* menu, QAction* act) {
+	QString txt = act->text();
+	int tab = txt.indexOf('\t');
+	QFontMetrics fm(act->font().resolve(menu->font()));
+	int wid = fm.boundingRect(QRect(), Qt::TextSingleLine | Qt::TextShowMnemonic, tab < 0 ? txt : txt.left(tab)).width();
+	return (tab >= 0) ? wid + 12 : wid;
+}
+
 #if QT_VERSION < QT_VERSION_CHECK(6,0,0)
 // Under a style sheet Qt 5 draws every item's text after the icon column, but an
 // item with no icon or tick is measured without it (Qt 6 counts it), so the widest
@@ -224,11 +233,7 @@ static void menu_qt5_width(QMenu* menu, bool icons) {
 	int bare = 0;		// the widest with no icon or tick
 	foreach(QAction* act, menu->actions()) {
 		if (act->isSeparator() || !act->isVisible() || qobject_cast<QWidgetAction*>(act)) continue;
-		QString txt = act->text();
-		int tab = txt.indexOf('\t');
-		QFontMetrics fm(act->font().resolve(menu->font()));
-		int wid = fm.boundingRect(QRect(), Qt::TextSingleLine | Qt::TextShowMnemonic, tab < 0 ? txt : txt.left(tab)).width();
-		if (tab >= 0) wid += 12;		// as QStyleSheetStyle adds it
+		int wid = menu_text_width(menu, act);
 		if (act->icon().isNull() && !act->isCheckable()) {
 			bare = qMax(bare, wid);
 			wide = qMax(wide, wid);
@@ -242,6 +247,41 @@ static void menu_qt5_width(QMenu* menu, bool icons) {
 	menu_relayout(menu);
 }
 #endif
+
+// Under a style sheet Qt keeps no room for a submenu's arrow: it is drawn in the item's right
+// padding, over the end of the widest name when that one has a submenu (the toolbar's
+// Buttons menu). Such a menu is widened; what was added is undone before the next measure,
+// as Qt counts the minimum width in its own. A menu with shortcuts has their column for the
+// arrow, and one with a widget is left as it is.
+static void menu_arrow_room(QMenu* menu) {
+	if (menu->property("xarrowSet").isValid() && (menu->minimumWidth() == menu->property("xarrowSet").toInt())) {
+		menu->setMinimumWidth(menu->property("xarrowBase").toInt());
+		menu_relayout(menu);
+	}
+	menu->setProperty("xarrowSet", QVariant());
+	if (qApp->styleSheet().isEmpty()) return;
+	int wide = 0;		// the widest name
+	int sub = -1;		// ...of those with a submenu
+	foreach(QAction* act, menu->actions()) {
+		if (act->isSeparator() || !act->isVisible()) continue;
+		if (qobject_cast<QWidgetAction*>(act) || act->text().contains('\t')) return;
+		int wid = menu_text_width(menu, act);
+		wide = qMax(wide, wid);
+		if (act->menu()) sub = qMax(sub, wid);
+	}
+	if (sub < 0) return;
+	// the arrow: (item height - 4) / 2 square, 7 px from the right; a gap as wide again
+	// before it, past the sheets' 14 px of right padding
+	int dim = (QFontMetrics(menu->font()).height() + 8 - 4) / 2;
+	int lack = sub + 7 + 2 * dim - 14 - wide;
+	if (lack <= 0) return;
+	int base = menu->minimumWidth();
+	int want = qMax(base, menu->sizeHint().width() + lack);
+	menu->setProperty("xarrowBase", base);
+	menu->setProperty("xarrowSet", want);
+	menu->setMinimumWidth(want);
+	menu_relayout(menu);
+}
 
 // Under a style sheet Qt starts a menu's text after a column that depends on what
 // the menu holds: icons, only ticks, or neither. The sheets set the padding for
@@ -268,6 +308,7 @@ static void menu_column(QMenu* menu) {
 #if QT_VERSION < QT_VERSION_CHECK(6,0,0)
 	menu_qt5_width(menu, !strcmp(col, "icons"));
 #endif
+	menu_arrow_room(menu);
 }
 
 static MainWin* os_win = NULL;		// the window every open goes through, once there is one
@@ -1063,7 +1104,7 @@ int main(int ac,char** av) {
 				QString nam = QString::fromLocal8Bit(av[i++]);
 				serial_cli(parg[7] == 'p', (nam == "-") ? QString() : nam);
 			} else if (!strcmp(parg, "--sdcard")) {
-				sdc_mount(conf.zx->sdc, QString::fromLocal8Bit(av[i]));
+				xm_sd_mount(QString::fromLocal8Bit(av[i]));
 				xm_next_card();		// the Next starts from it, or takes its own, or asks
 				given = true;
 				i++;

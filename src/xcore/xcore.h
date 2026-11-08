@@ -445,6 +445,7 @@ void xm_defer(const std::string&, const std::string&);
 bool xm_migrate(const std::string&, const std::string&);
 std::string xm_id_for_name(const std::string&);
 void xm_finish_load();
+void xm_sd_mount(const QString& path);	// a card into the slot; a folder read only where there is one
 void xm_next_card(bool force = false);	// a ZX Spectrum Next with no System/Next card gets its own (force: whatever is in)
 void xm_next_put_card(const QString& path);	// the card a snapshot names goes in, the machine not restarted
 bool xm_next_wants_card();	// once: the Next has no card to start from, the window asks for one

@@ -10,6 +10,7 @@
 #include <QDateTime>
 #include <QStringList>
 #include <QSet>
+#include <QMutex>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,6 +21,7 @@
 
 #include "vfat_scan.h"
 #include "xcore.h"
+#include "pacing.h"
 #include "../libxpeccy/xlog.h"
 
 // Host folder -> synthetic FAT32 volume. The scan and the host side of the guest's
@@ -29,6 +31,14 @@
 #define VFS_MAXDEPTH	16		// deeper folders are left out
 #define VFS_MAXNODES	200000		// and so is anything past this many entries: the scan holds the gui
 #define VFS_ROOM	(256u * 2048)	// a folder taking writes has this much free room at least, in sectors
+#define VFS_SLOW_NS	1000000000LL	// a read this long is said while it goes on (vfat_scan_notify)
+#define VFS_SLOW_EVERY	1024		// entries between looks at the clock
+
+static void (*vfsSlow)(const QString&, bool) = NULL;
+
+void vfat_scan_notify(void (*hook)(const QString& path, bool on)) {
+	vfsSlow = hook;
+}
 
 // == the host side, all paths UTF-8 ==
 
@@ -177,7 +187,23 @@ struct vfsDrop {
 	int big = 0;			// files too big for FAT
 	bool count = false;		// stopped at VFS_MAXNODES
 	unsigned long long bytes = 0;	// what the files hold
+	long long start = 0;		// when the read began
+	bool slow = false;		// it took long last time
+	bool told = false;		// ...and it has been said to take long
+	unsigned looked = 0;		// entries seen, taken or not
 };
+
+// a read past VFS_SLOW_NS is said once; a folder that took that long last time, at once
+// (a card image is made of a folder on a thread of its own)
+static QSet<QString> vfsSlowRoots;
+static QMutex vfsSlowLock;
+
+static void vfs_slow_check(const QString& root, vfsDrop& drop) {
+	if (!vfsSlow || drop.told) return;
+	if (!drop.slow && (paceClockNs() - drop.start <= VFS_SLOW_NS)) return;
+	drop.told = true;
+	vfsSlow(root, true);
+}
 
 struct vfsDir {
 	int idx;
@@ -243,8 +269,10 @@ static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, co
 		QString curReal = real_dir(cur.path);
 		// links are left out by hand, not by QDir::NoSymLinks: a ".lnk" file Qt calls one is
 		// let through (System lets in what Qt takes for a link to nothing)
+		vfs_slow_check(root, drop);		// one folder of thousands is a long listing of its own
 		QFileInfoList list = QDir(cur.path).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::System, QDir::Name | QDir::DirsFirst);
 		foreach(QFileInfo inf, list) {
+			if (!(++drop.looked % VFS_SLOW_EVERY)) vfs_slow_check(root, drop);
 			if (vf->nodes >= VFS_MAXNODES) {
 				drop.count = true;
 				return;
@@ -311,8 +339,19 @@ static vFat* vfat_scan_in(const QString& path, bool writable, const QString& sub
 	vfat_set_root(vf, lpath.constData(), &vfs_host);
 	unsigned int mtime = inf.lastModified().toMSecsSinceEpoch() / 1000;
 	vfsDrop drop;
+	drop.start = paceClockNs();
+	{
+		QMutexLocker lock(&vfsSlowLock);
+		drop.slow = vfsSlowRoots.contains(path);
+	}
 	vfat_add(vf, -1, "", 0, mtime, 1);		// root
 	vfat_scan_tree(vf, path, sub, subName, writable, drop);
+	{
+		QMutexLocker lock(&vfsSlowLock);
+		if (paceClockNs() - drop.start > VFS_SLOW_NS) vfsSlowRoots.insert(path);
+		else vfsSlowRoots.remove(path);
+	}
+	if (drop.told) vfsSlow(path, false);
 	QStringList why;
 	if (drop.count) why << QString("everything past %0 entries").arg(VFS_MAXNODES);
 	if (drop.deep) why << QString("%0 folders deeper than %1").arg(drop.deep).arg(VFS_MAXDEPTH);
@@ -424,6 +463,18 @@ void sdc_mount(SDCard* sdc, const QString& path) {
 	} else {
 		sdcSetImage(sdc, path.toLocal8Bit().constData());
 	}
+}
+
+// A folder of thousands of entries takes seconds to read: not for a machine that has no
+// slot for it, nor for a card that is about to be taken out again
+void sdc_mount_later(SDCard* sdc, const QString& path) {
+	if (!sdc) return;
+	if (!QFileInfo(path).isDir()) {
+		sdc_mount(sdc, path);
+		return;
+	}
+	vfat_flush(sdc->vfat);
+	sdcSetUnread(sdc, path.toLocal8Bit().constData());
 }
 
 void sdc_remount(SDCard* sdc) {

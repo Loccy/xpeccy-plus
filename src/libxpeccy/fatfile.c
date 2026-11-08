@@ -26,6 +26,16 @@ typedef struct {
 static unsigned int le16(const unsigned char* p) {return p[0] | (p[1] << 8);}
 static unsigned int le32(const unsigned char* p) {return le16(p) | (le16(p + 2) << 16);}
 
+// where a long name entry keeps its 13 UTF-16 characters
+static const int fat_lfn_at[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
+
+// the checksum of an 8.3 name its long name entries carry
+static unsigned char fat_sname_sum(const unsigned char* d) {
+	unsigned char sum = 0;
+	for (int j = 0; j < 11; j++) sum = (unsigned char)(((sum & 1) << 7) + (sum >> 1) + d[j]);
+	return sum;
+}
+
 static int fat_bpb(fatVol* v, const unsigned char* s) {
 	if ((le16(s + 11) != 512) || !s[13] || (s[13] & (s[13] - 1)) || !s[16]) return 0;
 	unsigned int rsv = le16(s + 14);
@@ -107,7 +117,6 @@ static int fat_find(fatVol* v, unsigned int dir, const char* name, int alen, fat
 			if ((d[11] & 0x3f) == 0x0f) {
 				// a long name part, ASCII only: the parts come last first
 				int seq = (d[0] & 0x1f) - 1;
-				static const int at[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
 				if (d[0] & 0x40) {
 					memset(lfn, 0, sizeof(lfn));
 					lfnok = 1;
@@ -116,7 +125,7 @@ static int fat_find(fatVol* v, unsigned int dir, const char* name, int alen, fat
 				if (d[13] != lfnsum) lfnok = 0;
 				if ((seq < 0) || (seq > 19)) lfnok = 0;
 				for (int j = 0; lfnok && (j < 13); j++) {
-					unsigned int ch = le16(d + at[j]);
+					unsigned int ch = le16(d + fat_lfn_at[j]);
 					if ((ch == 0) || (ch == 0xffff)) break;
 					lfn[seq * 13 + j] = (ch < 0x80) ? (char)ch : '?';
 				}
@@ -126,9 +135,7 @@ static int fat_find(fatVol* v, unsigned int dir, const char* name, int alen, fat
 				lfnok = 0;
 				continue;
 			}
-			unsigned char sum = 0;
-			for (int j = 0; j < 11; j++) sum = (unsigned char)(((sum & 1) << 7) + (sum >> 1) + d[j]);
-			if (sum != lfnsum) lfnok = 0;
+			if (fat_sname_sum(d) != lfnsum) lfnok = 0;
 			char sn[13];
 			int p = 0;
 			for (int j = 0; (j < 8) && (d[j] != ' '); j++) sn[p++] = d[j];
@@ -160,8 +167,44 @@ static unsigned long long fat_mix(unsigned long long h, const unsigned char* p, 
 	return h;
 }
 
-static void fat_print_dir(fatVol* v, unsigned int clust, int depth, unsigned long long* h, unsigned int* left, unsigned char* s) {
+// An entry's share of the print: its name (the long one, without case), folder or not, a
+// file's size and time - not where it lies or a folder's time, which a copy changes. The
+// shares are added, so a directory's order does not count; the parent's share is the path.
+static unsigned long long fat_print_entry(unsigned long long parent, const unsigned short* lfn, int lfnlen, const unsigned char* e) {
+	unsigned short sn[12];
+	unsigned char b[8];
+	if (lfnlen <= 0) {			// the short name as it reads: "NAME.EXT"
+		lfnlen = 0;
+		for (int i = 0; (i < 8) && (e[i] != ' '); i++) sn[lfnlen++] = e[i];
+		if (e[8] != ' ') {
+			sn[lfnlen++] = '.';
+			for (int i = 8; (i < 11) && (e[i] != ' '); i++) sn[lfnlen++] = e[i];
+		}
+		lfn = sn;
+	}
+	for (int i = 0; i < 8; i++) b[i] = (unsigned char)(parent >> (i * 8));
+	unsigned long long h = fat_mix(0xcbf29ce484222325ULL, b, 8);
+	for (int i = 0; i < lfnlen; i++) {
+		unsigned int ch = lfn[i];
+		if ((ch >= 'a') && (ch <= 'z')) ch -= 0x20;
+		b[0] = ch & 0xff;
+		b[1] = ch >> 8;
+		h = fat_mix(h, b, 2);
+	}
+	b[0] = (e[11] & 0x10) ? 1 : 0;
+	h = fat_mix(h, b, 1);
+	if (!(e[11] & 0x10)) {
+		h = fat_mix(h, e + 22, 4);		// written: time, date
+		h = fat_mix(h, e + 28, 4);		// size
+	}
+	return h ? h : 1;
+}
+
+static void fat_print_dir(fatVol* v, unsigned int clust, int depth, unsigned long long self, unsigned long long* h, unsigned int* left, unsigned char* s) {
 	unsigned char d[512];
+	unsigned short lfn[20 * 13];
+	int lfnlen = 0;
+	unsigned char lfnsum = 0;
 	for (unsigned int n = 0; *left; n++) {
 		unsigned int lba = fat_sector(v, clust, n, s);
 		if (!lba || !v->rd(v->ctx, lba, d)) return;
@@ -169,12 +212,41 @@ static void fat_print_dir(fatVol* v, unsigned int clust, int depth, unsigned lon
 		for (int k = 0; k < 512; k += 32) {
 			const unsigned char* e = d + k;
 			if (!e[0]) return;
-			*h = fat_mix(*h, e, 18);		// 18-19: the last access date
-			*h = fat_mix(*h, e + 20, 12);
-			if ((e[0] == 0xe5) || ((e[11] & 0x3f) == 0x0f) || !(e[11] & 0x10) || (e[0] == '.')) continue;
+			if (e[0] == 0xe5) {
+				lfnlen = 0;
+				continue;
+			}
+			if ((e[11] & 0x3f) == 0x0f) {		// a long name part, the last one first
+				int seq = (e[0] & 0x1f) - 1;
+				if (e[0] & 0x40) {
+					memset(lfn, 0, sizeof(lfn));	// a part that never comes adds nothing of another name
+					lfnlen = 0;
+					lfnsum = e[13];
+					for (int j = 0; j < 13; j++) {
+						unsigned int ch = le16(e + fat_lfn_at[j]);
+						if ((ch == 0) || (ch == 0xffff)) break;
+						lfnlen = seq * 13 + j + 1;
+					}
+				}
+				if ((seq < 0) || (seq > 19) || (e[13] != lfnsum)) {
+					lfnlen = -1;		// broken: the short name stands
+					continue;
+				}
+				for (int j = 0; (j < 13) && (lfnlen > 0); j++) {
+					if (seq * 13 + j < lfnlen) lfn[seq * 13 + j] = (unsigned short)le16(e + fat_lfn_at[j]);
+				}
+				continue;
+			}
+			int len = lfnlen;
+			lfnlen = 0;
+			if ((e[11] & 0x08) || (e[0] == '.')) continue;		// the label, dot and dotdot
+			if (fat_sname_sum(e) != lfnsum) len = 0;
+			unsigned long long me = fat_print_entry(self, lfn, len, e);
+			*h += me;
+			if (!(e[11] & 0x10)) continue;
 			unsigned int sub = le16(e + 26) | (v->fat32 ? (le16(e + 20) << 16) : 0);
 			if ((sub >= 2) && (sub - 2 < v->clusters) && (depth < FAT_PRINT_DEPTH))
-				fat_print_dir(v, sub, depth + 1, h, left, s);
+				fat_print_dir(v, sub, depth + 1, me, h, left, s);
 		}
 	}
 }
@@ -188,7 +260,7 @@ unsigned long long fat_dir_print(fatSector rd, void* ctx) {
 	if (!fat_open(&v, s)) return 0;
 	unsigned long long h = 0xcbf29ce484222325ULL;
 	unsigned int left = FAT_PRINT_SECTORS;
-	fat_print_dir(&v, v.rootClust, 0, &h, &left, s);
+	fat_print_dir(&v, v.rootClust, 0, 0, &h, &left, s);
 	return h ? h : 1;
 }
 

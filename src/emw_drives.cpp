@@ -330,7 +330,7 @@ void MainWin::fillDrivesMenu() {
 	}
 
 	int hw = comp->hw->id;
-	if ((hw == HW_PENTEVO) || (hw == HW_TSLAB) || (hw == HW_ZXNEXT))
+	if (hw_has_sd(comp->hw))
 		fillCardMenu(sdcMenu, -1);
 	fillDivMenu();
 

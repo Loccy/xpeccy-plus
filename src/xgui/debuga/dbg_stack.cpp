@@ -1,12 +1,13 @@
 #include "dbg_stack.h"
 #include "../xgui.h"
+#include "xcore/xcore.h"
 
 #include <QPainter>
 #include <QStyle>
 #include <QStyleOption>
 
 #define	STACK_PAD	3	// margin around the block of lines
-#define	STACK_GAP	6	// between the offset column and the word
+#define	STACK_GAP	3	// between the offset column and the word
 
 xStackView::xStackView(QWidget* par):QWidget(par) {
 }
@@ -22,10 +23,19 @@ int xStackView::rowsFit() const {
 	return (free - one) / rowPitch() + 1;
 }
 
-// one line; the +0 row's "#0000:" is the widest name, a character to spare
+// one line as wide as an address can be, the word and the +0 row's name with its colon:
+// whole strings, every digit the widest, a pixel to spare each for a fractional scale
 QSize xStackView::minimumSizeHint() const {
 	QFontMetrics fm = fontMetrics();
-	return QSize(fm.horizontalAdvance("000000:") + STACK_GAP + fm.horizontalAdvance("00000") + 2 * STACK_PAD,
+	bool dec = (conf.dbg.numfmt == CPU_NUM_DEC);
+	QString digits = dec ? "0123456789" : "0123456789ABCDEF";
+	QChar wide = digits[0];
+	foreach (QChar c, digits)
+		if (fm.horizontalAdvance(c) > fm.horizontalAdvance(wide)) wide = c;
+	QString word = dbg_adr(0xFFFF);
+	for (int i = 0; i < word.size(); i++)
+		if (digits.contains(word[i])) word[i] = wide;
+	return QSize(fm.horizontalAdvance(word + ":") + 1 + STACK_GAP + fm.horizontalAdvance(word) + 1 + 2 * STACK_PAD,
 		fm.height() + 2 * STACK_PAD);
 }
 
@@ -35,6 +45,10 @@ QSize xStackView::sizeHint() const {
 
 void xStackView::setRows(const QList<xStackRow>& lst) {
 	rows = lst;
+	if (numfmt != conf.dbg.numfmt) {		// another width of numbers
+		numfmt = conf.dbg.numfmt;
+		updateGeometry();
+	}
 	update();
 }
 

@@ -1058,7 +1058,7 @@ static bool szx_holds(Computer* comp, const szxMedia* m, const QString& link) {
 // program from elsewhere put back on it under its name; then whether the card still reads
 // as it did. NextZXOS keeps what it read of the card in memory - open files, where they
 // are - so on another card, or one written since, the program may read the wrong things.
-// Told, not refused: the user may know better.
+// Told on the screen, not refused and not in a box: the user may know better.
 static bool szxCardChanged = false;
 
 static void szx_card_mount(Computer* comp, bool load) {
@@ -1216,9 +1216,7 @@ static void szx_mount(Computer* comp, const QString& snap) {
 	for (int i = 0; i < 4; i++)
 		if (gone & (1 << i)) comp->dif->flp[i]->changed = 1;
 	szx_card_mount(comp, load);
-	// a quick load: a word on the screen, no box to stop the game; at the start (the command
-	// line, Resume) szx_warn shows no box either
-	if (szxCardChanged && (szx_exact || !conf.running))
+	if (szxCardChanged)
 		comp->msg = (char*)" the SD card has changed since this save ";
 }
 
@@ -1240,22 +1238,15 @@ static void szx_warn() {
 		{0, NULL}
 	};
 	int notes = szx_notes();
-	if ((!notes && !szxCardChanged) || !conf.running) return;
-	QString text;
-	if (notes) {
-		text = QObject::tr("The snapshot was taken with something this machine does not have:");
-		text += "\n";
-		for (int i = 0; tab[i].text; i++) {
-			if (notes & tab[i].note)
-				text += QString("\n- ") + tab[i].text;
-		}
-		text += "\n\n";
-		text += QObject::tr("It may not run as it did. The machine's settings are left as they are.");
+	if (!notes || !conf.running) return;
+	QString text = QObject::tr("The snapshot was taken with something this machine does not have:");
+	text += "\n";
+	for (int i = 0; tab[i].text; i++) {
+		if (notes & tab[i].note)
+			text += QString("\n- ") + tab[i].text;
 	}
-	if (szxCardChanged) {
-		if (!text.isEmpty()) text += "\n\n";
-		text += QObject::tr("The SD card is not as it was when the snapshot was saved. What the program had open on it may read wrong.");
-	}
+	text += "\n\n";
+	text += QObject::tr("It may not run as it did. The machine's settings are left as they are.");
 	QMessageBox mbx(QMessageBox::Warning, "SZX snapshot", text, QMessageBox::Ok);
 	mbx.exec();
 }

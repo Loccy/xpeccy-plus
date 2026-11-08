@@ -39,10 +39,11 @@ void szx_media_clear(void);
 // folders a program from elsewhere stood in back on it, and compares the print
 // (sdc_dir_print) - the card is never in the file.
 #define SZX_PINS	4
+#define SZX_CARD_CONTENT	0x02	// the record's flags: the print is of what the card holds
 typedef struct {
 	int on;			// the file names a card
 	int folder;		// ...a folder, not an image
-	unsigned long long print;	// its directories when saved, 0 unknown
+	unsigned long long print;	// what it held when saved (fat_dir_print), 0 unknown
 	char path[1024];
 	int pins;
 	struct {
@@ -74,6 +75,7 @@ const unsigned char* szx_ext_find(const unsigned char* data, size_t len, size_t*
 int szx_ext_hardware(const unsigned char* file, size_t len);	// SNAP_HW_* of a file of ours
 // 1 when it stood the machine where in the frame it was, exactly
 int szx_ext_load(Computer*, const unsigned char* ext, size_t len);
+void szx_ext_forget(void);	// the last file's card and media state dropped
 int szx_ext_can_save(Computer*);		// a machine the spec cannot name, but we can
 // what the tape and the drives were doing, once the program has put the media
 // of szx_media() back in; carried: a bit per drive whose disk came out of the

@@ -235,18 +235,21 @@ in records of our own, all opaque:
 - `VCLK` - the video clock's fraction of a dot.
 - `SDCD` - the SD card: a card is far too big to carry, but NextZXOS keeps what it read of it
   in memory. The record names the card (an image or a folder), the folder a program opened
-  from elsewhere was put on it as, and a print of the card's directories as the Next reads
-  them. A load puts the card back in and that folder back on it, and says so when the
-  directories have changed since.
+  from elsewhere was put on it as, and a print of what the card holds as the Next reads it.
+  A load puts the card back in and that folder back on it, and says so when what it holds
+  has changed since.
 
 ```
-  byte  flags             b0: a folder, not an image
-  qword print             of every directory entry, the last access date left out; 0 none
+  byte  flags             b0: a folder, not an image; b1: the print at the end follows
+  qword old print         0 with b1; without it, a print of every directory entry, not compared
   char  path[]            zero terminated
   byte  folders           how many follow (one at a time is put on a card)
   for each:
     char  name[]          its name in the card's root, UTF-8, zero terminated
     char  host[]          where it is on the computer, UTF-8, zero terminated
+  qword print             with b1: every file and folder by its name (the long one, without
+                          case), a file's size and write time - not where they lie, the order
+                          or the folders' times; 0 none
 ```
 
 - `ESP ` - the ESP-01 module, which runs outside the machine: its UART, boot, the command

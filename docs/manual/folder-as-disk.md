@@ -32,6 +32,11 @@ as a real card is taken out, has files copied onto it and goes back in. Files co
 folder while the machine runs are seen after that. **Apply** in Options does not read it again:
 the program running keeps the disk it knows.
 
+A folder of many thousands of files takes seconds to read, and the window waits meanwhile:
+when a read goes on for over a second, the status bar says **Reading the folder ...**. The
+SD card slot of the ZX Evo and the Next is read only on those machines: on another one the
+card stays named, and its folder is read when a machine with the slot is chosen again.
+
 ## Writing back
 
 ```{index} Writing to a folder; sync, (recovered)

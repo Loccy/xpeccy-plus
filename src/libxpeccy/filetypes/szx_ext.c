@@ -694,9 +694,9 @@ static void ext_card_save(szxBuf* b, Computer* comp) {
 	if (!sdc || !sdc->image) return;
 	unsigned long long print = sdc_dir_print(sdc);
 	rec_begin(b, XR_SDCD, &mark);
-	sb_byte(b, sdc->vfat ? 1 : 0);
-	sb_dword(b, (unsigned)(print & 0xffffffffu));
-	sb_dword(b, (unsigned)(print >> 32));
+	sb_byte(b, (sdc->vfat ? 1 : 0) | SZX_CARD_CONTENT);
+	sb_dword(b, 0);			// the old print's place: 0, which a build of before compares with nothing
+	sb_dword(b, 0);
 	ext_put_string(b, sdc->image);
 	int pins = 0;
 	vFat* vf = sdc->vfat;
@@ -709,6 +709,8 @@ static void ext_card_save(szxBuf* b, Computer* comp) {
 		ext_put_string(b, vf->node[i].hroot);
 		pins--;
 	}
+	sb_dword(b, (unsigned)(print & 0xffffffffu));	// the print of what it holds, after all
+	sb_dword(b, (unsigned)(print >> 32));
 	rec_end(b, mark);
 }
 
@@ -727,7 +729,7 @@ static void ext_card_load(const unsigned char* p, size_t n) {
 	memset(c, 0, sizeof(*c));
 	if (n < 10) return;
 	c->folder = p[0] & 1;
-	c->print = rd_dword(p + 1) | ((unsigned long long)rd_dword(p + 5) << 32);
+	// the qword at 1 is the old print (the directories' bytes, layout and all): not compared
 	if (!ext_get_string(p, n, &pos, c->path, sizeof(c->path)) || (pos >= n)) return;
 	int pins = p[pos++];
 	for (int i = 0; (i < pins) && (i < SZX_PINS); i++) {
@@ -735,6 +737,8 @@ static void ext_card_load(const unsigned char* p, size_t n) {
 		if (!ext_get_string(p, n, &pos, c->pin[i].host, sizeof(c->pin[i].host))) break;
 		c->pins = i + 1;
 	}
+	if ((p[0] & SZX_CARD_CONTENT) && (c->pins == pins) && (pos + 8 <= n))
+		c->print = rd_dword(p + pos) | ((unsigned long long)rd_dword(p + pos + 4) << 32);
 	c->on = 1;
 }
 
@@ -1236,6 +1240,15 @@ static void ext_gs(GSound* gs, const unsigned char* p, size_t n) {
 	gsiowr(0, tmp_.rp0, gs);		// the page register, which maps #8000 as it says
 }
 
+// What the last file left for after its load - its card, its media's state - goes
+// before any other is read: a file without our record has neither.
+void szx_ext_forget(void) {
+	free(ext_held);
+	ext_held = NULL;
+	ext_held_len = 0;
+	memset(&szxCardLast, 0, sizeof(szxCardLast));
+}
+
 int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 	size_t pos = 0;
 	unsigned id;
@@ -1245,10 +1258,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 	int esp = 0;
 	char core[64];
 	char mac[256];
-	free(ext_held);
-	ext_held = NULL;
-	ext_held_len = 0;
-	memset(&szxCardLast, 0, sizeof(szxCardLast));
+	szx_ext_forget();
 	// The ports, the flags and the video mean what they mean on one core only:
 	// a 128K snapshot of ours run on a Pentagon takes the sound chips and no more.
 	ext_mach(ext, len, core, sizeof(core), mac, sizeof(mac));

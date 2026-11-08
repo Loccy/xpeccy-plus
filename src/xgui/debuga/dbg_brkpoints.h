@@ -99,6 +99,7 @@ class xBreakWidget : public xDockWidget {
 		Ui::BrkWidget ui;
 		xBrkManager* brkManager;
 		QAction* actLog;
+		QAction* actDel;
 	private slots:
 		void addBrk();
 		void editBrk();

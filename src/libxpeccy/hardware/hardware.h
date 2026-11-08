@@ -254,6 +254,7 @@ int zx_dev_rd(Computer*, int, int*);
 void zx_irq(Computer*, int);
 // a divMMC can sit on this machine's edge connector (the Sinclair models)
 int hw_takes_divmmc(const HardWare*);
+int hw_has_sd(const HardWare*);		// the SD slot (comp->sdc): ZX Evo, TSConf, the Next
 void zx_snow(Computer*);
 void zx_contend_adr(Computer*, int, int);	// address already past vid_cont_hit, video at cpu->t
 int zx_bank_of(Computer*, int);

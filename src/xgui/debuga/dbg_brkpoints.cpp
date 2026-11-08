@@ -777,6 +777,12 @@ xBreakWidget::xBreakWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) 
 
 	ui.bpList->setContextMenuPolicy(Qt::ActionsContextMenu);
 	ui.bpList->addAction(ui.brkActReset);
+	// the panel's delete button, in the menu and on the key while the list has the focus
+	actDel = new QAction(QIcon(":/images/cancel.png"), "Delete breakpoint", this);
+	actDel->setShortcut(QKeySequence(Qt::Key_Delete));
+	actDel->setShortcutContext(Qt::WidgetShortcut);
+	ui.bpList->addAction(actDel);
+	ui.tbDelBrk->setToolTip("Delete the selected breakpoints (Del)");
 	actLog = new QAction("Open breakpoint log", this);
 	ui.bpList->addAction(actLog);
 	connect(actLog, &QAction::triggered, this, &xBreakWidget::openLog);
@@ -792,6 +798,7 @@ xBreakWidget::xBreakWidget(QString i, QString t, QWidget* p):xDockWidget(i,t,p) 
 	connect(ui.bpList, &xBreakTable::rqDisasm, this, &xBreakWidget::rqDisasm);
 	connect(ui.bpList, &xBreakTable::rqDasmDump, this, &xBreakWidget::updated);
 	connect(ui.brkActReset, &QAction::triggered, this, &xBreakWidget::resetBrk);
+	connect(actDel, &QAction::triggered, this, &xBreakWidget::delBrk);
 }
 
 void xBreakWidget::draw() {

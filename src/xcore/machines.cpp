@@ -1131,12 +1131,19 @@ static void mac_cold_ram(Computer* comp, const std::string& pat, int noise) {
 	mem_cold_fill(comp->mem, (const unsigned char*)bytes.constData(), bytes.size(), noise);
 }
 
+// A card into the slot: a folder is read only on a machine that has one
+void xm_sd_mount(const QString& path) {
+	Computer* comp = conf.zx;
+	if (hw_has_sd(comp->hw)) sdc_mount(comp->sdc, path);
+	else sdc_mount_later(comp->sdc, path);
+}
+
 // A folder served as a card or a disk is read again: with the power off is when a
 // card comes out, gets files copied onto it and goes back in.
 static void mac_reread_folders(Computer* comp) {
 	SDCard* cards[3] = {comp->sdc, comp->div->card[0], comp->div->card[1]};
 	for (int i = 0; i < 3; i++) {
-		if (cards[i]->vfat) sdc_remount(cards[i]);
+		if (cards[i]->vfat && (i || hw_has_sd(comp->hw))) sdc_remount(cards[i]);
 	}
 	if (comp->ide->master->vfat) ide_mount(comp->ide, IDE_MASTER, QString::fromLocal8Bit(comp->ide->master->image));
 	if (comp->ide->slave->vfat) ide_mount(comp->ide, IDE_SLAVE, QString::fromLocal8Bit(comp->ide->slave->image));
@@ -1252,10 +1259,11 @@ static QString xm_next_own() {
 	return QFileInfo(dir + "/machines/next").isDir() ? dir : QString();
 }
 
-// the card the user put in, the Next's own taken out again
+// the card the user put in, the Next's own taken out again; not read: every caller puts
+// another in or leaves the machine next (a big folder takes seconds)
 static void xm_next_card_back() {
 	if (!xm_next_own_in()) return;
-	sdc_mount(conf.zx->sdc, QString::fromLocal8Bit(nextAside.c_str()));
+	sdc_mount_later(conf.zx->sdc, QString::fromLocal8Bit(nextAside.c_str()));
 	nextAside.clear();
 	nextIn.clear();
 }
@@ -1271,6 +1279,8 @@ void xm_next_card(bool force) {
 	if (!force && comp->sdc->image && sdc_has_file(comp->sdc, "machines/next/enNextZX.rom")) return;
 	QString own = xm_next_own();
 	if (own.isEmpty()) {
+		// the user's card, set back above unread, stays in: read it after all
+		if (sdc_unread(comp->sdc)) sdc_remount(comp->sdc);
 		nextWants = true;
 		return;
 	}
@@ -1346,7 +1356,7 @@ bool xm_set(std::string id) {
 	// emulator, not of the machine, and it stays mounted across a switch. A
 	// folder served as a disk is re-read here, which is the other half of it.
 	ide_remount(conf.zx->ide);
-	sdc_remount(conf.zx->sdc);
+	if (hw_has_sd(conf.zx->hw)) sdc_remount(conf.zx->sdc);	// the others leave it as it is
 	sdc_remount(conf.zx->div->card[0]);
 	sdc_remount(conf.zx->div->card[1]);
 	xm_next_card();
@@ -1665,7 +1675,7 @@ static void mac_set_defer_key(const std::string& nam, const std::string& val) {
 	else if (nam == "hdd.slave.type") comp->ide->slave->type = arg.i;
 	else if (nam == "hdd.slave.lba") comp->ide->slave->hasLBA = arg.b;
 	else if (nam == "hdd.slave") ide_mount(comp->ide, IDE_SLAVE, QString::fromLocal8Bit(arg.s));
-	else if (nam == "sdcard") sdc_mount(comp->sdc, QString::fromLocal8Bit(arg.s));
+	else if (nam == "sdcard") xm_sd_mount(QString::fromLocal8Bit(arg.s));
 	else if (nam == "sdcard.lock") sdcSetLock(comp->sdc, arg.b);
 	else if (nam == "next.card") conf.next.card = val;
 	else if (nam == "next.card.own") conf.next.own = arg.b;

@@ -690,6 +690,7 @@ int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
 	int version;
 	int mid = szx_header(buf, len, &version);
 	szx_media_clear();
+	szx_ext_forget();
 	szx_noted = 0;
 	if (mid < 0) return ERR_SZX_SIGN;
 	int snap = (mid == SZM_XPECCY) ? szx_ext_hardware(buf, len) : szx_snap_of(mid);

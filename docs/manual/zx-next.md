@@ -150,8 +150,11 @@ these files: the SZX format has no ZX Spectrum Next.
 
 The SD card is not in the snapshot - it is far too big - but NextZXOS keeps in memory what it
 read from the card. So the snapshot names the card, and the folder of a program opened from
-elsewhere, and loading it puts them back. When the card's files have changed since the save, a
-message says so: what the program had open on the card may read wrong. The ESP-01's network
+elsewhere, and loading it puts them back. When the files on the card have changed since the
+save - added, removed, renamed or written - a line on the screen says so: what the program
+had open on the card may read wrong. A card moved or copied with its files' dates kept is the
+same card. A snapshot that names no card - from another program, or of another machine - leaves
+the card in as it is. The ESP-01's network
 connections are not in the snapshot either: after loading, the program finds them closed.
 
 ## Keyboard and joysticks
