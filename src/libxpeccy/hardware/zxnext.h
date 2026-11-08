@@ -79,8 +79,7 @@ int nx_inp_in(Computer*, int, int*);
 void nx_keyp(Computer*, keyEntry*);
 void nx_keyr(Computer*, keyEntry*);
 
-void nx_snd_reset(Computer*);
-void nx_snd_reset_at(Computer*, long long);
+void nx_snd_reset(Computer*, long long);
 void nx_snd_nr(Computer*, int, long long);
 void nx_snd_dac_nr(Computer*, int, int, long long);
 int nx_snd_in(Computer*, int);
@@ -109,7 +108,6 @@ void nx_int_opcode(Computer*, int);
 void nx_int_reset(Computer*);
 void nx_nmi_raise(Computer*, int, int);
 void nx_board_key(Computer*, int);	// F1..F10 as 0..9, made
-#define NX_BUTTON_SHORT 28000000LL	// CLK_28: a button let go within a second (zxnext_top_issue2.vhd 1962)
 int nx_nmi_accepts(Computer*);
 void nx_nmi_ack(Computer*);
 int nx_nmi_push(Computer*, int);

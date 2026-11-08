@@ -85,23 +85,19 @@ static void nx_dac_play(Computer* comp, long long t) {
 	}
 }
 
-void nx_snd_reset(Computer* comp) {
+// A reset between steps (w < 0) drops the DACs' queue; one inside a step (NR 02 b0, F4)
+// queues their change at edge w, what came before it still played
+void nx_snd_reset(Computer* comp, long long w) {
 	for (int i = 0; i < 32; i++) nxAyTab[i] = nxAyTab16[i >> 1];
 	nx_ay_reset(comp);
 	nx_dac_reset(comp);
-	memcpy(SND.out, SND.dac, 4);
-	SND.qHead = SND.qN = 0;
+	if (w < 0) {
+		memcpy(SND.out, SND.dac, 4);
+		SND.qHead = SND.qN = 0;
+	} else {
+		nx_dac_push(comp, w);
+	}
 	nx_snd_fe(comp, NX.pfe);	// the beeper's levels are the Next's
-}
-
-// a soft reset on edge w (NR 02 b0, F4): the chips as nx_snd_reset leaves them, the DACs'
-// change queued at w and what was queued before it still played
-void nx_snd_reset_at(Computer* comp, long long w) {
-	for (int i = 0; i < 32; i++) nxAyTab[i] = nxAyTab16[i >> 1];
-	nx_ay_reset(comp);
-	nx_dac_reset(comp);
-	nx_dac_push(comp, w);
-	nx_snd_fe(comp, NX.pfe);
 }
 
 // nr_06 or nr_08 written on edge w: entering psg_mode 11 resets the chips, nr_08 b3 = 0

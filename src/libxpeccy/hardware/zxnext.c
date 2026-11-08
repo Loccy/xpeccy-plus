@@ -24,6 +24,7 @@
 void (*next_log_out)(Computer*, int, int) = NULL;
 void (*next_log_nr)(Computer*, int, int, int) = NULL;
 int next_reset_open = 0;
+void (*next_board_reset)(Computer*) = NULL;
 int next_ear_tied = 0;
 long long next_log_at = -1;
 long long next_log_t = -1;
@@ -2559,6 +2560,7 @@ static void nx_hard_reset(Computer* comp) {
 	NX.powered = 0;
 	NX.firmware = 1;
 	nx_reset(comp);
+	compSetHwTurbo(comp, 1.0);	// 3.5 MHz, on power-on's grid (nx_relock)
 	cpu_reset(comp->cpu);
 }
 
@@ -2575,32 +2577,32 @@ static void nx_reset_lines(Computer* comp) {
 	ds_bus(comp->rtc, 1, 1);
 }
 
-// The core's soft reset, i_RESET (zxnext.vhd 1730), as nr_02_soft_reset makes it for
-// NR 02 b0 and for F4, the RESET button's short press (6370): on edge w - the write's
-// own (nx_nr_land), the copper's or the CPU's - or, -1, where the ray stands. The
-// raster stays: it changes at a frame start only. Machine > Reset is the same reset
-// from outside a step (nx_reset).
+// The soft reset inside a step (nr_02_soft_reset, zxnext.vhd 6370): NR 02 b0 on its
+// edge w (nx_nr_land), F4 where the ray stands (-1). The raster stays.
 static void nx_soft_reset(Computer* comp, long long w) {
 	nx_reset_type_soft(comp);
 	if (next_reset_open) return;
 	long long e = (w >= 0) ? w : nx_now(comp);
 	long long up = nxv_before_reset(comp, w);
+	int sp = NX.speed;
 	nx_regs_reset(comp);
-	compSetHwTurbo(comp, 1.0);		// 3.5 MHz again (nx_regs_reset's NR 07)
+	if (sp) {
+		// 3.5 MHz again (5785-5790) through an NR 07 write's phase step (nx_speed_apply)
+		NX.speed = sp;
+		NX.speedPend = 1;
+		NX.speedT = e - 2;
+	}
 	nx_reset_lines(comp);
 	nx_map_mem(comp);
 	nxv_reset(comp);
 	nxv_after_reset(comp, up);	// drawn on from there, as the dot after the reset did
-	nx_snd_reset_at(comp, e);
+	nx_snd_reset(comp, e);
 	cpu_reset(comp->cpu);
 }
 
-// A board key made, F1..F10 as 0..9: what the core's hotkeys do with it (zxnext.vhd
-// 2090-2091, 5790-5845, 6335-6350, 6370). F9 is the NMI button, F10 the DRIVE button -
-// the divMMC NMI, which needs the divMMC's ports on too. F2 and F7 change only the
-// video output, F5 and F6 the expansion bus: nothing here. What changes the machine
-// from outside joins a recording (an NMI taken does that by itself); a recording
-// played leaves them alone, as the NMI key.
+// A board key made, F1..F10 as 0..9, as the core's hotkeys take it (zxnext.vhd
+// 2090-2091, 5790-5845, 6335-6350); F2, F5-F7 (video output, expansion bus) do
+// nothing here. A change joins an RZX recording; a played one ignores the keys.
 void nx_board_key(Computer* comp, int n) {
 	unsigned char* nr = NX.nr;
 	if (comp->rzx.play) return;
@@ -2608,6 +2610,7 @@ void nx_board_key(Computer* comp, int n) {
 		case 0:			// hard reset
 			if (next_reset_open) return;
 			nx_hard_reset(comp);
+			if (next_board_reset) next_board_reset(comp);	// the user's, as Machine > Reset
 			break;
 		case 2: {		// 50/60 Hz (none on the Pentagon timing)
 			if (!(nr[0x06] & 0x20)) return;
@@ -2619,15 +2622,16 @@ void nx_board_key(Computer* comp, int n) {
 		case 3:			// soft reset
 			if (NX.configMode || next_reset_open) return;
 			nx_soft_reset(comp, -1);
+			if (next_board_reset) next_board_reset(comp);
 			break;
 		case 7:			// the next CPU speed
 			if (!(nr[0x06] & 0x80)) return;
 			nx_nr_write(comp, 0x07, (nr[0x07] + 1) & 3);
 			break;
-		case 8:
+		case 8:			// the NMI button: the Multiface's NMI
 			nx_nmi_raise(comp, 1, 0);
 			return;
-		case 9:
+		case 9:			// DRIVE: the divMMC's NMI, with its ports on
 			if (nr[0x83] & 1) nx_nmi_raise(comp, 0, 1);
 			return;
 		default:
@@ -2823,7 +2827,7 @@ static void nx_reset(Computer* comp) {
 	nx_map_mem(comp);
 	nxv_reset(comp);
 	nxv_after_reset(comp, up);	// the button: drawn on from where the reset found the ray
-	nx_snd_reset(comp);
+	nx_snd_reset(comp, -1);
 	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
 }
 
