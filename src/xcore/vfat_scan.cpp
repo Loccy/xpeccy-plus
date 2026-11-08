@@ -505,10 +505,15 @@ bool sdc_mount_over(SDCard* sdc, const QString& sub, const QString& subName, con
 		int pin = -1;
 		for (int i = vf->node[0].child; (i >= 0) && (pin < 0); i = vf->node[i].next)
 			if (vf->node[i].pinned && (name == vf->node[i].name)) pin = i;
-		for (int i = 1; (pin >= 0) && (i < vf->nodes); i++) {
-			int up = vf->node[i].parent;
-			while ((up > 0) && (up != pin)) up = vf->node[up].parent;
-			if (up == pin) (*entries)++;
+		// down its own tree only: the card may be far bigger
+		QList<int> todo;
+		if (pin >= 0) todo.append(vf->node[pin].child);
+		while (!todo.isEmpty()) {
+			int i = todo.takeLast();
+			if (i < 0) continue;
+			(*entries)++;
+			todo.append(vf->node[i].next);
+			todo.append(vf->node[i].child);
 		}
 	}
 	vf->hold = sdc->vfat->hold;		// read again, not mounted anew: asked or not, as it was

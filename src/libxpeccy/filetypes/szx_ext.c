@@ -709,9 +709,15 @@ static void ext_card_save(szxBuf* b, Computer* comp) {
 		// one with only the program's file of its folder is named by that file
 		int f = vf->node[i].child;
 		if (vf->node[i].cut && (f >= 0) && !vf->node[f].dead && vf->node[f].hname) {
-			char host[2048];
-			snprintf(host, sizeof(host), "%s/%s", vf->node[i].hroot, vf->node[f].hname);
-			ext_put_string(b, host);
+			size_t len = strlen(vf->node[i].hroot) + strlen(vf->node[f].hname) + 2;
+			char* host = (char*)malloc(len);
+			if (host) {
+				snprintf(host, len, "%s/%s", vf->node[i].hroot, vf->node[f].hname);
+				ext_put_string(b, host);
+				free(host);
+			} else {
+				ext_put_string(b, vf->node[i].hroot);
+			}
 		} else {
 			ext_put_string(b, vf->node[i].hroot);
 		}

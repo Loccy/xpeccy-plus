@@ -392,7 +392,7 @@ static bool pin_put(Computer* comp, const QString& dir, const QString& name, con
 	int n = 0;
 	if (!sdc_mount_over(comp->sdc, dir, name, only, &n)) return false;
 	QString what = !only ? QString("%0 put on the card as /%1, %2 entries").arg(dir, name).arg(n)
-		: only->isEmpty() ? QString("%0 put on the card as an empty /%1").arg(dir, name)
+		: (only->isEmpty() || !n) ? QString("%0 put on the card as an empty /%1").arg(dir, name)
 		: QString("%0 put on the card alone as /%1").arg(QDir(dir).filePath(*only), name);
 	if (!why.isEmpty()) what += ": " + why;
 	xlog(XLG_FILE, XLL_INFO, "next: %s", what.toUtf8().constData());
@@ -1120,21 +1120,22 @@ static void szx_card_mount(Computer* comp, bool load) {
 		bool alone = hinf.isFile();
 		QString dir = alone ? hinf.absolutePath() : hinf.absoluteFilePath();
 		QString file = alone ? hinf.fileName() : QString();
-		QString why = (!alone && hinf.isDir() && pin_huge(dir)) ? QString("it holds over %0 entries").arg(PIN_MAX) : QString();
-		bool cut = alone || !why.isEmpty();
 		vFat* vf = comp->sdc->vfat;
 		int node = vf_child(vf, 0, c->pin[0].name);
 		bool there = (node >= 0) && vf->node[node].pinned && vf->node[node].hroot
-			&& (QFileInfo(QString::fromUtf8(vf->node[node].hroot)).canonicalFilePath() == QFileInfo(dir).canonicalFilePath())
-			&& (vf->node[node].cut == (cut ? 1u : 0u));
-		if (there && cut) {
+			&& (QFileInfo(QString::fromUtf8(vf->node[node].hroot)).canonicalFilePath() == QFileInfo(dir).canonicalFilePath());
+		// a folder is there as the rule put it, whole or empty; a file, with that file in it
+		if (there && alone) {
 			int f = vf->node[node].child;
-			there = alone ? ((f >= 0) && (file == QString::fromUtf8(vf->node[f].name))) : (f < 0);
+			there = vf->node[node].cut && (f >= 0) && !vf->node[f].dead && (file == QString::fromUtf8(vf->node[f].name));
 		}
-		if (!there && !hinf.exists()) {
+		if (!there && !alone && !hinf.isDir()) {
 			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s not found", c->pin[0].host);
-		} else if (!there && !pin_put(comp, dir, name, cut ? &file : NULL, why)) {
-			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s could not go on the card", c->pin[0].host);
+		} else if (!there) {
+			QString why = (!alone && pin_huge(dir)) ? QString("it holds over %0 entries").arg(PIN_MAX) : QString();
+			bool cut = alone || !why.isEmpty();
+			if (!pin_put(comp, dir, name, cut ? &file : NULL, why))
+				xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s could not go on the card", c->pin[0].host);
 		}
 	}
 	szxCardChanged = c->print && (sdc_dir_print(comp->sdc) != c->print);
