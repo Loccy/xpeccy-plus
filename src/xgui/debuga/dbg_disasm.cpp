@@ -1105,12 +1105,20 @@ void xDasmLabel::drawDisplay(QPainter* pnt, const QStyleOptionViewItem& opt, con
 	pnt->restore();
 }
 
+void xDasmBytes::drawDisplay(QPainter* pnt, const QStyleOptionViewItem& opt, const QRect& rect, const QString& text) const {
+	const QWidget* wid = opt.widget;
+	QStyle* stl = wid ? wid->style() : QApplication::style();
+	int mrg = stl->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, wid) + 1;
+	QFontMetrics fm(opt.font);
+	xItemDelegate::drawDisplay(pnt, opt, rect, fm.elidedText(text, Qt::ElideRight, rect.width() - 2 * mrg));
+}
+
 void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const QModelIndex& idx) const {
 	QStyleOptionViewItem opt = option;
 	initStyleOption(&opt, idx);
 	QString text = opt.text;
-	// a db "string" is text, not operands
-	if (!conf.dbg.synhl || text.isEmpty() || text.startsWith("DB \"")) {
+	// a db "string" (dc "string") is text, not operands
+	if (!conf.dbg.synhl || text.isEmpty() || text.startsWith("DB \"") || text.startsWith("DC \"")) {
 		QStyledItemDelegate::paint(pnt, option, idx);
 		return;
 	}
@@ -1191,7 +1199,7 @@ bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyl
 	QString text = opt.text;
 	QStyle* stl = opt.widget ? opt.widget->style() : QApplication::style();
 	QRect rect = stl->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
-	bool syn = conf.dbg.synhl && !text.startsWith("DB \"");
+	bool syn = conf.dbg.synhl && !text.startsWith("DB \"") && !text.startsWith("DC \"");
 	QString lab = syn ? idx.data(X_LabelRole).toString() : QString();
 	int lpos = lab.isEmpty() ? -1 : text.indexOf(lab);
 	QFont bfnt = opt.font;

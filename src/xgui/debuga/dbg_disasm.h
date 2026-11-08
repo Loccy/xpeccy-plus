@@ -142,6 +142,16 @@ class xDasmLabel : public xItemDelegate {
 		mutable QColor bgr;
 };
 
+// the bytes column: a data row's bytes cut to what fits, with an ellipsis -
+// the command beside them has them all. Edited in full
+
+class xDasmBytes : public xItemDelegate {
+	public:
+		xDasmBytes() : xItemDelegate(XTYPE_DUMP) {}
+	protected:
+		void drawDisplay(QPainter*, const QStyleOptionViewItem&, const QRect&, const QString&) const override;
+};
+
 // paints the command column token by token: constants take their own
 // colour, a label goes bold, everything else keeps the row colour
 

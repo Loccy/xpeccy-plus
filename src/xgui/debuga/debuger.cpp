@@ -688,7 +688,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	xid_none = new xItemDelegate(XTYPE_NONE);
 	xid_byte = new xItemDelegate(XTYPE_BYTE);
 	xid_labl = new xDasmLabel();
-	xid_dump = new xItemDelegate(XTYPE_DUMP);
+	xid_dump = new xDasmBytes();		// the listing's bytes, cut to the column
 
 // actions data
 	ui_asm.actFetch->setData(MEM_BRK_FETCH);
