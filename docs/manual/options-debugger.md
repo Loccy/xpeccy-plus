@@ -56,4 +56,6 @@ style's own.
 
 **Misc** - **Auto-load labels**: opening an image also loads a `.labels` file of the same
 name, if there is one. See [Disasm panel](debugger-code.md). **ROM labels**: known ROMs
-name their routines in the listing. See [ROM labels](debugger-code.md#rom-labels).
+name their routines in the listing and show their data as data. **System variables**: the
+variables of BASIC and TR-DOS are named in instructions, `LD HL,(CH_ADD)`. See
+[ROM labels](debugger-code.md#rom-labels).
