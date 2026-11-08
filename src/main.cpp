@@ -1116,6 +1116,17 @@ int main(int ac,char** av) {
 	for (const QPair<QString, QString>& arg : brkArgs) {
 		if (arg.first == "--bp") {
 			bool ok = true;
+			// a name in several ROMs (LD_BYTES on the +3): a breakpoint in each, whichever runs
+			if (labels_shared(arg.second)) {
+				int set = 0;
+				for (const QString& full : labels_candidates(arg.second)) {
+					for (int abs : labels_rom_cells(full)) {
+						brkSet(BRK_MEMCELL, MEM_BRK_FETCH | MEM_BRK_ROM, abs, -1);
+						set++;
+					}
+				}
+				if (set) continue;
+			}
 			xAdr xadr = find_label(arg.second);
 			if ((xadr.type >= 0) && (xadr.adr < 0)) {
 				// its page is not paged in now: a breakpoint on the cell, where it runs;

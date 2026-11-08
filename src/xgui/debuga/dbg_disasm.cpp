@@ -465,7 +465,8 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 		fl = dasm_flag(comp, adr + clen);
 	}
 	// a character with bit 7 set ends the text, as the ROMs keep theirs: DC "..."
-	if (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt & 0x80) && dasm_printable(bt & 0x7f)) {
+	// (not #FF: the +3's messages end in it as a byte of its own)
+	if (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt & 0x80) && dasm_printable(bt & 0x7f) && (bt != 0xff)) {
 		drow.command.append(QChar(bt & 0x7f));
 		drow.command.replace(0, 2, "DC");
 		clen++;
@@ -1047,6 +1048,8 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 						*ptr |= DBG_VIEW_WORD;
 					} else {
 						len = 0;
+						if (!labels_ambiguous(str).isEmpty())		// a name of several ROMs: say which there are
+							shitHappens(QString("Which one: %0").arg(labels_ambiguous(str).join(", ")).toLocal8Bit().constData());
 					}
 				}
 				if (len > 0) {

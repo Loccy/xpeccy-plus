@@ -333,8 +333,9 @@ static void xe_primary(xeParser* prs) {
 			}
 		}
 		// label
+		// a label; a bare name of several ROMs too, though none is paged in now
 		xadr = find_label(QString(name.c_str()));
-		if (xadr.type >= 0) {
+		if ((xadr.type >= 0) || labels_shared(QString(name.c_str()))) {
 			xe_emit(prs, XE_LAB, 0, name.c_str());
 			return;
 		}
@@ -351,13 +352,6 @@ static void xe_primary(xeParser* prs) {
 				xe_emit_num(prs, val, 16);
 				return;
 			}
-		}
-		// a short name of two systems' ROM labels or variables: which one
-		QStringList amb = labels_ambiguous(QString(name.c_str()));
-		if (!amb.isEmpty()) {
-			std::string msg = "which one: " + amb.join(", ").toStdString();
-			xe_fail(prs, msg.c_str());
-			return;
 		}
 		xe_fail(prs, "no such register, variable or label");
 		return;
@@ -572,13 +566,14 @@ static int xe_memory(Computer* comp, unsigned adr, int type) {
 	return comp_peek(comp, adr, MEM_VIEW_READ, NULL);
 }
 
-unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsigned dt, int memType) {
+unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsigned dt, int memType, bool* unres) {
 	unsigned stk[XE_STACK];
 	int sp = 0;
 	bool err = false;
 	bool rerr;
 	int val;
 	xAdr xadr;
+	unsigned long long key;
 	if (!comp || exp.code.empty() || !exp.err.empty()) {
 		if (errp) *errp = true;
 		return 0;
@@ -600,22 +595,35 @@ unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsi
 					stk[sp] = val;
 					break;
 				case XE_LAB:
-					if ((it->labGen != labels_gen()) || it->paged) {
+					key = labels_paging_key();		// 0: no key, look again every time
+					if ((it->labGen != labels_gen()) || (it->paged && (!key || (it->pageKey != key)))) {
 						QString nm(it->name.c_str());
 						it->lab = find_label_cell(nm);
 						it->labGen = labels_gen();
 						it->paged = labels_shared(nm);
+						it->pageKey = key;
+						it->cpuKey = 0;
 					}
 					xadr = it->lab;
 					if (memType == MEM_RAM || memType == MEM_ROM) {
 						if (xadr.type != memType) err = true;
 						stk[sp] = xadr.abs;
 					} else {
-						xadr = label_cpu(xadr);
+						// a ROM label is where the paging puts it: looked for when that changes
+						if ((xadr.type == MEM_ROM) && key) {
+							if (it->cpuKey != key) {
+								it->cpu = label_cpu(xadr);
+								it->cpuKey = key;
+							}
+							xadr = it->cpu;
+						} else {
+							xadr = label_cpu(xadr);
+						}
 						if (memType == XE_CPU_HOME) xadr = label_home(xadr);
 						if (xadr.type < 0 || xadr.adr < 0) err = true;
 						stk[sp] = xadr.adr;
 					}
+					if (err && unres) *unres = true;		// not resolved, or not paged in now
 					break;
 				case XE_VAR:
 					stk[sp] = xe_var_value(comp, it->val, hits, dt);

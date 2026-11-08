@@ -202,11 +202,25 @@ int main(int argc, char** argv) {
 	check("a short name of several systems: the ROM paged in", labels_shared("ONLYA")
 		&& find_label("ONLYA").adr == 0x20 && (xexpr_eval(paged, comp) == 0x20)
 		&& find_label("LATER").type == MEM_ROM && find_label("LATER").adr < 0);
+	xExpr fullx = xexpr_compile("SYSD.ONLYA");	// a full name's address, cached by the paging
+	bool ferr = false;
+	xexpr_eval(fullx, comp, &ferr);
 	memSetBank(comp->mem, 0x00, MEM_ROM, 1, MEM_16K, NULL, NULL, NULL);
+	bool ferr2 = false;
+	check("a ROM name's address follows the paging", ferr && (xexpr_eval(fullx, comp, &ferr2) == 0x30) && !ferr2);
 	check("...and after the paging changes", find_label("ONLYA").adr == 0x30 && (xexpr_eval(paged, comp) == 0x30)
 		&& find_label(comp_get_xadr(comp, 0x30, MEM_VIEW_READ)) == "ONLYA"
 		&& find_label(comp_get_xadr(comp, 0x40, MEM_VIEW_READ)) == "LATER");
+	// neither paged in (RAM at 0000): compiles, and a condition with it is false, not an error
+	memSetBank(comp->mem, 0x00, MEM_RAM, 0, MEM_16K, NULL, NULL, NULL);
+	xExpr none = xexpr_compile("PC == ONLYA");
+	bool nerr = false, nunres = false;
+	xexpr_eval(none, comp, &nerr, 0, 0, 0, &nunres);
+	check("...with none paged in: compiled, unresolved", xexpr_ok(none) && nerr && nunres
+		&& (labels_candidates("ONLYA").size() == 2) && (labels_ambiguous("ONLYA").size() == 2));
 	memSetBank(comp->mem, 0x00, MEM_ROM, 0, MEM_16K, NULL, NULL, NULL);
+	nerr = nunres = false;
+	check("...and paged in again", (xexpr_eval(paged, comp, &nerr, 0, 0, 0, &nunres) == 0x20) && !nerr && !nunres);
 	xAdr var = comp_get_xadr(comp, 0x5C3D, MEM_VIEW_READ);
 	check("system variables in operands only", find_label(var).isEmpty()
 		&& find_label(var, nullptr, LAB_SYSVAR) == "ERR_SP" && find_label(var, nullptr, LAB_SYSVAR | LAB_FULL) == "SYSA.ERR_SP"

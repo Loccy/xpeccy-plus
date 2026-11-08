@@ -257,14 +257,17 @@ void brk_set_cond(xBrkPoint* brk, const char* cond) {
 }
 
 // true = breakpoint may fire. a broken condition breaks too, so that a typo
-// doesn't silently disable the breakpoint
+// doesn't silently disable the breakpoint; a label whose ROM is not paged in
+// now makes it false (PC == LD_BYTES holds only while that ROM is in)
 
 int brk_cond_true(xBrkPoint* brk, Computer* comp) {
 	bool err = false;
+	bool unres = false;
 	unsigned res;
 	if (brk->cond.empty()) return 1;
 	if (!xexpr_ok(brk->script)) return 1;
-	res = xexpr_eval(brk->script, comp, &err, brk->hits, brk->dt);
+	res = xexpr_eval(brk->script, comp, &err, brk->hits, brk->dt, 0, &unres);
+	if (unres) return 0;
 	if (err) return 1;
 	return res ? 1 : 0;
 }

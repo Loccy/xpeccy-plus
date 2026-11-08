@@ -283,6 +283,8 @@ QStringList labels_builtin_names();	// ...with the system variables and the shor
 xAdr labels_rom_cell(const QString&);	// a built-in name's cell, a ROM one paged in if any
 QStringList labels_ambiguous(const QString&);	// the full names a bare name could mean, if more than one
 bool labels_shared(const QString&);	// a bare name of several systems: it follows the paging
+QStringList labels_candidates(const QString&);	// every full name a bare one could stand for
+unsigned long long labels_paging_key();	// what the 16K windows hold now: a shared name's cache key
 unsigned char labels_rom_view(int abs);	// the data mark a ROM list gives a ROM cell
 int labels_sys_size(xAdr);		// a system variable's size at that cell, 0 if none
 void labels_full(bool);			// built-in names with their namespace while on

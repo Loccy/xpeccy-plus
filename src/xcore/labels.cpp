@@ -57,6 +57,7 @@ struct romLab {
 	int ofs;		// in the bank; the CPU address for @ram
 	QString full;		// BASIC48.LD_BYTES
 	QString bare;		// LD_BYTES
+	int size;		// a system variable's, 0: as far as the next one
 };
 
 struct romLabList {
@@ -123,10 +124,12 @@ static void rom_lists_read() {
 				foreach(QString wrd, arr.mid(2))	// a range's address in any case, as its line has it
 					if (wrd.startsWith('-')) drop.insert(wrd.startsWith("-@") ? wrd.mid(1).toUpper() : wrd.mid(1));
 				lst.banks[arr.at(1).toLatin1().toLower()] = drop;
-			} else if (arr.size() == 2) {
+			} else if ((arr.size() == 2) || ((arr.size() == 3) && (lst.ram >= 0))) {
+				// a name; a system variable's may say its size: "5BA0 STRIP2 8"
 				bool ok;
 				int ofs = arr.at(0).toInt(&ok, 16);
-				romLab lab = {ofs, lst.ns.isEmpty() ? arr.at(1) : (lst.ns + "." + arr.at(1)), arr.at(1)};
+				romLab lab = {ofs, lst.ns.isEmpty() ? arr.at(1) : (lst.ns + "." + arr.at(1)), arr.at(1),
+					(arr.size() == 3) ? arr.at(2).toInt() : 0};
 				if (ok && (ofs >= 0) && (ofs < ((lst.ram < 0) ? MEM_16K : MEM_64K))) lst.labs.append(lab);
 			} else if (arr.size() == 3) {
 				bool ok1, ok2;
@@ -217,7 +220,7 @@ void labels_rom_scan(Computer* comp) {
 			xadr.adr = lab.ofs;
 			xadr.abs = (lst.ram << 14) | (xadr.adr & 0x3fff);
 			// as far as the next one (the lists go up); the last, a word
-			int size = (i + 1 < lst.labs.size()) ? lst.labs.at(i + 1).ofs - lab.ofs : 2;
+			int size = lab.size ? lab.size : (i + 1 < lst.labs.size()) ? lst.labs.at(i + 1).ofs - lab.ofs : 2;
 			sysByAbs[xadr.abs] = {lab.full, lab.ofs, qBound(1, size, 64)};
 			sysByName[lab.full] = xadr;
 			short_add(sysShort, lab.bare, lab.full);
@@ -272,13 +275,19 @@ static QString builtin_full(const QString& nm, QStringList* amb = nullptr) {
 	return QString();
 }
 
+// every full name a bare one could stand for, whatever is paged in; none for a
+// label of the user's
+QStringList labels_candidates(const QString& nm) {
+	QStringList res;
+	if (user_has(nm)) return res;
+	if (conf.dbg.romlabels) res += romShort.value(nm);
+	if (conf.dbg.sysvars) res += sysShort.value(nm);
+	return res;
+}
+
 // a short name more than one system has: what it stands for follows the paging
 bool labels_shared(const QString& nm) {
-	if (user_has(nm)) return false;
-	int n = 0;
-	if (conf.dbg.romlabels) n += romShort.value(nm).size();
-	if (conf.dbg.sysvars) n += sysShort.value(nm).size();
-	return n > 1;
+	return labels_candidates(nm).size() > 1;
 }
 
 // A built-in name as the listing shows it: short, unless the short one would mean
@@ -320,7 +329,7 @@ QStringList labels_rom_names() {
 }
 
 // the built-in names to complete: ROM labels and system variables in full, and
-// the short ones that stand for one
+// their short names
 QStringList labels_builtin_names() {
 	QStringList res = labels_rom_names();
 	QStringList shorts;
@@ -329,9 +338,7 @@ QStringList labels_builtin_names() {
 		res += sysByName.keys();
 		shorts += sysShort.keys();
 	}
-	foreach(const QString& sh, shorts)
-		if (!builtin_full(sh).isEmpty()) res.append(sh);
-	return res;
+	return res + shorts;		// a short name of several systems too: it follows the paging
 }
 
 bool labels_rom_only(const QString& nm) {
@@ -358,6 +365,20 @@ static int rom_cpu_adr(int abs) {
 			return (i << mem->pgshift) | (abs & mem->pgmask);
 	}
 	return -1;
+}
+
+// What the CPU's four 16K windows hold now, as one number: a name of several
+// systems looked up under one key stays right while the key stays the same
+unsigned long long labels_paging_key() {
+	Computer* comp = conf.zx;
+	if (!comp || comp->hw->memView) return 0;
+	Memory* mem = comp->mem;
+	unsigned long long key = 0;
+	for (int w = 0; w < 4; w++) {
+		int i = (w << 14) >> mem->pgshift;
+		key = (key << 16) | ((unsigned long long)(mem->map[i].type & 0x0f) << 12) | (mem->map[i].num & 0x0fff);
+	}
+	return key;
 }
 
 // a ROM cell as the lists name it: wrapped the same way
