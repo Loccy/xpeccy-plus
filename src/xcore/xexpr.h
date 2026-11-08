@@ -74,8 +74,10 @@ xExpr xexpr_compile(const char*);
 // The last argument selects CPU addresses (0) or physical MEM_RAM/MEM_ROM for labels and reads;
 // XE_CPU_HOME: CPU addresses, a ROM label paged out where its ROM runs (the assembler's)
 #define XE_CPU_HOME	(-2)
-// unres: an error is a label not resolved or not paged in now (a condition is false then)
-unsigned xexpr_eval(const xExpr&, Computer*, bool* = nullptr, int = 0, unsigned = 0, int = 0, bool* unres = nullptr);
+// out given: a label that is there but not paged in now is XE_NOWHERE, which no
+// address equals, and out is set; else that is an error
+#define XE_NOWHERE	0x10000
+unsigned xexpr_eval(const xExpr&, Computer*, bool* = nullptr, int = 0, unsigned = 0, int = 0, bool* out = nullptr);
 bool xexpr_ok(const xExpr&);
 // the expression as it was understood: hex numbers, priorities as brackets
 std::string xexpr_text(const xExpr&);

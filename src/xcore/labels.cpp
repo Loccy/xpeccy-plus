@@ -367,8 +367,9 @@ static int rom_cpu_adr(int abs) {
 	return -1;
 }
 
-// What the CPU's four 16K windows hold now, as one number: a name of several
-// systems looked up under one key stays right while the key stays the same
+// Which ROM pages the CPU's four 16K windows hold now, as one number: a name of
+// several systems looked up under one key stays right while the key stays the
+// same. Another window counts by its type alone, so a RAM page switch is none
 unsigned long long labels_paging_key() {
 	Computer* comp = conf.zx;
 	if (!comp || comp->hw->memView) return 0;
@@ -376,7 +377,8 @@ unsigned long long labels_paging_key() {
 	unsigned long long key = 0;
 	for (int w = 0; w < 4; w++) {
 		int i = (w << 14) >> mem->pgshift;
-		key = (key << 16) | ((unsigned long long)(mem->map[i].type & 0x0f) << 12) | (mem->map[i].num & 0x0fff);
+		int num = (mem->map[i].type == MEM_ROM) ? (mem->map[i].num & 0x0fff) : 0;
+		key = (key << 16) | ((unsigned long long)(mem->map[i].type & 0x0f) << 12) | num;
 	}
 	return key;
 }

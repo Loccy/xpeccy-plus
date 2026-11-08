@@ -566,7 +566,7 @@ static int xe_memory(Computer* comp, unsigned adr, int type) {
 	return comp_peek(comp, adr, MEM_VIEW_READ, NULL);
 }
 
-unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsigned dt, int memType, bool* unres) {
+unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsigned dt, int memType, bool* out) {
 	unsigned stk[XE_STACK];
 	int sp = 0;
 	bool err = false;
@@ -620,10 +620,17 @@ unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsi
 							xadr = label_cpu(xadr);
 						}
 						if (memType == XE_CPU_HOME) xadr = label_home(xadr);
-						if (xadr.type < 0 || xadr.adr < 0) err = true;
-						stk[sp] = xadr.adr;
+						if ((xadr.type >= 0) && (xadr.adr >= 0)) {
+							stk[sp] = xadr.adr;
+						} else if (out && (it->paged || (it->lab.type >= 0))) {
+							// there, but not paged in now: no address equals it, and the
+							// rest of the expression still counts
+							stk[sp] = XE_NOWHERE;
+							*out = true;
+						} else {
+							err = true;
+						}
 					}
-					if (err && unres) *unres = true;		// not resolved, or not paged in now
 					break;
 				case XE_VAR:
 					stk[sp] = xe_var_value(comp, it->val, hits, dt);

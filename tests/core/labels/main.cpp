@@ -211,16 +211,33 @@ int main(int argc, char** argv) {
 	check("...and after the paging changes", find_label("ONLYA").adr == 0x30 && (xexpr_eval(paged, comp) == 0x30)
 		&& find_label(comp_get_xadr(comp, 0x30, MEM_VIEW_READ)) == "ONLYA"
 		&& find_label(comp_get_xadr(comp, 0x40, MEM_VIEW_READ)) == "LATER");
-	// neither paged in (RAM at 0000): compiles, and a condition with it is false, not an error
+	// neither paged in (RAM at 0000): compiles, and in a condition it equals no
+	// address, the rest of the condition as written
 	memSetBank(comp->mem, 0x00, MEM_RAM, 0, MEM_16K, NULL, NULL, NULL);
+	comp->cpu->regPC = 0;
 	xExpr none = xexpr_compile("PC == ONLYA");
-	bool nerr = false, nunres = false;
-	xexpr_eval(none, comp, &nerr, 0, 0, 0, &nunres);
-	check("...with none paged in: compiled, unresolved", xexpr_ok(none) && nerr && nunres
+	xExpr ne = xexpr_compile("PC != ONLYA");
+	xExpr either = xexpr_compile("PC == 0 || PC == ONLYA");
+	bool nerr = false, nout = false;
+	unsigned nres = xexpr_eval(none, comp, &nerr, 0, 0, 0, &nout);
+	check("...with none paged in: compiled, no address", xexpr_ok(none) && !nerr && nout && (nres == 0)
 		&& (labels_candidates("ONLYA").size() == 2) && (labels_ambiguous("ONLYA").size() == 2));
+	nerr = nout = false;
+	check("...each comparison as written", (xexpr_eval(ne, comp, &nerr, 0, 0, 0, &nout) == 1)
+		&& (xexpr_eval(either, comp, &nerr, 0, 0, 0, &nout) == 1) && !nerr && nout);
+	nerr = false;
+	xexpr_eval(none, comp, &nerr);
+	check("...an error where nothing asks for that", nerr);
+	// a label of the user's gone: the condition is broken, not false
+	add_label(comp_get_xadr(comp, 0x8100, MEM_VIEW_READ), "GONE");
+	xExpr gone = xexpr_compile("PC == GONE");
+	del_label("GONE");
+	nerr = nout = false;
+	xexpr_eval(gone, comp, &nerr, 0, 0, 0, &nout);
+	check("a label no longer there is an error", xexpr_ok(gone) && nerr && !nout);
 	memSetBank(comp->mem, 0x00, MEM_ROM, 0, MEM_16K, NULL, NULL, NULL);
-	nerr = nunres = false;
-	check("...and paged in again", (xexpr_eval(paged, comp, &nerr, 0, 0, 0, &nunres) == 0x20) && !nerr && !nunres);
+	nerr = nout = false;
+	check("...and paged in again", (xexpr_eval(paged, comp, &nerr, 0, 0, 0, &nout) == 0x20) && !nerr && !nout);
 	xAdr var = comp_get_xadr(comp, 0x5C3D, MEM_VIEW_READ);
 	check("system variables in operands only", find_label(var).isEmpty()
 		&& find_label(var, nullptr, LAB_SYSVAR) == "ERR_SP" && find_label(var, nullptr, LAB_SYSVAR | LAB_FULL) == "SYSA.ERR_SP"

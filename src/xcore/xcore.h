@@ -392,6 +392,9 @@ extern int brk_cond_n;		// conditions not bound to an address, asked per instruc
 int brk_load_list(const char*, int* bad = NULL, bool add = false);
 // a label, #/$/0x hex or plain hex; cell gets a label's cell, type -1 for a number
 bool brk_list_adr(QString, int* adr, xAdr* cell);
+// the cells a label runs at where its CPU address would not do (a name of several
+// systems, a label not paged in now): --bp and a list's lines set breakpoints there
+QList<xAdr> brk_label_cells(const QString&);
 int brk_mem_type(int type);		// the memory a cell breakpoint type watches, MEM_*
 // a cell as page:offset - the page in hex when it is of the memory the type names,
 // else its area's token (ROM0, DIV3...), as comp_cell() has the machine's pages
