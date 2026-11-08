@@ -469,10 +469,13 @@ void MainWin::socketRead() {
 		QString name = prm.mid(3).join(" ");
 		QWidget* win = NULL;
 		if ((name == "@menu") && (prm.size() > 3)) {
-			// by geometry: the window system finds nothing on a hidden desktop
+			// by geometry: the window system finds nothing on a hidden desktop; the
+			// submenu open last is over the others
 			QPoint gp = frame->mapToGlobal(QPoint(prm[1].toInt(), prm[2].toInt()));
+			QWidget* top = QApplication::activePopupWidget();
+			if (qobject_cast<QMenu*>(top) && top->geometry().contains(gp)) win = top;
 			foreach(QWidget* t, QApplication::topLevelWidgets()) {
-				if (qobject_cast<QMenu*>(t) && t->isVisible() && t->geometry().contains(gp)) win = t;
+				if (!win && qobject_cast<QMenu*>(t) && t->isVisible() && t->geometry().contains(gp)) win = t;
 			}
 			if (win) {
 				prm[1] = QString::number(win->mapFromGlobal(gp).x());

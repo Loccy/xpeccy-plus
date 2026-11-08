@@ -161,9 +161,10 @@ void MainWin::syncResume() {
 				name = fm.elidedText(name, Qt::ElideRight, qMax(width - fm.horizontalAdvance(", " + time), fm.horizontalAdvance("M...")));
 			time = name + ", " + time;
 		}
-		tip = time.toHtmlEscaped();
+		// a tag makes it rich text, with or without the picture: a name's own '&' or '<' as it is
+		tip = "<nobr>" + time.toHtmlEscaped() + "</nobr>";
 		if (!sv.pic.isEmpty())
-			tip = QString("<img src=\"%0\"><br>%1").arg(QUrl::fromLocalFile(sv.pic).toString(), tip);
+			tip = QString("<img src=\"%0\"><br>%1").arg(QUrl::fromLocalFile(sv.pic).toString().toHtmlEscaped(), tip);
 	}
 	resumeAct->setProperty("xTip", tip);
 }
