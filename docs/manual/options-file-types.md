@@ -45,11 +45,16 @@ only when it is run, and a disk only from drive A.
 ```{index} snapshot; which machine runs it
 ```
 
-A `.z80` or `.sna` snapshot runs on any machine with its memory paging. One taken inside
-the ROM - in the 128K menu or the BASIC editor, or in the middle of a ROM routine - also
-needs the very same ROM:
+A `.z80` names the model it was taken on, as an `.szx` does, and **Auto** opens it on that
+model: a 48K one on the 48K, a 128K one on the 128K rather than on a +2 or a Pentagon. The
+48K, the 128K and the Pentagon each have a frame of their own length, so a program timed to
+the screen runs right only on its own. A Pentagon 1024 counts as a Pentagon. **Keep current** leaves it where you are.
 
-- A `.z80` taken in the menu or editor opens on the model it names. Even the clones' ROMs
+Any other snapshot - a `.sna`, or a `.z80` with **Ask** or a machine picked in **Opened on** -
+runs on any machine with its memory paging. One taken inside the ROM - in the 128K menu or
+the BASIC editor, or in the middle of a ROM routine - also needs the very same ROM:
+
+- A `.z80` taken in the menu or editor runs only on the model it names. Even the clones' ROMs
   differ there: the Pentagon's menu has a TR-DOS item the 128K's has not. The +2A and +3
   share their ROMs, but a +3's disk system is set up for its drive. One stopped in a
   48 BASIC routine needs the same editor: a 128K one runs on the 128K and the clones, not
@@ -58,8 +63,8 @@ needs the very same ROM:
   or a +3 by what the ROM left in memory. A 128K and its clones share that code, so for
   them, and whenever the snapshot does not tell, **Auto** asks which machine to use, as
   **Ask** does. To keep the model, save as `.z80` or `.szx`.
-- A program running in RAM stays on the current machine. A `.z80` of one that keeps the
-  128K editor's ROM paged in needs a machine with that editor, which the +2, +2A and +3
-  do not have; a `.sna` is looked at only when it was stopped inside the ROM.
+- A `.sna` of a program running in RAM stays on the current machine: a `.sna` is looked
+  at only when it was stopped inside the ROM. A `.z80` of one that keeps the 128K editor's
+  ROM paged in needs a machine with that editor, which the +2, +2A and +3 do not have.
 
 A machine of your own counts by its hardware, whatever ROM files it has.

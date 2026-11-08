@@ -254,8 +254,10 @@ What an SZX holds and how Xpeccy+ reads it is in [SZX snapshots](szx.md).
   interrupt, which is where loading puts it back. If that cannot be done, the message
   **SNA: no frame position, use SZX** appears. It keeps 48K or 128K of memory.
 
-A `.z80` or `.sna` opens on any machine that can run the model it was saved from: a 48K
-snapshot runs anywhere, a 128K one on anything but a 48K, a +3 one on a +2A or +3.
+A `.z80` opens on the model it names, as an SZX does. A `.sna` names only 48K or 128K and
+opens on any machine that can run it: a 48K one anywhere, a 128K one on anything but a 48K.
+The [File types page](options-file-types.md) sets this for each format and says when a
+snapshot needs its own ROM.
 
 ```{index} SPG
 ```
@@ -266,8 +268,9 @@ that machine.
 ```{index} NEX, SNX
 ```
 
-**NEX** programs and **SNX** snapshots need the ZX Spectrum Next. It starts them, and `.z80`
-and `.sna` snapshots too, through NextZXOS, from its SD card: see
+**NEX** programs and **SNX** snapshots need the ZX Spectrum Next. It starts them, and `.sna`
+snapshots too, through NextZXOS, from its SD card - and a `.z80` when **Auto** does not
+switch it to the model it names: see
 [Starting programs](zx-next.md#starting-programs). The Next's own state saves as `.szx`: a
 `.sna` or `.z80` has no room for it, and a `.nex` holds a program, not a running machine. See
 [Snapshots](zx-next.md#snapshots).
