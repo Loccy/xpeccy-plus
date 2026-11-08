@@ -11,6 +11,10 @@
 #include "xcore.h"
 #include "../libxpeccy/filetypes/filetypes.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 struct chState {
 	int on;
 	int val;
@@ -158,6 +162,57 @@ int cheats_open(const QString& path, bool picked) {
 	return POK_OK;
 }
 
+// The file dir/name as the disk spells it, empty when there is none
+static QString pok_probe(const QString& dir, const QString& name) {
+#ifdef _WIN32
+	// names ignore case here: one look answers, and gives the disk's spelling back
+	const QString pat = QDir::toNativeSeparators(dir + "/" + name);
+	WIN32_FIND_DATAW fd;
+	HANDLE h = FindFirstFileExW(reinterpret_cast<LPCWSTR>(pat.utf16()), FindExInfoBasic, &fd,
+		FindExSearchNameMatch, NULL, 0);
+	if (h == INVALID_HANDLE_VALUE) return QString();
+	FindClose(h);
+	const QString disk = QString::fromWCharArray(fd.cFileName);
+	// a short 8.3 name matches too
+	if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || disk.compare(name, Qt::CaseInsensitive))
+		return QString();
+	return dir + "/" + disk;
+#else
+	const QString path = dir + "/" + name;
+	return QFileInfo(path).isFile() ? path : QString();
+#endif
+}
+
+// Fuse's and Spectaculator's rule, and how every archive with pokes has it:
+// POKES/NAME.POK beside the image, else NAME.pok beside it. Asked for by name, as
+// listing a TOSEC folder takes a third of a second.
+static QString pok_beside(const QString& image) {
+	const QFileInfo inf(image);
+	const QString dir = inf.absolutePath();
+	const QString want = inf.completeBaseName() + ".pok";
+#ifdef _WIN32
+	const QStringList names = {want};
+	const QStringList subs = {"POKES"};
+#else
+	// case counts: the spellings collections use
+	QStringList names;
+	for (const QString& one : {want, inf.completeBaseName() + ".POK", want.toUpper(), want.toLower()})
+		if (!names.contains(one)) names.append(one);
+	const QStringList subs = {"POKES", "pokes", "Pokes"};
+#endif
+	for (const QString& sub : subs) {
+		for (const QString& name : names) {
+			const QString found = pok_probe(dir + "/" + sub, name);
+			if (!found.isEmpty()) return found;
+		}
+	}
+	for (const QString& name : names) {
+		const QString found = pok_probe(dir, name);
+		if (!found.isEmpty()) return found;
+	}
+	return QString();
+}
+
 // The same image again (Reload, Recent, a mount): every cheat off, bytes back (memory is
 // still theirs); the image the command line opened keeps the list it named.
 void cheats_pick(const QString& image) {
@@ -174,25 +229,7 @@ void cheats_pick(const QString& image) {
 		ch_all_back();
 	}
 	if (!keep.isEmpty() && bkm_same(image, keep)) return;
-	// Fuse's and Spectaculator's rule, and how every archive with pokes has it:
-	// POKES/NAME.POK beside the image, else NAME.pok beside it
-	QFileInfo inf(image);
-	QString want = inf.completeBaseName() + ".pok";
-	QDir dir = inf.dir();
-	QString found;
-	foreach(QString sub, dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-		if (sub.compare("pokes", Qt::CaseInsensitive)) continue;
-		foreach(QString name, QDir(dir.filePath(sub)).entryList(QDir::Files)) {
-			if (!name.compare(want, Qt::CaseInsensitive))
-				found = dir.filePath(sub + "/" + name);
-		}
-	}
-	if (found.isEmpty()) {
-		foreach(QString name, dir.entryList(QDir::Files)) {
-			if (!name.compare(want, Qt::CaseInsensitive))
-				found = dir.filePath(name);
-		}
-	}
+	const QString found = pok_beside(image);
 	if (!found.isEmpty() && (cheats_open(found, true) == POK_OK))
 		return;
 	chLock lock;
