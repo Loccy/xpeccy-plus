@@ -11,6 +11,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Added
 
+- **The ZX Spectrum Next's F-keys** work as on its PS/2 keyboard: F3 switches 50 and 60 Hz,
+  F4 resets, F8 steps the CPU speed, F9 and F10 press its NMI and DRIVE buttons. Keys that
+  are hotkeys reach the Next with Grab Keyboard on.
 - **Frame skip** (Options > Video): on a computer too slow for the machine a frame is left
   undrawn now and then, so the machine and its sound keep their speed. When the machine falls
   behind for a few seconds, Xpeccy+ offers to turn it on.

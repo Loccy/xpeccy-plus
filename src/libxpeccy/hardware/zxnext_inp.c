@@ -98,7 +98,8 @@ void nx_inp_nr(Computer* comp, int r, int v) {
 
 // One code taken (ps2_keyb.vhd): the typematic repeat of a make is dropped, CAPS
 // and SYM SHIFT are counted, the rest set or clear their place in the matrix.
-// A function key (b7:6 = 11) is the board's (resets, NMI, speed): not modelled.
+// A function key (b7:6 = 11) is the board's, F1..F8 (resets, 50/60 Hz, speed); F9 and
+// F10 are the NMI and DRIVE buttons whatever the keymap says (nx_board_key).
 // A keyboard makes a key once and breaks it once; the host's input can make one twice
 // (a modifier is read from two places), so a make of a key down or a break of one up
 // is dropped here - counted, a CAPS or SYM SHIFT would stay down for good.
@@ -113,8 +114,14 @@ static void nx_ps2_code(Computer* comp, int code, int ext, int rel) {
 	if (rel ? !(*down & bit) : (*down & bit)) return;
 	if (rel) *down &= ~bit;
 	else *down |= bit;
+	// F9 or left Win, F10 or right Win: the buttons' lines (ps2_keyb.vhd 119-141)
+	if (!rel && (k == (ext ? 0x11f : 0x01))) nx_board_key(comp, 8);
+	if (!rel && (k == (ext ? 0x127 : 0x09))) nx_board_key(comp, 9);
 	int d = IN.keymap[(ext << 8) | code];
-	if ((d & 0xc0) == 0xc0) return;
+	if ((d & 0xc0) == 0xc0) {
+		if (!rel) nx_board_key(comp, d & 7);
+		return;
+	}
 	if (d & 0x40) {
 		if (!rel) kbd->nxCaps = (kbd->nxCaps + 1) & 7;
 		else if (kbd->nxCaps) kbd->nxCaps--;
