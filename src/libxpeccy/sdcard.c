@@ -105,6 +105,17 @@ void sdcSetFolder(SDCard* sdc, const char* name, vFat* vf) {
 	sdcSetLock(sdc, 0);
 }
 
+// A folder card a machine without the slot holds: the path only, read when a machine
+// with the slot comes up (sdc_remount)
+void sdcSetUnread(SDCard* sdc, const char* name) {
+	sdcCloseFile(sdc);
+	if (sdc->image) free(sdc->image);
+	sdc->image = NULL;
+	if (!name || !*name) return;
+	sdc->image = (char*)malloc(strlen(name) + 1);
+	strcpy(sdc->image, name);
+}
+
 // the card's lock switch, the user's; a folder that takes no writes is protected whatever it says
 void sdcSetLock(SDCard* sdc, int lock) {
 	sdc->lock = lock ? 1 : 0;

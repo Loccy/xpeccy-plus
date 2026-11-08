@@ -694,7 +694,7 @@ static void ext_card_save(szxBuf* b, Computer* comp) {
 	if (!sdc || !sdc->image) return;
 	unsigned long long print = sdc_dir_print(sdc);
 	rec_begin(b, XR_SDCD, &mark);
-	sb_byte(b, sdc->vfat ? 1 : 0);
+	sb_byte(b, (sdc->vfat ? 1 : 0) | SZX_CARD_CONTENT);
 	sb_dword(b, (unsigned)(print & 0xffffffffu));
 	sb_dword(b, (unsigned)(print >> 32));
 	ext_put_string(b, sdc->image);
@@ -727,7 +727,9 @@ static void ext_card_load(const unsigned char* p, size_t n) {
 	memset(c, 0, sizeof(*c));
 	if (n < 10) return;
 	c->folder = p[0] & 1;
-	c->print = rd_dword(p + 1) | ((unsigned long long)rd_dword(p + 5) << 32);
+	// a print of the old kind (the directories' bytes, layout and all) cannot be compared
+	if (p[0] & SZX_CARD_CONTENT)
+		c->print = rd_dword(p + 1) | ((unsigned long long)rd_dword(p + 5) << 32);
 	if (!ext_get_string(p, n, &pos, c->path, sizeof(c->path)) || (pos >= n)) return;
 	int pins = p[pos++];
 	for (int i = 0; (i < pins) && (i < SZX_PINS); i++) {
@@ -1236,6 +1238,15 @@ static void ext_gs(GSound* gs, const unsigned char* p, size_t n) {
 	gsiowr(0, tmp_.rp0, gs);		// the page register, which maps #8000 as it says
 }
 
+// What the last file left for after its load - its card, its media's state - goes
+// before any other is read: a file without our record has neither.
+void szx_ext_forget(void) {
+	free(ext_held);
+	ext_held = NULL;
+	ext_held_len = 0;
+	memset(&szxCardLast, 0, sizeof(szxCardLast));
+}
+
 int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 	size_t pos = 0;
 	unsigned id;
@@ -1245,10 +1256,7 @@ int szx_ext_load(Computer* comp, const unsigned char* ext, size_t len) {
 	int esp = 0;
 	char core[64];
 	char mac[256];
-	free(ext_held);
-	ext_held = NULL;
-	ext_held_len = 0;
-	memset(&szxCardLast, 0, sizeof(szxCardLast));
+	szx_ext_forget();
 	// The ports, the flags and the video mean what they mean on one core only:
 	// a 128K snapshot of ours run on a Pentagon takes the sound chips and no more.
 	ext_mach(ext, len, core, sizeof(core), mac, sizeof(mac));

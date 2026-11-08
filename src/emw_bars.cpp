@@ -18,6 +18,7 @@
 #include <QWidgetAction>
 #include <QFileInfo>
 #include <QStyleOptionSlider>
+#include <QThread>
 #include <functional>
 
 #include "emulwin.h"
@@ -26,6 +27,7 @@
 #include "xcore/vidrec.h"
 #include "xcore/pacing.h"
 #include "xcore/vscalers.h"
+#include "xcore/vfat_scan.h"
 
 #define TB_MIME "application/x-xpeccy-toolbar-item"
 
@@ -127,6 +129,18 @@ class xStatusBar : public QStatusBar {
 		QSize sizeHint() const override {return QSize(0, QStatusBar::sizeHint().height());}
 		QSize minimumSizeHint() const override {return QSize(0, QStatusBar::minimumSizeHint().height());}
 };
+
+// A folder read that goes on for seconds holds the window: the bar says so first, painted
+// there and then, as nothing else is until the read is over
+static QStatusBar* slowBar = NULL;
+
+static void folder_slow(const QString& path, bool on) {
+	if (!slowBar || (QThread::currentThread() != qApp->thread())) return;
+	xlog(XLG_DISK, XLL_DEBUG, "folder %s: %s", path.toLocal8Bit().constData(), on ? "a long read, said in the status bar" : "read");
+	if (on) slowBar->showMessage(QString(" Reading the folder %0... ").arg(QFileInfo(path).fileName()));
+	else slowBar->clearMessage();
+	if (slowBar->isVisible()) slowBar->repaint();
+}
 
 // the buttons are made by the bar, after every rebuild
 void xToolBar::watch() {
@@ -490,6 +504,8 @@ void MainWin::initBars() {
 
 	xStatusBar* sb = new xStatusBar(frame);
 	statusBar = sb;
+	slowBar = sb;
+	vfat_scan_notify(folder_slow);
 	sb->setSizeGripEnabled(false);
 	sbMachine = new QLabel;
 	sbClock = new QLabel;
