@@ -29,7 +29,7 @@ Each row has four columns:
 | Column | What it shows |
 |---|---|
 | Address | where the row starts in memory |
-| Bytes | the bytes of the instruction or data, in hex |
+| Bytes | the bytes of the instruction or data, in hex; a long data row shows those that fit, then `…` |
 | Command | the instruction, or `DB`, `DW` for data |
 | (last) | on the PC row only: the value in memory, or an arrow |
 
