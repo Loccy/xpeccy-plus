@@ -57,6 +57,7 @@ typedef struct {
 	// XE_LAB: the label's cell, looked up once while the labels stay the same
 	mutable xAdr lab;
 	mutable unsigned labGen = 0;
+	mutable bool paged = false;	// a bare name of several systems: looked up each time, by the paging
 } xExprItem;
 
 typedef struct {

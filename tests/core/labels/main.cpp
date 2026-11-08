@@ -153,10 +153,13 @@ int main(int argc, char** argv) {
 		&& find_label("RomLabel").type == MEM_ROM && find_label("RomLabel").abs == 0x38);
 	loadLabels(fixtures.filePath("legacy.labels").toLocal8Bit().constData());
 	check("legacy label expressions", !eval("print_score").err && eval("print_score").value == 0x8010);
-	// ROM lists: namespaces, data ranges, system variables. The bench 128K has
-	// one 16K ROM page; the lists name it by the MD5 of the bytes put in it
-	for (int i = 0; i < MEM_16K; i++) comp->mem->romData[i] = (unsigned char)(i * 7 + (i >> 8));
+	// ROM lists: namespaces, data ranges, system variables. The bench 128K gets
+	// two 16K ROM banks, 0 paged in; the lists name them by the MD5 of their bytes
+	comp->mem->romMask = 2 * MEM_16K - 1;
+	for (int i = 0; i < 2 * MEM_16K; i++) comp->mem->romData[i] = (unsigned char)(i * 7 + (i >> 8) + (i >> 14) * 3);
 	QString md5 = QCryptographicHash::hash(QByteArray((const char*)comp->mem->romData, MEM_16K),
+		QCryptographicHash::Md5).toHex();
+	QString md5b = QCryptographicHash::hash(QByteArray((const char*)comp->mem->romData + MEM_16K, MEM_16K),
 		QCryptographicHash::Md5).toHex();
 	QDir(temp.path()).mkdir("labels");
 	installDir = temp.path();
@@ -164,15 +167,17 @@ int main(int argc, char** argv) {
 		{"a.labels", "@ns SYSA\n@rom %1\n0010 ENTRY\n0020 ONLYA\n3D00 3D07 db\n0100 0103 text\n"},
 		{"b.labels", "@ns SYSB\n@rom %1 -@0200 -@3e00\n0018 ENTRY\n0200 0201 dw\n0300 0301 dw\n3E00 3E01 db\n"},
 		{"b2.labels", "@ns SYSA\n@rom %1\n0020 ONLYA\n"},
-		{"c.labels", "@ns SYSA\n@ram 5\n5C3D ERR_SP\n"},
-		{"d.labels", "@ns SYSC\n@ram 5\n5C00 NOT_FITTED\n"}};
+		{"c.labels", "@ns SYSA\n@ram 5\n5C3D ERR_SP\n5C3F LIST_SP\n"},
+		{"d.labels", "@ns SYSC\n@ram 5\n5C00 NOT_FITTED\n"},
+		{"e.labels", "@ns SYSD\n@rom %2\n0030 ONLYA\n0040 LATER\n"}};
 	for (auto& lst : lists) {
 		QFile out(temp.filePath(QString("labels/") + lst[0]));
 		out.open(QIODevice::WriteOnly);
-		out.write(QString(lst[1]).arg(md5).toLatin1());
+		out.write(QString(lst[1]).replace("%1", md5).replace("%2", md5b).toLatin1());
 	}
 	conf.dbg.romlabels = 1;
 	conf.dbg.sysvars = 1;
+	memSetBank(comp->mem, 0x00, MEM_ROM, 0, MEM_16K, NULL, NULL, NULL);
 	labels_rom_scan(comp);
 	xAdr r10 = comp_get_xadr(comp, 0x10, MEM_VIEW_READ);
 	xAdr r20 = comp_get_xadr(comp, 0x20, MEM_VIEW_READ);
@@ -192,13 +197,26 @@ int main(int argc, char** argv) {
 		&& labels_rom_view(0x101) == DBG_VIEW_TEXT && labels_rom_view(0x200) == DBG_VIEW_CODE
 		&& labels_rom_view(0x300) == DBG_VIEW_WORD && labels_rom_view(0x3E00) == DBG_VIEW_CODE);
 	check("a name two lists of a bank share is one cell", labels_rom_cells("SYSA.ONLYA").size() == 1);
+	// ONLYA is SYSA's in bank 0 and SYSD's in bank 1: the one paged in
+	xExpr paged = xexpr_compile("ONLYA");
+	check("a short name of several systems: the ROM paged in", labels_shared("ONLYA")
+		&& find_label("ONLYA").adr == 0x20 && (xexpr_eval(paged, comp) == 0x20)
+		&& find_label("LATER").type == MEM_ROM && find_label("LATER").adr < 0);
+	memSetBank(comp->mem, 0x00, MEM_ROM, 1, MEM_16K, NULL, NULL, NULL);
+	check("...and after the paging changes", find_label("ONLYA").adr == 0x30 && (xexpr_eval(paged, comp) == 0x30)
+		&& find_label(comp_get_xadr(comp, 0x30, MEM_VIEW_READ)) == "ONLYA"
+		&& find_label(comp_get_xadr(comp, 0x40, MEM_VIEW_READ)) == "LATER");
+	memSetBank(comp->mem, 0x00, MEM_ROM, 0, MEM_16K, NULL, NULL, NULL);
 	xAdr var = comp_get_xadr(comp, 0x5C3D, MEM_VIEW_READ);
 	check("system variables in operands only", find_label(var).isEmpty()
 		&& find_label(var, nullptr, LAB_SYSVAR) == "ERR_SP" && find_label(var, nullptr, LAB_SYSVAR | LAB_FULL) == "SYSA.ERR_SP"
 		&& eval("ERR_SP").value == 0x5C3D && eval("SYSA.ERR_SP").value == 0x5C3D);
 	xAdr high = var;
 	high.adr = 0xDC3D;		// bank 5 paged at C000 as well
-	check("a system variable only at its own address", find_label(high, nullptr, LAB_SYSVAR).isEmpty());
+	check("a system variable only at its own address", find_label(high, nullptr, LAB_SYSVAR).isEmpty()
+		&& !labels_sys_size(high));
+	check("a system variable's size, to the next one", labels_sys_size(var) == 2
+		&& labels_sys_size(comp_get_xadr(comp, 0x5C3F, MEM_VIEW_READ)) == 2);
 	check("a system not in the machine names nothing", find_label("NOT_FITTED").type < 0
 		&& find_label("SYSC.NOT_FITTED").type < 0);
 	conf.dbg.sysvars = 0;

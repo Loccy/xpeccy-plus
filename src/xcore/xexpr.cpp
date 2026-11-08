@@ -600,9 +600,11 @@ unsigned xexpr_eval(const xExpr& exp, Computer* comp, bool* errp, int hits, unsi
 					stk[sp] = val;
 					break;
 				case XE_LAB:
-					if (it->labGen != labels_gen()) {
-						it->lab = find_label_cell(QString(it->name.c_str()));
+					if ((it->labGen != labels_gen()) || it->paged) {
+						QString nm(it->name.c_str());
+						it->lab = find_label_cell(nm);
 						it->labGen = labels_gen();
+						it->paged = labels_shared(nm);
 					}
 					xadr = it->lab;
 					if (memType == MEM_RAM || memType == MEM_ROM) {

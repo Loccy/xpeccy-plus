@@ -282,9 +282,17 @@ static int dasm_access(Computer* comp, int adr) {
 	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_PC;
 }
 
-// A cell's flags as the listing reads it: its breakpoints and view mark, read
-// where setData() writes them (a page view too) - or, where it has no mark, the
-// one a ROM list gives the cell the row shows (the font as bytes)
+// a character a text row shows: ASCII 32-127
+static bool dasm_printable(int bt) {
+	return (bt > 31) && (bt < 128);
+}
+
+// a row of text, DB "..." or DC "...": its words are not operands
+static bool dasm_is_text(const QString& cmd) {
+	return cmd.startsWith("DB \"") || cmd.startsWith("DC \"");
+}
+
+// a cell's flags where setData() writes them; with no mark of its own, a ROM list's
 static unsigned char dasm_flag(Computer* comp, int adr, int access = MEM_VIEW_PC) {
 	if (mode != XVIEW_CPU) access = MEM_VIEW_READ;
 	unsigned char fl = getBrkView(comp, adr, access);
@@ -368,7 +376,7 @@ void placeLabel(Computer* comp, dasmData& drow) {
 	xMnem mn;
 	xAdr xadr;
 	bool rom = false;
-	while (work && (shift < 8)) {
+	while (work && (shift < 64)) {		// as far back as the longest system variable
 		xadr = dasm_xadr(comp, drow.oadr - shift);
 		lab = find_label(xadr, &rom, LAB_SYSVAR);
 		if (lab.isEmpty()) {
@@ -378,11 +386,17 @@ void placeLabel(Computer* comp, dasmData& drow) {
 				work = 0;
 			}
 		} else {
-			mn.len = 8;					// default seek range
-			if ((drow.flag & 0xf0) == DBG_VIEW_CODE) {	// for code - size of opcode only
-				mn = dasm_mnem(comp, drow.oadr - shift, NULL, drow.fmt);
+			// a system variable reaches as far as its size; another label, the
+			// instruction it names (or 8 bytes of data)
+			int reach = labels_sys_size(xadr);
+			if (!reach) {
+				mn.len = 8;					// default seek range
+				if ((drow.flag & 0xf0) == DBG_VIEW_CODE) {	// for code - size of opcode only
+					mn = dasm_mnem(comp, drow.oadr - shift, NULL, drow.fmt);
+				}
+				reach = qMin(mn.len, 8);
 			}
-			if (shift < mn.len) {
+			if (shift < reach) {
 				replace_number(drow.command, dasm_word(drow.oadr, drow.fmt),
 					shift ? QString("%0 + %1").arg(lab).arg(shift) : lab);
 				drow.label = lab;		// the delegate colours it as one word
@@ -444,14 +458,14 @@ int dasmText(Computer* comp, int adr, dasmData& drow) {
 	drow.command = QString("DB \"");
 	unsigned char fl = dasm_flag(comp, adr);
 	unsigned char bt = dasmrd(adr, comp);
-	while (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt > 31) && (bt < 128) && (clen < conf.dbg.dmsize)) {
+	while (((fl & 0xf0) == DBG_VIEW_TEXT) && dasm_printable(bt) && (clen < conf.dbg.dmsize)) {
 		drow.command.append(QChar(bt));
 		clen++;
 		bt = dasmrd(adr + clen, comp);
 		fl = dasm_flag(comp, adr + clen);
 	}
 	// a character with bit 7 set ends the text, as the ROMs keep theirs: DC "..."
-	if (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt & 0x80) && ((bt & 0x7f) > 31) && ((bt & 0x7f) < 127)) {
+	if (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt & 0x80) && dasm_printable(bt & 0x7f)) {
 		drow.command.append(QChar(bt & 0x7f));
 		drow.command.replace(0, 2, "DC");
 		clen++;
@@ -527,7 +541,7 @@ int dasmSome(Computer* comp, int adr, dasmData& drow, int fmt) {
 	drow.lrom = -1;
 	drow.bytes.clear();
 	drow.adr = adr;
-	drow.flag = dasm_flag(comp, adr, (mode == XVIEW_CPU) ? dasm_access(comp, adr) : MEM_VIEW_PC);
+	drow.flag = dasm_flag(comp, adr, dasm_access(comp, adr));
 	drow.oflag = 0;
 	drow.oadr = -1;
 	switch(drow.flag & 0xf0) {
@@ -633,7 +647,7 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 	// a local label of the block the row is in: its global part is shaded
 	if (!drow.label.isEmpty()) {
 		int pre = label_local_prefix(drow.label);
-		if (pre && (labels_namespace(drow.label.left(pre)) || (label_block(xadr) == drow.label.left(pre)))) drow.opre = pre;
+		if (pre && ((labels_ns_len(drow.label) == pre) || (label_block(xadr) == drow.label.left(pre)))) drow.opre = pre;
 	}
 	// 1:bytes
 	if (drow.bytes.isEmpty()) {
@@ -850,6 +864,24 @@ static QString asm_operand(QString op) {
 	return brk ? QString("(%0%1)").arg(idx).arg(num) : (idx + num);
 }
 
+// the full names of the first bare name in an instruction that is in several
+// ROMs and none or more than one of them paged in: why it does not assemble
+static QStringList asm_ambiguous(const QString& src) {
+	int n = src.size();
+	for (int i = 0; i < n; ) {
+		if (lab_char(src.at(i)) && !src.at(i).isDigit()) {
+			int start = i;
+			while ((i < n) && lab_char(src.at(i))) i++;
+			QStringList amb = labels_ambiguous(src.mid(start, i - start));
+			if (!amb.isEmpty()) return amb;
+		} else {
+			while ((i < n) && lab_char(src.at(i))) i++;
+			if ((i < n) && !lab_char(src.at(i))) i++;
+		}
+	}
+	return QStringList();
+}
+
 QString asm_labels(const QString& src) {
 	QString str = src.trimmed();
 	int sp = str.indexOf(' ');
@@ -966,20 +998,18 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 			if (str.startsWith("db ", Qt::CaseInsensitive) || isdc) {	// db
 				if ((str.size() > 4) && (str.at(3) == '"') && str.endsWith("\"")) {		// db "text"
 					str = str.mid(4, str.size() - 5);
-					idx = 0;
-					while ((idx < 250) && (idx < str.size())) {
-						cbyte = str.at(idx).cell();
-						if ((cbyte < 32) || (cbyte > 127)) break;
-						buf[idx] = cbyte;
+					len = 0;		// the characters it can write
+					while ((len < 250) && (len < str.size()) && (str.at(len).unicode() > 31) && (str.at(len).unicode() < 128))
+						len++;
+					if (isdc && (len < str.size())) len = 0;	// dc: all of it or nothing, its end would be lost
+					for (idx = 0; idx < len; idx++) {
+						buf[idx] = str.at(idx).unicode();
 						// each byte's own flag cell: the next one may be on
 						// another page, or (DIV, EXT) have none at all
 						ptr = getBrkPtr(comp, (adr + idx) & 0xffff);
 						*ptr &= 0x0f;
 						*ptr |= DBG_VIEW_TEXT;
-						idx++;
 					}
-					len = idx;
-					if (isdc && (idx < str.size())) len = 0;	// not all of it: its end would be lost
 					if (isdc && (len > 0)) buf[len - 1] |= 0x80;
 				} else if (isdc) {
 					len = 0;
@@ -1030,6 +1060,8 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 						*ptr &= 0x0f;
 						*ptr |= DBG_VIEW_EXEC;
 					}
+				} else if (!asm_ambiguous(str).isEmpty()) {	// a name of several ROMs: say which there are
+					shitHappens(QString("Which one: %0").arg(asm_ambiguous(str).join(", ")).toLocal8Bit().constData());
 				}
 			}
 			idx = 0;
@@ -1118,7 +1150,7 @@ void xDasmSyntax::paint(QPainter* pnt, const QStyleOptionViewItem& option, const
 	initStyleOption(&opt, idx);
 	QString text = opt.text;
 	// a db "string" (dc "string") is text, not operands
-	if (!conf.dbg.synhl || text.isEmpty() || text.startsWith("DB \"") || text.startsWith("DC \"")) {
+	if (!conf.dbg.synhl || text.isEmpty() || dasm_is_text(text)) {
 		QStyledItemDelegate::paint(pnt, option, idx);
 		return;
 	}
@@ -1199,7 +1231,7 @@ bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyl
 	QString text = opt.text;
 	QStyle* stl = opt.widget ? opt.widget->style() : QApplication::style();
 	QRect rect = stl->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
-	bool syn = conf.dbg.synhl && !text.startsWith("DB \"") && !text.startsWith("DC \"");
+	bool syn = conf.dbg.synhl && !dasm_is_text(text);
 	QString lab = syn ? idx.data(X_LabelRole).toString() : QString();
 	int lpos = lab.isEmpty() ? -1 : text.indexOf(lab);
 	QFont bfnt = opt.font;

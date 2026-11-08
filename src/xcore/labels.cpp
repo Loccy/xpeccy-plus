@@ -42,14 +42,9 @@ void labels_touch() {
 	labGen++;
 }
 
-// ROM labels name the routines of known ROMs. A list is for the 16K banks whose
-// MD5 its "@rom" lines give; a patched bank leaves out the names whose code
-// changed. They are found by the bytes, so a ROM file of the user's with the
-// same bytes has them too. A list's names are in its namespace ("@ns BASIC48"):
-// BASIC48.LD_BYTES; the short name stands for it where nothing else has it.
-// A list may mark ranges as data ("3D00 3FFF db"), shown where the user has
-// marked nothing. An "@ram 5" list names RAM cells of that bank, the system
-// variables, when a ROM of its namespace is in the machine.
+// Built-in labels: the lists in config/labels (format in its README.md) name the
+// routines and data of known ROMs, found by each 16K bank's MD5, and the system
+// variables of the systems in the machine - each name in its system's namespace.
 
 struct romLabData {
 	int start;
@@ -58,12 +53,24 @@ struct romLabData {
 	QString key;		// "@START": how an @rom line drops it
 };
 
+struct romLab {
+	int ofs;		// in the bank; the CPU address for @ram
+	QString full;		// BASIC48.LD_BYTES
+	QString bare;		// LD_BYTES
+};
+
 struct romLabList {
 	QString ns;
 	int ram = -1;					// @ram: the bank its names are in
-	QList<QPair<int, QString> > labs;		// offset in the bank (CPU address for @ram), full name
+	QList<romLab> labs;
 	QList<romLabData> data;
 	QHash<QByteArray, QSet<QString> > banks;	// MD5 (hex) of a bank -> names and @data it has not
+};
+
+struct sysVar {
+	QString name;		// full
+	int adr;		// the CPU address it is at
+	int size;		// up to the next variable
 };
 
 static QList<romLabList> romLists;
@@ -72,8 +79,8 @@ static QHash<int, QString> romByAbs;		// ROM cell -> full name, for the machine 
 static QMap<QString, QList<int> > romByName;	// full name -> its cells, lowest first
 static QHash<QString, QStringList> romShort;	// short name -> the full names it may stand for
 static QByteArray romView;			// ROM cell -> the data mark a list gives it
-static QHash<int, QString> sysByAbs;		// RAM cell -> system variable's full name
-static QMap<QString, xAdr> sysByName;		// ...and back
+static QHash<int, sysVar> sysByAbs;		// RAM cell -> system variable
+static QMap<QString, xAdr> sysByName;		// full name -> its cell
 static QHash<QString, QStringList> sysShort;
 static QList<QByteArray> romBanks;		// the MD5s they were found by
 static int romCustomSeen = 0;			// the machine's romCustom at that time
@@ -94,12 +101,10 @@ static void rom_lists_read() {
 	if (done) return;
 	done = true;
 	QStringList paths;
-	foreach(QString dname, QStringList() << (xconf_install_dir() + "/labels")) {
-		QDir dir(dname);
-		if (!dir.exists()) xlog(XLG_FILE, XLL_WARN, "ROM labels: no %s", dname.toLocal8Bit().constData());
-		foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name))
-			paths.append(dir.filePath(fn));
-	}
+	QDir dir(xconf_install_dir() + "/labels");
+	if (!dir.exists()) xlog(XLG_FILE, XLL_WARN, "ROM labels: no %s", dir.path().toLocal8Bit().constData());
+	foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name))
+		paths.append(dir.filePath(fn));
 	foreach(QString path, paths) {
 		QFile file(path);
 		if (!file.open(QFile::ReadOnly)) continue;
@@ -121,8 +126,8 @@ static void rom_lists_read() {
 			} else if (arr.size() == 2) {
 				bool ok;
 				int ofs = arr.at(0).toInt(&ok, 16);
-				QString nm = lst.ns.isEmpty() ? arr.at(1) : (lst.ns + "." + arr.at(1));
-				if (ok && (ofs >= 0) && (ofs < ((lst.ram < 0) ? MEM_16K : MEM_64K))) lst.labs.append(qMakePair(ofs, nm));
+				romLab lab = {ofs, lst.ns.isEmpty() ? arr.at(1) : (lst.ns + "." + arr.at(1)), arr.at(1)};
+				if (ok && (ofs >= 0) && (ofs < ((lst.ram < 0) ? MEM_16K : MEM_64K))) lst.labs.append(lab);
 			} else if (arr.size() == 3) {
 				bool ok1, ok2;
 				romLabData dat;
@@ -139,16 +144,20 @@ static void rom_lists_read() {
 	}
 }
 
-// BASIC48.LD_BYTES -> LD_BYTES; a name with no namespace is itself
-static QString short_name(const QString& full) {
-	int dot = full.indexOf('.');
-	return ((dot > 0) && romSpaces.contains(full.left(dot))) ? full.mid(dot + 1) : full;
+// the length of a name's namespace, BASIC48 of BASIC48.LD_BYTES; 0 if it has none
+int labels_ns_len(const QString& nm) {
+	int dot = nm.indexOf('.');
+	return ((dot > 0) && romSpaces.contains(nm.left(dot))) ? dot : 0;
 }
 
-static void short_add(QHash<QString, QStringList>& map, const QString& full) {
-	QString sh = short_name(full);
-	if (sh == full) return;
-	QStringList& lst = map[sh];
+static QString short_name(const QString& full) {
+	int len = labels_ns_len(full);
+	return len ? full.mid(len + 1) : full;
+}
+
+static void short_add(QHash<QString, QStringList>& map, const QString& bare, const QString& full) {
+	if (bare == full) return;
+	QStringList& lst = map[bare];
 	if (!lst.contains(full)) lst.append(full);
 }
 
@@ -181,14 +190,13 @@ void labels_rom_scan(Computer* comp) {
 			QHash<QByteArray, QSet<QString> >::const_iterator it = lst.banks.constFind(banks.at(b));
 			if (it == lst.banks.constEnd()) continue;
 			fitted.insert(lst.ns);
-			for (int i = 0; i < lst.labs.size(); i++) {
-				const QString& nm = lst.labs.at(i).second;
-				if (it->contains(short_name(nm))) continue;
-				int abs = b * MEM_16K + lst.labs.at(i).first;
-				romByAbs[abs] = nm;
-				QList<int>& cells = romByName[nm];
+			foreach(const romLab& lab, lst.labs) {
+				if (it->contains(lab.bare)) continue;
+				int abs = b * MEM_16K + lab.ofs;
+				romByAbs[abs] = lab.full;
+				QList<int>& cells = romByName[lab.full];
 				if (!cells.contains(abs)) cells.append(abs);	// two lists of a bank may share names
-				short_add(romShort, nm);
+				short_add(romShort, lab.bare, lab.full);
 			}
 			foreach(const romLabData& dat, lst.data) {
 				if (it->contains(dat.key)) continue;
@@ -202,15 +210,17 @@ void labels_rom_scan(Computer* comp) {
 	foreach(const romLabList& lst, romLists) {
 		if ((lst.ram < 0) || next || !fitted.contains(lst.ns)) continue;
 		for (int i = 0; i < lst.labs.size(); i++) {
+			const romLab& lab = lst.labs.at(i);
 			xAdr xadr;
 			xadr.type = MEM_RAM;
 			xadr.bank = lst.ram;
-			xadr.adr = lst.labs.at(i).first;
+			xadr.adr = lab.ofs;
 			xadr.abs = (lst.ram << 14) | (xadr.adr & 0x3fff);
-			const QString& nm = lst.labs.at(i).second;
-			sysByAbs[xadr.abs] = nm;
-			sysByName[nm] = xadr;
-			short_add(sysShort, nm);
+			// as far as the next one (the lists go up); the last, a word
+			int size = (i + 1 < lst.labs.size()) ? lst.labs.at(i + 1).ofs - lab.ofs : 2;
+			sysByAbs[xadr.abs] = {lab.full, lab.ofs, qBound(1, size, 64)};
+			sysByName[lab.full] = xadr;
+			short_add(sysShort, lab.bare, lab.full);
 		}
 	}
 	if (!romByAbs.isEmpty())
@@ -223,9 +233,28 @@ void labels_rom_check(Computer* comp) {
 	if (comp && (comp->romCustom != romCustomSeen)) labels_rom_scan(comp);
 }
 
+static int rom_cpu_adr(int abs);
+
+static bool user_has(const QString& nm) {
+	return conf.curlabset && conf.curlabset->list.contains(nm);
+}
+
+// the first of a ROM name's cells the CPU sees now, -1 if none; adr: where
+static int rom_paged_cell(const QList<int>& cells, int* adr = nullptr) {
+	foreach(int abs, cells) {
+		int at = rom_cpu_adr(abs);
+		if (at >= 0) {
+			if (adr) *adr = at;
+			return abs;
+		}
+	}
+	return -1;
+}
+
 // The full name a built-in name stands for: itself, or the one full name a short
-// one has among the ROM labels and system variables in effect. Empty when none;
-// amb gets the full names when there are more
+// one has among the ROM labels and system variables in effect - of several, the
+// one whose ROM is paged in now (a system variable always is). Empty when none
+// or still more than one; amb then gets the names it could be
 static QString builtin_full(const QString& nm, QStringList* amb = nullptr) {
 	if (conf.dbg.romlabels && romByName.contains(nm)) return nm;
 	if (conf.dbg.sysvars && sysByName.contains(nm)) return nm;
@@ -233,16 +262,27 @@ static QString builtin_full(const QString& nm, QStringList* amb = nullptr) {
 	if (conf.dbg.romlabels) cands += romShort.value(nm);
 	if (conf.dbg.sysvars) cands += sysShort.value(nm);
 	if (cands.size() == 1) return cands.first();
+	if (cands.size() > 1) {
+		QStringList now;
+		foreach(const QString& full, cands)
+			if (!romByName.contains(full) || (rom_paged_cell(romByName[full]) >= 0)) now.append(full);
+		if (now.size() == 1) return now.first();
+	}
 	if (amb) *amb = cands;
 	return QString();
 }
 
-static bool user_has(const QString& nm) {
-	return conf.curlabset && conf.curlabset->list.contains(nm);
+// a short name more than one system has: what it stands for follows the paging
+bool labels_shared(const QString& nm) {
+	if (user_has(nm)) return false;
+	int n = 0;
+	if (conf.dbg.romlabels) n += romShort.value(nm).size();
+	if (conf.dbg.sysvars) n += sysShort.value(nm).size();
+	return n > 1;
 }
 
 // A built-in name as the listing shows it: short, unless the short one would mean
-// something else when typed (a label of the user's, a name of two systems)
+// something else when typed now (a label of the user's, another system's name)
 static QString builtin_shown(const QString& full) {
 	if (labFull) return full;
 	QString sh = short_name(full);
@@ -262,8 +302,12 @@ void labels_full(bool on) {
 	labFull = on;
 }
 
-bool labels_namespace(const QString& ns) {
-	return romSpaces.contains(ns);
+// a system variable's size at that cell, 0 if none is there: how far "VAR + n" reaches
+int labels_sys_size(xAdr xadr) {
+	if ((xadr.type != MEM_RAM) || !conf.dbg.sysvars) return 0;
+	QHash<int, sysVar>::const_iterator it = sysByAbs.constFind(xadr.abs);
+	if ((it == sysByAbs.constEnd()) || ((xadr.adr >= 0) && ((xadr.adr & 0xffff) != it->adr))) return 0;
+	return it->size;
 }
 
 // every cell of a ROM label's name, one a bank it is in
@@ -330,15 +374,8 @@ xAdr labels_rom_cell(const QString& name) {
 	if (!conf.dbg.romlabels || !romByName.contains(nm)) return sysByName.value(nm, xadr);
 	const QList<int>& cells = romByName[nm];
 	xadr.type = MEM_ROM;
-	xadr.abs = cells.first();
-	foreach(int abs, cells) {
-		int adr = rom_cpu_adr(abs);
-		if (adr >= 0) {
-			xadr.abs = abs;
-			xadr.adr = adr;
-			break;
-		}
-	}
+	xadr.abs = rom_paged_cell(cells, &xadr.adr);
+	if (xadr.abs < 0) xadr.abs = cells.first();
 	xadr.bank = xadr.abs >> 14;
 	return xadr;
 }
@@ -478,9 +515,8 @@ QString find_label(xAdr xadr, bool* rom, int how) {
 		lab = romByAbs.value(rom_abs(xadr.abs));
 		builtin = !lab.isEmpty();
 	} else if (lab.isEmpty() && (xadr.type == MEM_RAM) && (how & LAB_SYSVAR) && conf.dbg.sysvars) {
-		lab = sysByAbs.value(xadr.abs);
 		// only where the system has it: bank 5 seen at C000 too is not its variables
-		if (!lab.isEmpty() && (xadr.adr >= 0) && ((xadr.adr & 0xffff) != sysByName.value(lab).adr)) lab.clear();
+		if (labels_sys_size(xadr)) lab = sysByAbs.value(xadr.abs).name;
 		builtin = !lab.isEmpty();
 	}
 	if (builtin && !(how & LAB_FULL)) lab = builtin_shown(lab);
@@ -517,15 +553,12 @@ xAdr label_cpu(xAdr xadr) {
 	if (conf.zx && (xadr.type == MEM_ROM) && (xadr.adr < 0) && conf.dbg.romlabels) {
 		QHash<int, QString>::const_iterator ra = romByAbs.constFind(xadr.abs);
 		if ((ra != romByAbs.constEnd()) && !(conf.labmap.contains(MEM_ROM) && conf.labmap[MEM_ROM].contains(xadr.abs))) {
-			for (int abs : romByName.constFind(ra.value()).value()) {
-				if (abs == xadr.abs) continue;
-				int adr = rom_cpu_adr(abs);
-				if (adr >= 0) {
-					xadr.abs = abs;
-					xadr.adr = adr;
-					xadr.bank = abs >> 14;
-					break;
-				}
+			int adr = -1;
+			int abs = rom_paged_cell(romByName.value(ra.value()), &adr);
+			if (abs >= 0) {
+				xadr.abs = abs;
+				xadr.adr = adr;
+				xadr.bank = abs >> 14;
 			}
 		}
 	}
@@ -539,8 +572,8 @@ xAdr find_label(QString nm) {
 // A local label, SjASMPlus's "global.local": the length of the part before the
 // last dot when a label of that name is loaded, else 0
 int label_local_prefix(const QString& nm) {
-	int dot = nm.indexOf('.');
-	if ((dot > 0) && romSpaces.contains(nm.left(dot))) return dot;	// a namespace, not a label
+	int ns = labels_ns_len(nm);		// a namespace, not a label of the user's
+	if (ns) return ns;
 	int pos = nm.lastIndexOf('.');
 	if ((pos < 1) || (pos == nm.size() - 1) || !conf.curlabset) return 0;
 	return conf.curlabset->list.contains(nm.left(pos)) ? pos : 0;

@@ -42,7 +42,7 @@ typedef struct {
 	QString label;			// label put into the command, if any
 	int lpre = 0;			// shaded part of the row's own label (label rows)
 	int opre = 0;			// ...and of the label in the command: in the same block only
-	int lrom = -1;			// the label in the command is a ROM label: its address
+	int lrom = -1;			// the label in the command is a built-in one (ROM, system variable): its address
 	QString info;			// memory argument if any
 	QString icon;			// icon path if any
 } dasmData;

@@ -2399,7 +2399,7 @@ void DebugWin::saveDasm() {
 		int org = adr;
 		int work = 1;
 		QHash<QString, int> defined;		// a name the block gives a row: where
-		QMap<QString, int> romUsed;		// ROM labels the code names: an EQU each, or it does not assemble
+		QMap<QString, int> romUsed;		// built-in names the code uses (ROM labels, system variables): an EQU each, or it does not assemble
 		QList<QPair<int, QString> > romLines;	// the lines that name one
 		labels_full(true);			// BASIC48.LD_BYTES: no short name to mistake
 		while ((adr <= end) && work) {

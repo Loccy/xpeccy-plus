@@ -1137,6 +1137,8 @@ int main(int ac,char** av) {
 			tmpi = (xadr.type >= 0) ? xadr.adr : str_num(arg.second, &ok);
 			if (ok) {
 				brkSet(BRK_CPUADR, MEM_BRK_FETCH, tmpi & 0xffff, -1);
+			} else if (!labels_ambiguous(arg.second).isEmpty()) {
+				cli_warn(QString("--bp: %0 is in several ROMs, which one: %1").arg(arg.second, labels_ambiguous(arg.second).join(", ")));
 			} else {
 				cli_warn(QString("--bp: no such label or address: %0").arg(arg.second));
 			}

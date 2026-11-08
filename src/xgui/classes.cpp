@@ -1673,7 +1673,7 @@ void label_complete(QLineEdit* edt) {
 			cmp->popup()->hide();
 			return;
 		}
-		// the user's set and the ROM's names, again when a label was added or another set picked
+		// the user's set and the built-in names, again when a label was added or another set picked
 		if (cmp->property("labGen").toUInt() != labels_gen()) {
 			QStringList names = conf.curlabset ? conf.curlabset->list.keys() : QStringList();
 			names += labels_builtin_names();

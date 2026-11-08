@@ -282,9 +282,11 @@ QStringList labels_rom_names();		// every ROM label's full name: the list
 QStringList labels_builtin_names();	// ...with the system variables and the short names: completion
 xAdr labels_rom_cell(const QString&);	// a built-in name's cell, a ROM one paged in if any
 QStringList labels_ambiguous(const QString&);	// the full names a bare name could mean, if more than one
+bool labels_shared(const QString&);	// a bare name of several systems: it follows the paging
 unsigned char labels_rom_view(int abs);	// the data mark a ROM list gives a ROM cell
+int labels_sys_size(xAdr);		// a system variable's size at that cell, 0 if none
 void labels_full(bool);			// built-in names with their namespace while on
-bool labels_namespace(const QString&);	// a namespace of the ROM lists: BASIC48
+int labels_ns_len(const QString&);	// the namespace's length in BASIC48.LD_BYTES, 0 if none
 // "global.local": how much of it is the global, 0 if not local; the global a cell is under
 int label_local_prefix(const QString&);
 QString label_block(xAdr);
