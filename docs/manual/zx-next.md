@@ -204,7 +204,8 @@ The F-keys work as on the Next's PS/2 keyboard:
 
 As on the Next, a digit pressed while F9 is held down is a function key instead, 1 to 0
 for F1 to F10, and F9 then sends no NMI: F9 with 1 is a hard reset, the firmware starts
-again and the memory is kept.
+again and the memory is kept. **Machine > NMI** is a press and release at once, so it
+cannot be held with a digit: hold F9 for that.
 
 An F-key that is a hotkey of Xpeccy+ stays a hotkey: F3, F4, F9 and F10 are hotkeys in
 both presets. To give them to the Next, turn on
@@ -275,8 +276,7 @@ panel is there too; **CMOS**, **FDC** and **FDD** are not.
 
 - the second SD card slot, the Raspberry Pi accelerator and the FPGA flash;
 - devices on the expansion bus;
-- holding **Machine > NMI** with a digit (hold F9 instead), and the keys for the Next's
-  video output (scandoubler, scanlines);
+- the keys for the Next's video output (scandoubler, scanlines);
 - video timings other than VGA 0 and VGA 1, and the settings of `config.ini` other than
   the ROMs and the timing;
 - **Look ahead** of the adaptive anti-flicker modes (see [View menu](view.md)).
