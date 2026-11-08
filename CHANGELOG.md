@@ -83,6 +83,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **A reset the ZX Spectrum Next makes itself** (a program, or the firmware after a hard
+  reset) is now the same as its reset button: the CPU is back at 3.5 MHz, where it kept
+  the old speed's timing, and the UART, the sound and the clock chip's lines reset too.
 - **A snapshot taken in the 128K menu or BASIC editor opens on a machine with that ROM**: a
   128K one stayed on a +2 or +2A, where the RUN waiting in it was lost or the machine reset.
   A `.sna`, which names no model, goes to a +2, +2A or +3 when the snapshot tells it, and
