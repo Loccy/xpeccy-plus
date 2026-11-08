@@ -226,14 +226,15 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	pick.unsure = (snap & SNAP_UNSURE) != 0;
 	if (pick.unsure) pref = FM_ASK;
 	bool exact = (row->need == FMN_EXACT);
-	auto fits = [&](const std::string& id) {
-		return fm_runs(id, row->need, snap) && (!exact || fm_is_model(id, ftype, snap, target));
+	// model: the machine has to be the model the file names, too
+	auto fits = [&](const std::string& id, bool model) {
+		return fm_runs(id, row->need, snap) && (!model || fm_is_model(id, ftype, snap, target));
 	};
 	// the machines but the running one that can take the file, in this order
 	std::vector<std::string> can;
-	auto add = [&](const std::string& id) {
+	auto add = [&](const std::string& id, bool model) {
 		if (!id.empty() && (id != conf.macId) && (std::find(can.begin(), can.end(), id) == can.end())
-				&& fits(id))
+				&& fits(id, model))
 			can.push_back(id);
 	};
 	// Ask, whenever there is a choice: not when the running machine is the model
@@ -243,11 +244,11 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	if (pref == FM_ASK) {
 		bool named = fm_names_model(row) && !target.empty();
 		if (named && (target == conf.macId)) return pick;
-		pick.runs = fits(conf.macId);
-		if (!named && fits(conf.macBase)) add(conf.macBase);
-		add(target);
+		pick.runs = fits(conf.macId, exact);
+		if (!named && fits(conf.macBase, exact)) add(conf.macBase, exact);
+		add(target, exact);
 		foreach(const xMachine& mac, xm_list())
-			add(mac.id);
+			add(mac.id, exact);
 		if (can.size() + (pick.runs ? 1 : 0) < 2) {
 			if (!pick.runs && !can.empty()) pick.target = can.front();
 			return pick;
@@ -257,25 +258,31 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 		xlog(XLG_FILE, XLL_INFO, "%s on %s: asking", row->key, conf.macId.c_str());
 		return pick;
 	}
-	// A .z80 names its model too, so Auto takes that one, as for an SZX. Ask and a
-	// machine set for the row take any that runs it.
-	if (ftype == FL_Z80) exact = true;
 	// The user's own machine when it can take the file: a machine a file
-	// switched to was for that file. Then the one running, if it can.
-	if (fits(conf.macBase)) {
-		if (conf.macBase != conf.macId) {
-			pick.target = conf.macBase;
-			xlog(XLG_FILE, XLL_INFO, "%s: back from %s to %s", row->key, conf.macId.c_str(), pick.target.c_str());
+	// switched to was for that file. Then the one running, if it can, then the
+	// one the file names, then every other one that can take it. false: none can.
+	auto choose = [&](bool model) {
+		if (fits(conf.macBase, model)) {
+			if (conf.macBase != conf.macId) {
+				pick.target = conf.macBase;
+				xlog(XLG_FILE, XLL_INFO, "%s: back from %s to %s", row->key, conf.macId.c_str(), pick.target.c_str());
+			}
+			return true;
 		}
-		return pick;
-	}
-	if (fits(conf.macId)) return pick;
-	// the one the file names, then every other one that can take it
-	add(target);
-	foreach(const xMachine& mac, xm_list())
-		add(mac.id);
-	if (can.empty()) return pick;
-	pick.target = can.front();
-	xlog(XLG_FILE, XLL_INFO, "%s does not run on %s: %s", row->key, conf.macId.c_str(), pick.target.c_str());
+		if (fits(conf.macId, model)) return true;
+		can.clear();
+		add(target, model);
+		foreach(const xMachine& mac, xm_list())
+			add(mac.id, model);
+		if (can.empty()) return false;
+		pick.target = can.front();
+		xlog(XLG_FILE, XLL_INFO, "%s does not run on %s: %s", row->key, conf.macId.c_str(), pick.target.c_str());
+		return true;
+	};
+	// A .z80 names its model too, so Auto takes that one, as for an SZX - or any
+	// machine that runs it, when none is that model. Ask and a machine set for the
+	// row take any that runs it.
+	bool model = exact || (ftype == FL_Z80);
+	if (!choose(model) && model && !exact) choose(false);
 	return pick;
 }
