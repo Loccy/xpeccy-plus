@@ -188,6 +188,7 @@ struct vfsDrop {
 	bool count = false;		// stopped at VFS_MAXNODES
 	unsigned long long bytes = 0;	// what the files hold
 	long long start = 0;		// when the read began
+	bool slow = false;		// it took long last time
 	bool told = false;		// ...and it has been said to take long
 	unsigned looked = 0;		// entries seen, taken or not
 };
@@ -199,10 +200,7 @@ static QMutex vfsSlowLock;
 
 static void vfs_slow_check(const QString& root, vfsDrop& drop) {
 	if (!vfsSlow || drop.told) return;
-	if (paceClockNs() - drop.start <= VFS_SLOW_NS) {
-		QMutexLocker lock(&vfsSlowLock);
-		if (!vfsSlowRoots.contains(root)) return;
-	}
+	if (!drop.slow && (paceClockNs() - drop.start <= VFS_SLOW_NS)) return;
 	drop.told = true;
 	vfsSlow(root, true);
 }
@@ -342,6 +340,10 @@ static vFat* vfat_scan_in(const QString& path, bool writable, const QString& sub
 	unsigned int mtime = inf.lastModified().toMSecsSinceEpoch() / 1000;
 	vfsDrop drop;
 	drop.start = paceClockNs();
+	{
+		QMutexLocker lock(&vfsSlowLock);
+		drop.slow = vfsSlowRoots.contains(path);
+	}
 	vfat_add(vf, -1, "", 0, mtime, 1);		// root
 	vfat_scan_tree(vf, path, sub, subName, writable, drop);
 	{

@@ -19,6 +19,7 @@
 #include <QFileInfo>
 #include <QStyleOptionSlider>
 #include <QThread>
+#include <QDir>
 #include <functional>
 
 #include "emulwin.h"
@@ -137,7 +138,9 @@ static QStatusBar* slowBar = NULL;
 static void folder_slow(const QString& path, bool on) {
 	if (!slowBar || (QThread::currentThread() != qApp->thread())) return;
 	xlog(XLG_DISK, XLL_DEBUG, "folder %s: %s", path.toLocal8Bit().constData(), on ? "a long read, said in the status bar" : "read");
-	if (on) slowBar->showMessage(QString(" Reading the folder %0... ").arg(QFileInfo(path).fileName()));
+	QString name = QFileInfo(QDir::cleanPath(path)).fileName();
+	if (name.isEmpty()) name = QDir::toNativeSeparators(path);		// a drive's root
+	if (on) slowBar->showMessage(QString(" Reading the folder %0... ").arg(name));
 	else slowBar->clearMessage();
 	if (slowBar->isVisible()) slowBar->repaint();
 }

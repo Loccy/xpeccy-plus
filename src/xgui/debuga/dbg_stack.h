@@ -26,6 +26,6 @@ class xStackView : public QWidget {
 		void paintEvent(QPaintEvent*);
 	private:
 		QList<xStackRow> rows;
-		bool dec = false;			// the numbers the hint was taken for
+		int numfmt = -1;			// the number format the layout last had the hint for
 		int rowPitch() const;
 };

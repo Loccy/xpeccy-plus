@@ -1285,7 +1285,8 @@ void xm_next_card(bool force) {
 	if (!force && comp->sdc->image && sdc_has_file(comp->sdc, "machines/next/enNextZX.rom")) return;
 	QString own = xm_next_own();
 	if (own.isEmpty()) {
-		if (force) sdc_remount(comp->sdc);	// the user's card stays in: read it after all
+		// the user's card, set back above unread, stays in: read it after all
+		if (force && comp->sdc->image && !comp->sdc->vfat && !comp->sdc->file) sdc_remount(comp->sdc);
 		nextWants = true;
 		return;
 	}

@@ -215,6 +215,7 @@ static void fat_print_dir(fatVol* v, unsigned int clust, int depth, unsigned lon
 				static const int at[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
 				int seq = (e[0] & 0x1f) - 1;
 				if (e[0] & 0x40) {
+					memset(lfn, 0, sizeof(lfn));	// a part that never comes adds nothing of another name
 					lfnlen = 0;
 					lfnsum = e[13];
 					for (int j = 0; j < 13; j++) {
