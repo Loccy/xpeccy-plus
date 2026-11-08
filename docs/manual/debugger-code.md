@@ -360,10 +360,11 @@ that has it), `BASIC128` (the 128K editor), `P3ROM0` and `P3ROM1` (the +2A/+3 ed
 label of yours has that name. A short name that several systems in the machine have is the
 one whose ROM is paged in now: on a +2A/+3, `LD_BYTES` is `P3ROM1.LD_BYTES` while ROM 1 is
 paged in and `BASIC48.LD_BYTES` while ROM 3 is, and a condition with it follows the paging
-as the program runs. With none of them paged in, or two, it is an error that names them:
-`START` with ROM 2 paged in names `P3ROM0.START` and `BASIC48.START`. The listing shows the
-short name, and the full one, the system's part paler, where the short one would mean
-something else now; a tip over it shows the full name.
+as the program runs, false while none of them is paged in. Typed into an instruction with
+none of them paged in, or two, it is an error that names them: `START` with ROM 2 paged in
+names `P3ROM0.START` and `BASIC48.START`. The listing shows the short name, and the full
+one, the system's part paler, where the short one would mean something else now; a tip over
+it shows the full name.
 
 The ROM lists also say which parts of the ROM are data, and those are shown as data where
 you have marked nothing yourself: the 48K's character set at 3D00 as `DB` rows, the keyword
