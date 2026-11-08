@@ -92,6 +92,10 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **Opening a game from a big folder on the ZX Spectrum Next no longer stalls**: a `.sna` or
+  `.z80`, or a program in a folder of over 2000 files, goes onto the SD card alone instead of
+  with its whole folder, and its SZX saves open and close fast. *(thanks to Volutar for
+  finding it)*
 - **Opening an image in a folder of thousands of files no longer pauses**: the `.pok` beside
   it is asked for by name, not looked for by listing the folder. *(thanks to Volutar for
   finding it)*
