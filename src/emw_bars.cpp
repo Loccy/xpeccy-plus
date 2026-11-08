@@ -387,7 +387,7 @@ void MainWin::initBars() {
 	add("key.rzx.rec", "Capture", rzxRecAct, TB_PLAIN);
 	add("menu.machine", "Machine", profileMenu->menuAction(), TB_LIST);
 	add("menu.reset", "Machine", resMenu->menuAction(), TB_SPLIT);
-	add("key.nmi", "Machine", cut("NMI", XCUT_NMI, "target"), TB_PLAIN);
+	add("key.nmi", "Machine", cut("NMI", XCUT_NMI, "grp-nmi"), TB_PLAIN);
 	add("menu.turbo", "Machine", turboMenu->menuAction(), TB_LIST);
 	pauseAct = cut("Pause", XCUT_PAUSE, "time-pause");
 	pauseAct->setCheckable(true);
