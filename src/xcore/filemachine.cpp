@@ -99,9 +99,10 @@ static bool fm_names_model(const xFileMac* row) {
 	return row->probe && (row->ftype != FL_SNA);
 }
 
-// An SZX stands the machine at a point in its frame, so it is loaded on the
-// model it names: a core shared by several models is not enough, unless the
-// machine is one of the user's own rather than a model of the table.
+// An SZX, and a .z80 on Auto, stand the machine at a point in its frame, so
+// they are loaded on the model they name: a core shared by several models is
+// not enough, unless the machine is one of the user's own rather than a model
+// of the table.
 static bool fm_exact_on(const std::string& id, int snap, const std::string& target) {
 	if (target.empty() || (target == id)) return true;
 	if (SNAP_HW_OF(snap) >= SNAP_HW_CORE) return !xm_find(target);
@@ -126,8 +127,8 @@ bool fm_runs(const std::string& id, int need, int snap) {
 // Pentagon alike, and the 1024 runs the 128's frame, so it is one of them.
 static bool fm_is_model(const std::string& id, int ftype, int snap, const std::string& target) {
 	if (fm_runs(id, FMN_EXACT, snap) && fm_exact_on(id, snap, target)) return true;
-	if ((ftype != FL_Z80) || (SNAP_HW_OF(snap) != SNAP_HW_PENTAGON)) return false;
-	return fm_is_model(id, ftype, SNAP_HW_PENT1024, fm_snap_target(SNAP_HW_PENT1024));
+	return (ftype == FL_Z80) && (SNAP_HW_OF(snap) == SNAP_HW_PENTAGON)
+		&& fm_runs(id, FMN_EXACT, SNAP_HW_PENT1024) && fm_exact_on(id, SNAP_HW_PENT1024, "pent1024");
 }
 
 void fm_clear() {
@@ -280,9 +281,9 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 		return true;
 	};
 	// A .z80 names its model too, so Auto takes that one, as for an SZX - or any
-	// machine that runs it, when none is that model. Ask and a machine set for the
-	// row take any that runs it.
-	bool model = exact || (ftype == FL_Z80);
-	if (!choose(model) && model && !exact) choose(false);
+	// machine that runs it, when none is that model. Ask, and a machine set for
+	// the row that cannot run the file, take any that runs it.
+	bool z80auto = (ftype == FL_Z80) && (pref == FM_AUTO);
+	if (!choose(exact || z80auto) && z80auto) choose(false);
 	return pick;
 }

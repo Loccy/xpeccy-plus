@@ -66,9 +66,9 @@ before that point is upstream's history and is not repeated here.
 - **Ask in Options > File types asks every time there is a choice**, with the model named in
   the file at the top. It does not ask on that very model, or when only one machine can run
   the file. *(reported by ZXLion)*
-
 - **Auto opens a `.z80` snapshot on the model it names**, as it does an SZX: a 128K demo timed
-  to the screen no longer stays on a Pentagon, nor a 48K game on a 128K. *(test by ZXLion)*
+  to the screen no longer stays on a Pentagon, nor a 48K game on a 128K or the Next.
+  *(thanks to ZXLion for the test)*
 
 ### Fixed
 
