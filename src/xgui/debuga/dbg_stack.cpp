@@ -1,12 +1,13 @@
 #include "dbg_stack.h"
 #include "../xgui.h"
+#include "xcore/xcore.h"
 
 #include <QPainter>
 #include <QStyle>
 #include <QStyleOption>
 
 #define	STACK_PAD	3	// margin around the block of lines
-#define	STACK_GAP	6	// between the offset column and the word
+#define	STACK_GAP	3	// between the offset column and the word
 
 xStackView::xStackView(QWidget* par):QWidget(par) {
 }
@@ -22,10 +23,15 @@ int xStackView::rowsFit() const {
 	return (free - one) / rowPitch() + 1;
 }
 
-// one line; the +0 row's "#0000:" is the widest name, a character to spare
+// one line, as wide as the widest the numbers can be: an address, "#FFFF" or "65535", is the
+// widest word, and the +0 row's name is one with a colon
 QSize xStackView::minimumSizeHint() const {
 	QFontMetrics fm = fontMetrics();
-	return QSize(fm.horizontalAdvance("000000:") + STACK_GAP + fm.horizontalAdvance("00000") + 2 * STACK_PAD,
+	QString digits = dec ? "0123456789" : "0123456789ABCDEF";
+	int dig = 0;
+	foreach (QChar c, digits) dig = qMax(dig, fm.horizontalAdvance(c));
+	int word = dec ? 5 * dig : fm.horizontalAdvance('#') + 4 * dig;
+	return QSize(word + fm.horizontalAdvance(':') + STACK_GAP + word + 2 * STACK_PAD,
 		fm.height() + 2 * STACK_PAD);
 }
 
@@ -35,6 +41,11 @@ QSize xStackView::sizeHint() const {
 
 void xStackView::setRows(const QList<xStackRow>& lst) {
 	rows = lst;
+	bool now = (conf.dbg.numfmt == CPU_NUM_DEC);
+	if (now != dec) {
+		dec = now;
+		updateGeometry();
+	}
 	update();
 }
 
