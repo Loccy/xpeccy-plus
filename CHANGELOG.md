@@ -48,6 +48,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Changed
 
+- **A TOSEC image finds its game's cheat file** by the name without its `[tags]`, or cut
+  down to the game and its publisher, as TOSEC sets name their `.pok` files.
 - **The Debugger's addresses carry their hex sign, `#8000`**, and a number typed into an
   address field is decimal unless it has one (`#`, `$`, `0x` or `h`). The fields open with
   the sign, so typing over the digits stays hex. In conditions a leading 0 is no longer octal.
@@ -93,8 +95,6 @@ before that point is upstream's history and is not repeated here.
 - **Opening an image in a folder of thousands of files no longer pauses**: the `.pok` beside
   it is asked for by name, not looked for by listing the folder. *(thanks to Volutar for
   finding it)*
-- **A TOSEC image finds its game's cheat file** by the name without its `[tags]`, or cut
-  down to the game and its publisher, as TOSEC sets name their `.pok` files.
 - **A reset the ZX Spectrum Next makes itself** (a program, or the firmware after a hard
   reset) now returns the CPU to 3.5 MHz and resets the UART and the sound, as its reset
   button does.
