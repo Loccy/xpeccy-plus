@@ -29,7 +29,7 @@ Each row has four columns:
 | Column | What it shows |
 |---|---|
 | Address | where the row starts in memory |
-| Bytes | the bytes of the instruction or data, in hex |
+| Bytes | the bytes of the instruction or data, in hex; a long data row shows those that fit, then `…` |
 | Command | the instruction, or `DB`, `DW` for data |
 | (last) | on the PC row only: the value in memory, or an arrow |
 
@@ -242,6 +242,7 @@ You can also type data in the command column:
 |---|---|
 | `db #3F` | one byte, shown as data |
 | `db "SCORE"` | the text, shown as text |
+| `dc "SCORE"` | the text with bit 7 set in its last character, shown as text |
 | `dw #4000` | a word, shown as a word |
 | `dw table` | the label's address, shown as an address |
 
@@ -346,24 +347,57 @@ when there is none.
 ```
 
 Known ROMs come with labels of their own, with no file loaded: `LD_BYTES` at 0556 of the
-48K BASIC, `DOS_OPEN` in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS. The 48K BASIC
-names are also in the 48 BASIC of the 128K, +2, +3 and the clones; a routine a clone
-changed has no name there. A ROM is known by its contents, so a ROM file of yours with the
-same bytes has them too.
+48K BASIC, the routines of the 128K editor (ROM 0) and of the four +2A/+3 ROMs, `DOS_OPEN`
+in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS with the functions it calls and the
+handlers of its commands (`FN_READ_SECTORS`, `CMD_FORMAT`). The names are also in the
+copies of these ROMs in the +2 and the clones (the Pentagon, Scorpion, Profi, ATM, ZX Evo);
+a routine a clone changed has no name there. A ROM is known by its contents, so a ROM file
+of yours with the same bytes has them too.
+
+Each name belongs to the system it is part of: `BASIC48` (the 48 BASIC, in every machine
+that has it), `BASIC128` (the 128K editor), `P3ROM0` and `P3ROM1` (the +2A/+3 editor),
+`P3DOS`, `TRDOS`. Its full name is `BASIC48.LD_BYTES`; `LD_BYTES` alone does too, unless a
+label of yours has that name. A short name that several systems in the machine have is the
+one whose ROM is paged in now: on a +2A/+3, `LD_BYTES` is `P3ROM1.LD_BYTES` while ROM 1 is
+paged in and `BASIC48.LD_BYTES` while ROM 3 is, and a condition with it follows the paging
+as the program runs. While none of them is paged in, or two (an ATM Turbo 2 can page in two
+ROMs at once; give the full name there), it equals no address in a condition: `PC ==
+LD_BYTES` is false, `PC != LD_BYTES` true, and the rest of the condition counts as written.
+Typed into an instruction then, it is an error that names them: `START` with ROM 2 paged in
+names `P3ROM0.START` and `BASIC48.START`. The listing shows the short name, and the full
+one, the system's part paler, where the short one would mean something else now; a tip over
+it shows the full name.
+
+The ROM lists also say which parts of the ROM are data, and those are shown as data where
+you have marked nothing yourself: the 48K's character set at 3D00 as `DB` rows, the keyword
+and message tables as `DC "..."` (text whose last character has bit 7 set), the report code
+after an error call as `DB`, so the instructions after it line up. A mark of yours wins, and
+the ROM's marks are not saved in a memory map.
+
+```{index} system variables, CH_ADD, ERR_SP
+```
+
+**System variables** are named in instructions too: `LD HL,(CH_ADD)`, not `LD HL,(5C5D)`.
+They are the names of the manuals for the 48 BASIC (5C00-5CB5), the 128K and +2 (5B00-5BFF),
+the +2A/+3 (its own 5B00-5BFF), and names given to the TR-DOS variables (from 5CC2:
+`TRDOS.FILE_NAME`, `TRDOS.ERROR_CODE`...), each where that system's ROM is in the machine. A
+variable is never a row of its own, as memory there may be used for other things. They can
+be typed as other names: `BASIC48.ERR_SP`, or `ERR_SP`.
 
 They work as other labels do: in the listing, typed as an address, in breakpoints and
 conditions. A ROM that is not paged in still has its place, for a label of yours in it
 too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too, and so is
 `TRDOS_FUNCTION` typed as an address - the dump then shows what is paged in there now. A
-condition such as `PC == LD_BYTES`, or a breakpoint on it, holds only while that ROM is
-paged in.
+condition such as `PC == TRDOS_FUNCTION`, or a breakpoint on it, holds only while that ROM
+is paged in.
 
 Your labels come first. A label of yours of the same name is the one an address or an
 instruction gets, and one at the same address is shown instead. A ROM label's name typed in
-the address column makes a label of yours, as a new name does; `@START` goes to the ROM's
-`START`. A ROM label cannot be removed, and **Save labels** does not save it. **ROM labels**
-on the **Debugger** page of **Options** switches them off. Where they come from, and their
-licenses, is in `config/labels/README.md` beside the program.
+the address column makes a label of yours, as a new name does; `@LD_BYTES` goes to the ROM's
+`LD_BYTES` (on a +2A/+3, of the ROM paged in now). A ROM label cannot be removed, and **Save
+labels** does not save it. **ROM labels** on the **Debugger** page of **Options** switches
+the names and the data marks off, **System variables** the variables. Where they come from,
+and their licenses, is in `config/labels/README.md` beside the program.
 
 ```{index} Auto-load labels, label; loading automatically
 ```
@@ -435,7 +469,7 @@ the right-click menu:
 |---|---|
 | **Opcode** | instructions |
 | **Byte** | `DB #3E,#05,...` |
-| **ASCII** | `DB "TEXT"`; bytes that are not printable stay `DB #nn` |
+| **ASCII** | `DB "TEXT"`; bytes that are not printable stay `DB #nn`; a text that ends in a character with bit 7 set, as the ROMs keep theirs, is `DC "TEXT"` |
 | **Word** | `DW #4000,...` |
 | **Address** | `DW` with the label of the address, one word a row |
 
@@ -514,9 +548,9 @@ separator** are kept between sessions.
 **Disasm to file** in the {icon}`floppy` floppy disk menu writes the listing to a text file
 you name: the selected block, or all 64K with nothing selected. The file starts with an
 `ORG` line; labels are written as `name:`, comments as they are, instructions after a tab.
-A [ROM label](#rom-labels) the instructions use gets an `EQU` line before the `ORG`, as
-`LD_BYTES EQU 0x0556`; if a label of yours in the block has its name, the instructions get
-its address instead. An assembler can read the file back.
+A [ROM label](#rom-labels) or a system variable the instructions use is written by its full
+name and gets an `EQU` line before the `ORG`, as `BASIC48.LD_BYTES EQU 0x0556`; if a label
+of yours in the block has its name, the instructions get its address instead. An assembler can read the file back.
 
 Ctrl+C copies the same text for the block, without the first line.
 

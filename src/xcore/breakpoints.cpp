@@ -256,15 +256,18 @@ void brk_set_cond(xBrkPoint* brk, const char* cond) {
 	brk->last = 0;
 }
 
-// true = breakpoint may fire. a broken condition breaks too, so that a typo
-// doesn't silently disable the breakpoint
+// true = breakpoint may fire. a broken condition breaks too, so that a typo or
+// a label no longer loaded doesn't silently disable the breakpoint; a label
+// whose ROM is not paged in now equals no address (PC == LD_BYTES holds only
+// while that ROM is in), the rest of the condition counts as written
 
 int brk_cond_true(xBrkPoint* brk, Computer* comp) {
 	bool err = false;
+	bool out = false;
 	unsigned res;
 	if (brk->cond.empty()) return 1;
 	if (!xexpr_ok(brk->script)) return 1;
-	res = xexpr_eval(brk->script, comp, &err, brk->hits, brk->dt);
+	res = xexpr_eval(brk->script, comp, &err, brk->hits, brk->dt, 0, &out);
 	if (err) return 1;
 	return res ? 1 : 0;
 }
@@ -1071,6 +1074,49 @@ bool brk_list_adr(QString str, int* adr, xAdr* cell) {
 	return ok;
 }
 
+// The cells a label runs at where a CPU address would not do: a short name of
+// several systems, one in each of their ROMs, whatever is paged in; a label in
+// a page not paged in now, its cell (a ROM label's name, one in each bank it is
+// in). Empty for a label paged in, a number, no label
+QList<xAdr> brk_label_cells(const QString& name) {
+	QList<xAdr> res;
+	QString nm = name.trimmed();
+	xAdr cell = {-1, -1, -1, -1};
+	if (nm.isEmpty() || nm.at(0).isDigit() || nm.startsWith("#") || nm.startsWith("$")) return res;
+	cell.type = MEM_ROM;
+	if (labels_shared(nm)) {
+		for (const QString& full : labels_candidates(nm)) {
+			for (int abs : labels_rom_cells(full)) {
+				cell.abs = abs;
+				res.append(cell);
+			}
+		}
+		if (!res.isEmpty()) return res;
+	}
+	xAdr xadr = find_label(nm);
+	if ((xadr.type < 0) || (xadr.adr >= 0)) return res;
+	QList<int> cells;
+	if ((xadr.type == MEM_ROM) && labels_rom_only(nm)) cells = labels_rom_cells(nm);
+	if (cells.isEmpty()) cells.append(xadr.abs);
+	cell.type = xadr.type;
+	for (int abs : cells) {
+		cell.abs = abs;
+		res.append(cell);
+	}
+	return res;
+}
+
+// the cell breakpoint type of a memory, -1 for one that has none
+static int brk_cell_type(int memType) {
+	switch (memType) {
+		case MEM_RAM: return BRK_MEMRAM;
+		case MEM_ROM: return BRK_MEMROM;
+		case MEM_SLOT: return BRK_MEMSLT;
+		case MEM_DIV: return BRK_MEMDIV;
+	}
+	return -1;
+}
+
 static bool parseRange(QString str, xBrkPoint* p) {
 	int badr;
 	int eadr;
@@ -1206,6 +1252,7 @@ int brk_load_list(const char* fpath, int* bad, bool add) {
 		if (brk_add_unreal(line)) continue;	// unreal's bpx.ini line
 		if (!line.startsWith(";")) {
 			xBrkPoint brk{};		// every field zeroed, not left from the line before
+			QList<xAdr> cells;
 			brk.id = brk_new_id();
 			b0 = true;
 			b1 = true;
@@ -1227,14 +1274,24 @@ int brk_load_list(const char* fpath, int* bad, bool add) {
 				brk.mask = list.at(2).toInt(&b1, 16) & 0xffff;
 			} else if (list.at(0) == "CPU") {
 				brk.type = BRK_CPUADR;
-				b0 = parseRange(list.at(1), &brk);
+				// a label not paged in now, or a name of several systems: on the cells
+				// it runs at, as --bp sets it
+				if (!list.at(1).contains('-')) cells = brk_label_cells(list.at(1));
+				if (cells.isEmpty()) b0 = parseRange(list.at(1), &brk);
 				brk.adr &= 0xffff;
 				brk.eadr &= 0xffff;
 			} else if ((list.at(0) == "ROM") || (list.at(0) == "RAM") || (list.at(0) == "SLT") || (list.at(0) == "DIV")) {
 				brk.type = (list.at(0) == "ROM") ? BRK_MEMROM : (list.at(0) == "RAM") ? BRK_MEMRAM
 					: (list.at(0) == "DIV") ? BRK_MEMDIV : BRK_MEMSLT;
-				// a label carries its page, which may then be left out
-				b0 = parseCells(list.at(1), list.at(2), brk_mem_type(brk.type), &brk);
+				// a label carries its page, which may then be left out; a name of
+				// several systems is a cell in each
+				if (!list.at(2).contains('-') && labels_shared(list.at(2).trimmed())) {
+					foreach(const xAdr& cell, brk_label_cells(list.at(2)))
+						if (cell.type == brk_mem_type(brk.type)) cells.append(cell);
+					b0 = !cells.isEmpty();
+				} else {
+					b0 = parseCells(list.at(1), list.at(2), brk_mem_type(brk.type), &brk);
+				}
 			} else if (list.at(0) == "IRQ") {
 				brk.type = BRK_IRQ;
 			} else if (list.at(0) == "COND") {
@@ -1258,10 +1315,25 @@ int brk_load_list(const char* fpath, int* bad, bool add) {
 				brk.last = 0;
 				brk_set_cond(&brk, cond.toLocal8Bit().data());
 				brk_set_logx(&brk, logx.toLocal8Bit().data());
+				std::vector<xBrkPoint> made;
+				if (cells.isEmpty()) made.push_back(brk);
+				for (const xAdr& cell : cells) {
+					xBrkPoint pt = brk;
+					pt.id = brk_new_id();
+					pt.type = brk_cell_type(cell.type);
+					pt.adr = cell.abs;
+					pt.eadr = cell.abs;
+					if (pt.type >= 0) made.push_back(pt);
+				}
 				// a line the list already holds word for word (a second list
 				// with it, a line written twice) would count every hit twice
-				if (brk_twin(&brk)) continue;
-				conf.brk.list.push_back(brk);
+				bool added = false;
+				for (xBrkPoint& pt : made) {
+					if (brk_twin(&pt)) continue;
+					conf.brk.list.push_back(pt);
+					added = true;
+				}
+				if (!added) continue;
 				if (!cond.isEmpty() && !xexpr_ok(brk.script)) {
 					// kept: a broken condition fires every time
 					xlog(XLG_BRK, XLL_WARN, "%s, line %i: condition: %s", fpath, num, brk.script.err.c_str());

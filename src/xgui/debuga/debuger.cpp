@@ -688,7 +688,7 @@ DebugWin::DebugWin(QWidget* par):QMainWindow(par) {
 	xid_none = new xItemDelegate(XTYPE_NONE);
 	xid_byte = new xItemDelegate(XTYPE_BYTE);
 	xid_labl = new xDasmLabel();
-	xid_dump = new xItemDelegate(XTYPE_DUMP);
+	xid_dump = new xDasmBytes();		// the listing's bytes, cut to the column
 
 // actions data
 	ui_asm.actFetch->setData(MEM_BRK_FETCH);
@@ -2399,8 +2399,9 @@ void DebugWin::saveDasm() {
 		int org = adr;
 		int work = 1;
 		QHash<QString, int> defined;		// a name the block gives a row: where
-		QMap<QString, int> romUsed;		// ROM labels the code names: an EQU each, or it does not assemble
+		QMap<QString, int> romUsed;		// built-in names the code uses (ROM labels, system variables): an EQU each, or it does not assemble
 		QList<QPair<int, QString> > romLines;	// the lines that name one
+		labels_full(true);			// BASIC48.LD_BYTES: no short name to mistake
 		while ((adr <= end) && work) {
 			list = getDisasm(comp, adr);
 			foreach (drow, list) {
@@ -2427,6 +2428,7 @@ void DebugWin::saveDasm() {
 			if (dasm_has_separator(list))
 				body.append(QString());
 		}
+		labels_full(false);
 		// A ROM label's name the assembler would read as another place - a label of
 		// the user's has it, in the block or not, or the block defines it elsewhere -
 		// goes as its address. The block's own row of that ROM label is no clash

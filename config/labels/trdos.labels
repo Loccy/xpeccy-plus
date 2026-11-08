@@ -2,7 +2,9 @@
 ; #3D00 from BASIC, #3D03 a command in a REM, #3D13 the function in C, #3D2F a
 ; RET that jumps to the address pushed. Part of Xpeccy+, MIT license.
 ;
-; @rom <MD5 of a 16K bank> <bundled image> [-NAME: not in that bank]
+; @rom <MD5 of a 16K bank> <bundled image> [-NAME / -@ADDR: not in that bank]
+; ADDR NAME: a name; START END VIEW: a data range
+@ns TRDOS
 @rom 0da70a5d2a0e733398e005b96b7e4ba6 trdos.rom
 @rom ce0723f9bc02f4948c15d3b3230ae831 256s-3.rom
 @rom 26b2b42ffa5490275090c087b949a987 atm2.rom bank 1

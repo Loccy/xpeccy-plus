@@ -596,8 +596,10 @@ An address in a list is hex without a prefix, as **Save** writes it, or a label 
 labels loaded at the time: `CPU:START`, `CPU:START-DONE`. A label takes priority over hex
 written the same way; `#`, `$` or `0x` in front makes it a number. A label carries its
 page, so the page field can be left empty: `RAM::SCREEN_BUF:W:CNT:`. On the Next a RAM page
-is 8K, as in the editor. **Save** writes the
-addresses as numbers.
+is 8K, as in the editor. A `CPU` line with a label that is not paged in when the list is
+loaded, or with a ROM name of several systems, gets cell breakpoints where the label runs, as
+`--bp` does: `CPU:LD_BYTES` on a +3 is a **ROM cell** in ROM 1 and one in ROM 3. **Save**
+writes the addresses as numbers.
 
 A line that cannot be read is left out and named in the log. A condition or a log
 expression that does not compile is kept as it is: the condition then fires every time, and
