@@ -122,6 +122,14 @@ bool fm_runs(const std::string& id, int need, int snap) {
 	return hw && fm_takes(hw->id, mac->snapModel, mac->disk, need, snap);
 }
 
+// Is that machine the model the file names. A .z80's hw 9 is written for every
+// Pentagon alike, and the 1024 runs the 128's frame, so it is one of them.
+static bool fm_is_model(const std::string& id, int ftype, int snap, const std::string& target) {
+	if (fm_runs(id, FMN_EXACT, snap) && fm_exact_on(id, snap, target)) return true;
+	if ((ftype != FL_Z80) || (SNAP_HW_OF(snap) != SNAP_HW_PENTAGON)) return false;
+	return fm_is_model(id, ftype, SNAP_HW_PENT1024, fm_snap_target(SNAP_HW_PENT1024));
+}
+
 void fm_clear() {
 	fm_pref_map.clear();
 }
@@ -217,8 +225,9 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 	// a model only guessed at is never switched to unasked
 	pick.unsure = (snap & SNAP_UNSURE) != 0;
 	if (pick.unsure) pref = FM_ASK;
+	bool exact = (row->need == FMN_EXACT);
 	auto fits = [&](const std::string& id) {
-		return fm_runs(id, row->need, snap) && ((row->need != FMN_EXACT) || fm_exact_on(id, snap, target));
+		return fm_runs(id, row->need, snap) && (!exact || fm_is_model(id, ftype, snap, target));
 	};
 	// the machines but the running one that can take the file, in this order
 	std::vector<std::string> can;
@@ -248,6 +257,9 @@ xFileMacPick fm_pick(int ftype, const char* path) {
 		xlog(XLG_FILE, XLL_INFO, "%s on %s: asking", row->key, conf.macId.c_str());
 		return pick;
 	}
+	// A .z80 names its model too, so Auto takes that one, as for an SZX. Ask and a
+	// machine set for the row take any that runs it.
+	if (ftype == FL_Z80) exact = true;
 	// The user's own machine when it can take the file: a machine a file
 	// switched to was for that file. Then the one running, if it can.
 	if (fits(conf.macBase)) {

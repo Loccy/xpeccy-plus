@@ -9,7 +9,8 @@
 // is asked at all is media_machine()'s business, in filer.cpp.
 
 #define FM_AUTO	"auto"		// switch only when the running machine cannot take it, and back after;
-				// ask when the file does not tell the model it needs
+				// a .z80 or an SZX goes on the model it names; ask when the file
+				// does not tell the model it needs
 #define FM_ASK	"ask"		// the user picks the machine, every time there is a choice
 #define FM_KEEP	"keep"		// never switch
 

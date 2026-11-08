@@ -67,12 +67,15 @@ before that point is upstream's history and is not repeated here.
   the file at the top. It does not ask on that very model, or when only one machine can run
   the file. *(reported by ZXLion)*
 
+- **Auto opens a `.z80` snapshot on the model it names**, as it does an SZX: a 128K demo timed
+  to the screen no longer stays on a Pentagon, nor a 48K game on a 128K. *(test by ZXLion)*
+
 ### Fixed
 
 - **A snapshot taken in the 128K menu or BASIC editor opens on a machine with that ROM**: a
   128K one stayed on a +2 or +2A, where the RUN waiting in it was lost or the machine reset.
-  A `.z80` goes to the model it names; a `.sna`, which names none, goes to a +2, +2A or +3
-  when the snapshot tells it, and Auto asks when it cannot be told. *(reported by ZXLion)*
+  A `.sna`, which names no model, goes to a +2, +2A or +3 when the snapshot tells it, and
+  Auto asks when it cannot be told. *(reported by ZXLion)*
 - **48K and 128K snapshots run on the +2A and +3**: a 48K `.z80` or a 128K `.sna` in
   48 BASIC reset the machine there.
 - **A middle click clears DUMP's selection on any byte**, not only on the first eight of a
