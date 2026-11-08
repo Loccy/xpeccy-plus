@@ -616,7 +616,9 @@ static int tap_pulse_ahead(Tape* tap) {
 // waiting for a key (Insult's LD A,#7F / IN / RRCA / JR C). Nor does a read
 // the playing tape would take for no loader's: B jumping, or A alone moving.
 // Started, it would stop a frame later and start again, every frame
-// (Overlander's IN A,(C) from a table of half-rows, B #FB / #BF). Not every loader
+// (Overlander's IN A,(C) from a table of half-rows, B #FB / #BF). A tape flash
+// loading armed is pressed by such a read as before: play disarms it, so it
+// is pressed once, and auto play may be off. Not every loader
 // counts: Styx calls a one-read edge test, so a read whose code tests the ear
 // bit is a loader's too. A keyboard scan never starts the tape, however it
 // steps B (Black Tiger's key definition), and the rom's edge routine never
@@ -687,7 +689,7 @@ void tapDetectLoader(Tape* tap, int tick, int pc, const unsigned char* regs, int
 		// copy of LD-BYTES).
 		tapPlay(tap);
 	} else if ((tap->detectOn || tap->armed) && (kind != TAPE_RD_EDGE) && (kind != TAPE_RD_KEYS) && (tickDiff <= 500)
-			&& ((kind == TAPE_RD_EAR) || (turn && fromRam && loose))) {
+			&& ((kind == TAPE_RD_EAR) || (turn && fromRam && (loose || tap->armed)))) {
 		if (++tap->detectReads >= 10) {
 			if (tap->detectOn && tap_next_at_end(tap)) {
 				tap->detectReads = 0;
