@@ -21,8 +21,9 @@ says more, so Xpeccy+ looks at the code right after it:
 - a read by the ROM's own loading routine belongs to [flash loading](#flash-loading).
 
 A loader waiting for the next pulse also reads in a tight loop: the same instruction again and
-again, with exactly one register moving - its counter. Code that plays a sound or draws from the
-port stores what it reads, and more registers move; a loop where nothing moves waits for a key.
+again, with exactly one register moving - its counter, which counts by one when it is B. Code
+that plays a sound or draws from the port stores what it reads, and more registers move; a loop
+where nothing moves, or only the byte it reads, waits for a key.
 
 ## Auto play / stop
 
