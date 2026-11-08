@@ -348,8 +348,9 @@ when there is none.
 
 Known ROMs come with labels of their own, with no file loaded: `LD_BYTES` at 0556 of the
 48K BASIC, the routines of the 128K editor (ROM 0) and of the four +2A/+3 ROMs, `DOS_OPEN`
-in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS with the functions it calls and the
-handlers of its commands (`FN_READ_SECTORS`, `CMD_FORMAT`). The names are also in the
+in the +3DOS, and TR-DOS's routines, tables and messages under the names of Marcos Cruz's
+disassembly (`TRDOS_ENTRY_EXECUTE_COMMAND_IN_C` at 3D13, `READ_SECTORS`,
+`CLI_COMMAND_FORMAT`). The names are also in the
 copies of these ROMs in the +2 and the clones (the Pentagon, Scorpion, Profi, ATM, ZX Evo);
 a routine a clone changed has no name there. A ROM is known by its contents, so a ROM file
 of yours with the same bytes has them too.
@@ -379,17 +380,18 @@ the ROM's marks are not saved in a memory map.
 
 **System variables** are named in instructions too: `LD HL,(CH_ADD)`, not `LD HL,(5C5D)`.
 They are the names of the manuals for the 48 BASIC (5C00-5CB5), the 128K and +2 (5B00-5BFF),
-the +2A/+3 (its own 5B00-5BFF), and names given to the TR-DOS variables (from 5CC2:
-`TRDOS.FILE_NAME`, `TRDOS.ERROR_CODE`...), each where that system's ROM is in the machine. A
+the +2A/+3 (its own 5B00-5BFF), and the TR-DOS variables as Marcos Cruz names them (from
+5CB6: `TRDOS_VARIABLE_FILENAME`, `TRDOS_VARIABLE_ERROR_CODE`...), each where that system's
+ROM is in the machine. A
 variable is never a row of its own, as memory there may be used for other things. They can
 be typed as other names: `BASIC48.ERR_SP`, or `ERR_SP`.
 
 They work as other labels do: in the listing, typed as an address, in breakpoints and
 conditions. A ROM that is not paged in still has its place, for a label of yours in it
-too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too, and so is
-`TRDOS_FUNCTION` typed as an address - the dump then shows what is paged in there now. A
-condition such as `PC == TRDOS_FUNCTION`, or a breakpoint on it, holds only while that ROM
-is paged in.
+too: `CALL READ_SECTORS` and `DW READ_SECTORS` are `1E3D` from BASIC too, and so is
+`READ_SECTORS` typed as an address - the dump then shows what is paged in there now. A
+condition such as `PC == READ_SECTORS`, or a breakpoint on it, holds only while that ROM is
+paged in.
 
 Your labels come first. A label of yours of the same name is the one an address or an
 instruction gets, and one at the same address is shown instead. A ROM label's name typed in
