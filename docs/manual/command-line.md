@@ -161,8 +161,8 @@ These are for this run only:
   page that is not paged in at start gets the breakpoint on its cell, so it stops when that
   page runs it (a ROM label in several banks gets one in each, and so does a short ROM name
   of several systems: `--bp LD_BYTES` on a +3 stops in ROM 1's and in ROM 3's).
-- `--brk FILE` - load a list of breakpoints (`.xbrk`); its addresses can be labels. Give it
-  more than once to load several lists.
+- `--brk FILE` - load a list of breakpoints (`.xbrk`); its addresses can be labels, set as
+  `--bp` sets them. Give it more than once to load several lists.
 - `--brk-log FILE` - where the [breakpoint log](debugger-breakpoints.md#the-breakpoint-log)
   goes; `-` writes it to the standard output.
 - `--xmap FILE` - load a memory map saved by the Debugger (`.xmap`).
