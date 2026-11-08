@@ -240,15 +240,16 @@ in records of our own, all opaque:
   has changed since.
 
 ```
-  byte  flags             b0: a folder, not an image; b1: the print is of what it holds
-  qword print             every file and folder by its name (the long one, without case), a
-                          file's size and write time; not where they lie, the order or the
-                          folders' times. Without b1 an older print, not compared. 0 none
+  byte  flags             b0: a folder, not an image; b1: the print at the end follows
+  qword old print         0 with b1; without it, a print of every directory entry, not compared
   char  path[]            zero terminated
   byte  folders           how many follow (one at a time is put on a card)
   for each:
     char  name[]          its name in the card's root, UTF-8, zero terminated
     char  host[]          where it is on the computer, UTF-8, zero terminated
+  qword print             with b1: every file and folder by its name (the long one, without
+                          case), a file's size and write time - not where they lie, the order
+                          or the folders' times; 0 none
 ```
 
 - `ESP ` - the ESP-01 module, which runs outside the machine: its UART, boot, the command
