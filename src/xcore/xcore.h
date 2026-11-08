@@ -260,7 +260,12 @@ xLabelSet* setLabelSet(QString);
 
 void add_label(xAdr, QString, xLabelSet* = nullptr);
 void del_label(QString);
-QString find_label(xAdr, bool* rom = nullptr);	// rom: the name is a ROM label's
+enum {
+	LAB_ROW = 0,		// a name for a row: the user's, a ROM label's, short where it can be
+	LAB_SYSVAR = 1,		// ...or a system variable's, for an operand or a tip
+	LAB_FULL = 2		// a built-in name with its namespace: BASIC48.LD_BYTES
+};
+QString find_label(xAdr, bool* rom = nullptr, int how = LAB_ROW);	// rom: a built-in name
 xAdr find_label(QString);
 xAdr find_label_cell(QString);	// the label's cell, without working out where the CPU sees it now
 xAdr label_cpu(xAdr);		// ...and that, for a cell find_label_cell() gave
@@ -270,11 +275,16 @@ void labels_touch();		// ...and makes it change
 void labels_rom_scan(Computer*);	// under emu_lock
 void labels_rom_check(Computer*);	// ...if a snapshot put a ROM in since
 QList<int> labels_rom_cells(const QString&);	// a ROM label's cells, a bank each
-bool labels_rom_only(const QString&);	// a ROM label's name, not one of the user's
+bool labels_rom_only(const QString&);	// a built-in name (ROM label, system variable), not one of the user's
 xAdr label_home(xAdr);			// a label in ROM paged out: where its ROM runs, for typing
 QString xconf_install_dir();		// config of the installed program
-QStringList labels_rom_names();		// every ROM label's name: the list, completion
-xAdr labels_rom_cell(const QString&);	// a ROM label's cell, the one paged in if any
+QStringList labels_rom_names();		// every ROM label's full name: the list
+QStringList labels_builtin_names();	// ...with the system variables and the short names: completion
+xAdr labels_rom_cell(const QString&);	// a built-in name's cell, a ROM one paged in if any
+QStringList labels_ambiguous(const QString&);	// the full names a bare name could mean, if more than one
+unsigned char labels_rom_view(int abs);	// the data mark a ROM list gives a ROM cell
+void labels_full(bool);			// built-in names with their namespace while on
+bool labels_namespace(const QString&);	// a namespace of the ROM lists: BASIC48
 // "global.local": how much of it is the global, 0 if not local; the global a cell is under
 int label_local_prefix(const QString&);
 QString label_block(xAdr);
@@ -1151,6 +1161,7 @@ struct xConfig {
 		unsigned nxdetach:1;	// ZX Next panel: shown in a window of its own
 		unsigned imglabels:1;	// an image's .labels comes with it
 		unsigned romlabels:1;	// known ROMs name their routines
+		unsigned sysvars:1;	// ...and their systems' variables, in operands
 		QFont font;
 		int numfmt;		// how addresses and the listing's values are written, CPU_NUM_*
 		int hexfmt;		// the hex form the decimal switch goes back to

@@ -282,6 +282,19 @@ static int dasm_access(Computer* comp, int adr) {
 	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_PC;
 }
 
+// A cell's flags as the listing reads it: the cell the row shows (a page view's
+// own), its breakpoints and view mark - or, where it has no mark, the one a ROM
+// list gives it (the font as bytes)
+static unsigned char dasm_flag(Computer* comp, int adr, int access = MEM_VIEW_PC) {
+	xAdr xadr = dasm_xadr(comp, adr, access);
+	unsigned char fl;
+	if (mode == XVIEW_ROM) fl = comp->brkRomMap[xadr.abs & comp->mem->romMask];
+	else if (mode == XVIEW_RAM) fl = comp->brkRamMap[xadr.abs & comp->mem->ramMask];
+	else fl = getBrkView(comp, adr, access);
+	if (!(fl & 0xf0) && (xadr.type == MEM_ROM)) fl |= labels_rom_view(xadr.abs);
+	return fl;
+}
+
 static QString dasm_word(int val, int fmt) {
 	return dbg_num_in(val & 0xffff, 4, fmt);
 }
@@ -358,7 +371,7 @@ void placeLabel(Computer* comp, dasmData& drow) {
 	bool rom = false;
 	while (work && (shift < 8)) {
 		xadr = dasm_xadr(comp, drow.oadr - shift);
-		lab = find_label(xadr, &rom);
+		lab = find_label(xadr, &rom, LAB_SYSVAR);
 		if (lab.isEmpty()) {
 			if (drow.oflag & OF_MEMADR) {
 				shift++;
@@ -385,13 +398,13 @@ int dasmByte(Computer* comp, int adr, dasmData& drow) {
 	int len = 1;
 	drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt));
 	adr++;
-	unsigned char fl = getBrk(comp, adr);
+	unsigned char fl = dasm_flag(comp, adr);
 	xAdr xadr = dasm_xadr(comp, adr);
 	while ((len < conf.dbg.dbsize) && (fl == DBG_VIEW_BYTE) && find_label(xadr).isEmpty()) {
 		drow.command.append(QString(",%0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt)));
 		len++;
 		adr++;
-		fl = getBrk(comp, adr);
+		fl = dasm_flag(comp, adr);
 		xadr = dasm_xadr(comp, adr);
 	}
 	return len;
@@ -403,7 +416,7 @@ int dasmWord(Computer* comp, int adr, dasmData& drow) {
 	word |= (dasmrd(adr + 1, comp) << 8);
 	drow.command = QString("DW %0").arg(dasm_word(word, drow.fmt));
 	adr += 2;
-	unsigned char fl = getBrk(comp, adr);
+	unsigned char fl = dasm_flag(comp, adr);
 	xAdr xadr = dasm_xadr(comp, adr);
 	while ((len < conf.dbg.dwsize * 2) && (fl == DBG_VIEW_WORD) && find_label(xadr).isEmpty()) {
 		word = dasmrd(adr, comp);
@@ -411,7 +424,7 @@ int dasmWord(Computer* comp, int adr, dasmData& drow) {
 		drow.command.append(QString(",%0").arg(dasm_word(word, drow.fmt)));
 		adr += 2;
 		len += 2;
-		fl = getBrk(comp, adr);
+		fl = dasm_flag(comp, adr);
 		xadr = dasm_xadr(comp, adr);
 	}
 	return len;
@@ -430,18 +443,24 @@ int dasmAddr(Computer* comp, int adr, dasmData& drow) {
 int dasmText(Computer* comp, int adr, dasmData& drow) {
 	int clen = 0;
 	drow.command = QString("DB \"");
-	unsigned char fl = getBrk(comp, adr);
+	unsigned char fl = dasm_flag(comp, adr);
 	unsigned char bt = dasmrd(adr, comp);
 	while (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt > 31) && (bt < 128) && (clen < conf.dbg.dmsize)) {
 		drow.command.append(QChar(bt));
 		clen++;
 		bt = dasmrd(adr + clen, comp);
-		fl = getBrk(comp, adr + clen);
+		fl = dasm_flag(comp, adr + clen);
+	}
+	// a character with bit 7 set ends the text, as the ROMs keep theirs: DC "..."
+	if (((fl & 0xf0) == DBG_VIEW_TEXT) && (bt & 0x80) && ((bt & 0x7f) > 31) && ((bt & 0x7f) < 127)) {
+		drow.command.append(QChar(bt & 0x7f));
+		drow.command.replace(0, 2, "DC");
+		clen++;
 	}
 	if (clen == 0) {		// TODO: non-ascii characters: single db, multiple db untill ascii or wut?
 		// shown with the breakpoints on it; nothing written back - getBrk() has
 		// the cpu address points in it too, and they are not the cell's
-		drow.flag = (getBrk(comp, adr) & 0x0f) | DBG_VIEW_BYTE;
+		drow.flag = (dasm_flag(comp, adr) & 0x0f) | DBG_VIEW_BYTE;
 		clen = 1;
 		drow.command = QString("DB %0").arg(dasm_byte(dasmrd(adr, comp), drow.fmt));
 	} else {
@@ -509,7 +528,7 @@ int dasmSome(Computer* comp, int adr, dasmData& drow, int fmt) {
 	drow.lrom = -1;
 	drow.bytes.clear();
 	drow.adr = adr;
-	drow.flag = (mode == XVIEW_CPU) ? getBrkView(comp, adr, dasm_access(comp, adr)) : getBrk(comp, adr);
+	drow.flag = dasm_flag(comp, adr, (mode == XVIEW_CPU) ? dasm_access(comp, adr) : MEM_VIEW_PC);
 	drow.oflag = 0;
 	drow.oadr = -1;
 	switch(drow.flag & 0xf0) {
@@ -615,7 +634,7 @@ QList<dasmData> getDisasm(Computer* comp, int& adr) {
 	// a local label of the block the row is in: its global part is shaded
 	if (!drow.label.isEmpty()) {
 		int pre = label_local_prefix(drow.label);
-		if (pre && (label_block(xadr) == drow.label.left(pre))) drow.opre = pre;
+		if (pre && (labels_namespace(drow.label.left(pre)) || (label_block(xadr) == drow.label.left(pre)))) drow.opre = pre;
 	}
 	// 1:bytes
 	if (drow.bytes.isEmpty()) {
@@ -883,6 +902,7 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 	if ((row < 0) || (row >= rowCount())) return false;
 	if ((col < 0) || (col >= columnCount())) return false;
 	bool flag;
+	bool isdc;
 	unsigned char cbyte;
 	char buf[256];
 	unsigned char* ptr;
@@ -940,9 +960,11 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 		case 2:	// command
 			ptr = getBrkPtr(comp, adr);
 			str = val.toString();
-			if (!str.startsWith("db \"", Qt::CaseInsensitive))		// #NUM -> 0xNUM if not db "..."
+			// dc "text": text whose last character has bit 7 set, as the ROMs end theirs
+			isdc = str.startsWith("dc \"", Qt::CaseInsensitive);
+			if (!str.startsWith("db \"", Qt::CaseInsensitive) && !isdc)	// #NUM -> 0xNUM if not db "..."
 				str = asm_hex_signs(str);
-			if (str.startsWith("db ", Qt::CaseInsensitive)) {		// db
+			if (str.startsWith("db ", Qt::CaseInsensitive) || isdc) {	// db
 				if ((str.size() > 4) && (str.at(3) == '"') && str.endsWith("\"")) {		// db "text"
 					str = str.mid(4, str.size() - 5);
 					idx = 0;
@@ -958,6 +980,9 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 						idx++;
 					}
 					len = idx;
+					if (isdc && (len > 0)) buf[len - 1] |= 0x80;
+				} else if (isdc) {
+					len = 0;
 				} else {						// db n
 					str = str.mid(3);
 					idx = str.toInt(&flag, 0);
@@ -1198,7 +1223,8 @@ bool xDasmSyntax::helpEvent(QHelpEvent* ev, QAbstractItemView* view, const QStyl
 			int val = word ? dbg_num_parse(tok, &ok) : 0;
 			if (pos == lpos) {
 				xAdr xa = label_home(find_label(lab));
-				if (xa.adr >= 0) tip = dbg_num_tip(xa.adr, true, lab);
+				QString full = find_label(xa, nullptr, LAB_SYSVAR | LAB_FULL);	// BASIC48.LD_BYTES
+				if (xa.adr >= 0) tip = dbg_num_tip(xa.adr, true, full.isEmpty() ? lab : full);
 			} else if (ok) {
 				tip = dbg_num_tip(val, val == idx.data(Qt::UserRole).toInt());
 			}

@@ -1300,7 +1300,7 @@ QString dbg_num_tip(int val, bool adr, const QString& name, bool label) {
 	if (word) bin.insert(8, ' ');
 	QString lab;
 	if (word && label && conf.zx)
-		lab = name.isEmpty() ? find_label(comp_get_xadr(conf.zx, val, MEM_VIEW_READ)) : name;
+		lab = name.isEmpty() ? find_label(comp_get_xadr(conf.zx, val, MEM_VIEW_READ), nullptr, LAB_SYSVAR | LAB_FULL) : name;
 	QString res = tip_head(lab.isEmpty() ? QString() : tip_bold(lab));
 	res.append(tip_row("HEX:", tip_bold(dbg_hex(val, word ? 4 : 2))));
 	res.append(tip_row("DEC:", tip_bold(QString::number(val))));
@@ -1335,7 +1335,7 @@ QString dbg_cpu_byte_tip(int adr, const QString& note) {
 	adr &= 0xffff;
 	int lo = comp_peek(comp, adr, MEM_VIEW_READ, NULL) & 0xff;
 	int hi = comp_peek(comp, (adr + 1) & 0xffff, MEM_VIEW_READ, NULL) & 0xff;
-	return dbg_byte_tip(lo, lo | (hi << 8), dbg_word(adr), find_label(comp_get_xadr(comp, adr, MEM_VIEW_READ)), note);
+	return dbg_byte_tip(lo, lo | (hi << 8), dbg_word(adr), find_label(comp_get_xadr(comp, adr, MEM_VIEW_READ), nullptr, LAB_SYSVAR | LAB_FULL), note);
 }
 
 QString dbg_buf_tip(const unsigned char* buf, int ofs, int len, const QString& where) {
@@ -1676,7 +1676,7 @@ void label_complete(QLineEdit* edt) {
 		// the user's set and the ROM's names, again when a label was added or another set picked
 		if (cmp->property("labGen").toUInt() != labels_gen()) {
 			QStringList names = conf.curlabset ? conf.curlabset->list.keys() : QStringList();
-			names += labels_rom_names();
+			names += labels_builtin_names();
 			names.removeDuplicates();
 			mod->setStringList(names);
 			cmp->setProperty("labGen", labels_gen());

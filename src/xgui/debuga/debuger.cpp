@@ -2401,6 +2401,7 @@ void DebugWin::saveDasm() {
 		QHash<QString, int> defined;		// a name the block gives a row: where
 		QMap<QString, int> romUsed;		// ROM labels the code names: an EQU each, or it does not assemble
 		QList<QPair<int, QString> > romLines;	// the lines that name one
+		labels_full(true);			// BASIC48.LD_BYTES: no short name to mistake
 		while ((adr <= end) && work) {
 			list = getDisasm(comp, adr);
 			foreach (drow, list) {
@@ -2427,6 +2428,7 @@ void DebugWin::saveDasm() {
 			if (dasm_has_separator(list))
 				body.append(QString());
 		}
+		labels_full(false);
 		// A ROM label's name the assembler would read as another place - a label of
 		// the user's has it, in the block or not, or the block defines it elsewhere -
 		// goes as its address. The block's own row of that ROM label is no clash

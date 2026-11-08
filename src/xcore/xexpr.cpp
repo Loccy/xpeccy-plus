@@ -352,6 +352,13 @@ static void xe_primary(xeParser* prs) {
 				return;
 			}
 		}
+		// a short name of two systems' ROM labels or variables: which one
+		QStringList amb = labels_ambiguous(QString(name.c_str()));
+		if (!amb.isEmpty()) {
+			std::string msg = "which one: " + amb.join(", ").toStdString();
+			xe_fail(prs, msg.c_str());
+			return;
+		}
 		xe_fail(prs, "no such register, variable or label");
 		return;
 	}

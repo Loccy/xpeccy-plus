@@ -499,6 +499,7 @@ void saveConfig() {
 	fprintf(cfile, "regs.split = %s\n", YESNO(conf.dbg.regsplit));
 	fprintf(cfile, "labels.image = %s\n", YESNO(conf.dbg.imglabels));
 	fprintf(cfile, "labels.rom = %s\n", YESNO(conf.dbg.romlabels));
+	fprintf(cfile, "labels.sysvars = %s\n", YESNO(conf.dbg.sysvars));
 	fprintf(cfile, "dim.address = %s\n", YESNO(conf.dbg.dimadr));
 	fprintf(cfile, "dim.opcodes = %s\n", YESNO(conf.dbg.dimops));
 	fprintf(cfile, "numbers = %s\n", dbg_numfmt_name(conf.dbg.numfmt));
@@ -989,6 +990,7 @@ void loadConfig() {
 	conf.dbg.regsplit = 1;
 	conf.dbg.imglabels = 1;
 	conf.dbg.romlabels = 1;
+	conf.dbg.sysvars = 1;
 	conf.dbg.dimadr = 0;
 	conf.dbg.dimops = 1;
 	conf.dbg.synhl = 1;
@@ -1167,6 +1169,7 @@ void loadConfig() {
 					if (pnam == "regs.split") conf.dbg.regsplit = arg.b;
 					if (pnam == "labels.image") conf.dbg.imglabels = arg.b;
 					if (pnam == "labels.rom") conf.dbg.romlabels = arg.b;
+					if (pnam == "labels.sysvars") conf.dbg.sysvars = arg.b;
 					if (pnam == "dim.address") conf.dbg.dimadr = arg.b;
 					if (pnam == "dim.opcodes") conf.dbg.dimops = arg.b;
 					if (pnam == "numbers") {

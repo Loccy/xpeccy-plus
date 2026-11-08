@@ -1,4 +1,5 @@
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
@@ -11,7 +12,9 @@ xConfig conf;
 
 QString gethexbyte(int value) { return QString("%1").arg(value & 0xff, 2, 16, QChar('0')).toUpper(); }
 QString gethexword(int value) { return QString("%1").arg(value & 0xffff, 4, 16, QChar('0')).toUpper(); }
-QString xconf_install_dir() { return QString(); }
+static QString installDir;		// the ROM lists of the test are in its labels/
+QString xconf_install_dir() { return installDir; }
+QString arc_beside(const QString& path, const QString& ext) { return path + ext; }	// labels_image: unused here
 
 static int failures;
 
@@ -150,6 +153,53 @@ int main(int argc, char** argv) {
 		&& find_label("RomLabel").type == MEM_ROM && find_label("RomLabel").abs == 0x38);
 	loadLabels(fixtures.filePath("legacy.labels").toLocal8Bit().constData());
 	check("legacy label expressions", !eval("print_score").err && eval("print_score").value == 0x8010);
+	// ROM lists: namespaces, data ranges, system variables. The bench 128K has
+	// one 16K ROM page; the lists name it by the MD5 of the bytes put in it
+	for (int i = 0; i < MEM_16K; i++) comp->mem->romData[i] = (unsigned char)(i * 7 + (i >> 8));
+	QString md5 = QCryptographicHash::hash(QByteArray((const char*)comp->mem->romData, MEM_16K),
+		QCryptographicHash::Md5).toHex();
+	QDir(temp.path()).mkdir("labels");
+	installDir = temp.path();
+	const char* lists[][2] = {
+		{"a.labels", "@ns SYSA\n@rom %1\n0010 ENTRY\n0020 ONLYA\n3D00 3D07 db\n0100 0103 text\n"},
+		{"b.labels", "@ns SYSB\n@rom %1 -@0200\n0018 ENTRY\n0200 0201 dw\n0300 0301 dw\n"},
+		{"c.labels", "@ns SYSA\n@ram 5\n5C3D ERR_SP\n"},
+		{"d.labels", "@ns SYSC\n@ram 5\n5C00 NOT_FITTED\n"}};
+	for (auto& lst : lists) {
+		QFile out(temp.filePath(QString("labels/") + lst[0]));
+		out.open(QIODevice::WriteOnly);
+		out.write(QString(lst[1]).arg(md5).toLatin1());
+	}
+	conf.dbg.romlabels = 1;
+	conf.dbg.sysvars = 1;
+	labels_rom_scan(comp);
+	xAdr r10 = comp_get_xadr(comp, 0x10, MEM_VIEW_READ);
+	xAdr r20 = comp_get_xadr(comp, 0x20, MEM_VIEW_READ);
+	check("ROM names in namespaces", find_label("SYSA.ENTRY").adr == 0x10 && find_label("SYSB.ENTRY").adr == 0x18
+		&& find_label("ONLYA").adr == 0x20 && eval("SYSA.ENTRY").value == 0x10);
+	check("a short name of two systems is neither",
+		find_label("ENTRY").type < 0 && eval("ENTRY").err && labels_ambiguous("ENTRY").size() == 2);
+	check("rows show the short name where it is enough", find_label(r20) == "ONLYA" && find_label(r10) == "SYSA.ENTRY"
+		&& find_label(r10, nullptr, LAB_FULL) == "SYSA.ENTRY" && label_local_prefix("SYSA.ENTRY") == 4);
+	xAdr ram = comp_get_xadr(comp, 0x8000, MEM_VIEW_READ);
+	add_label(ram, "ONLYA");
+	check("a label of the user's takes the short name", find_label("ONLYA").adr == 0x8000
+		&& find_label(r20) == "SYSA.ONLYA" && find_label("SYSA.ONLYA").adr == 0x20);
+	del_label("ONLYA");
+	check("data ranges, one dropped on that bank", labels_rom_view(0x3D00) == DBG_VIEW_BYTE
+		&& labels_rom_view(0x3D07) == DBG_VIEW_BYTE && labels_rom_view(0x3D08) == DBG_VIEW_CODE
+		&& labels_rom_view(0x101) == DBG_VIEW_TEXT && labels_rom_view(0x200) == DBG_VIEW_CODE
+		&& labels_rom_view(0x300) == DBG_VIEW_WORD);
+	xAdr var = comp_get_xadr(comp, 0x5C3D, MEM_VIEW_READ);
+	check("system variables in operands only", find_label(var).isEmpty()
+		&& find_label(var, nullptr, LAB_SYSVAR) == "ERR_SP" && find_label(var, nullptr, LAB_SYSVAR | LAB_FULL) == "SYSA.ERR_SP"
+		&& eval("ERR_SP").value == 0x5C3D && eval("SYSA.ERR_SP").value == 0x5C3D);
+	check("a system not in the machine names nothing", find_label("NOT_FITTED").type < 0
+		&& find_label("SYSC.NOT_FITTED").type < 0);
+	conf.dbg.sysvars = 0;
+	check("system variables switched off", find_label(var, nullptr, LAB_SYSVAR).isEmpty() && find_label("ERR_SP").type < 0);
+	conf.dbg.romlabels = 0;
+	check("ROM labels switched off", find_label(r20).isEmpty() && labels_rom_view(0x3D00) == DBG_VIEW_CODE);
 	while (!conf.labsets.isEmpty()) delLabelSet(conf.labsets.first()->name);
 	compDestroy(comp);
 	conf.zx = nullptr;
