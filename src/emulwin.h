@@ -490,6 +490,7 @@ class MainWin : public QWidget {
 		void fillRecent();
 		QMenu* quickMenu;
 		QAction* resumeAct;
+		void syncResume();
 		qint64 timedMs = 0;		// running time since the last periodic autosave
 		void fillQuickSaves();
 		// the toolbar and the status bar (emw_bars.cpp)

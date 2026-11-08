@@ -83,6 +83,9 @@ QString saves_game_dir();
 QString saves_session_path();
 // the newest autosave (on exit or timed) of any folder, empty when none
 QString saves_newest_auto();
+// what Resume Last Session loads: the last autosave, that one gone the newest
+// autosave left; path empty when none. name: its game's or machine's, if known
+xSave saves_resume(QString* name = nullptr);
 // a folder's saves, newest first; kind -1 for all
 QList<xSave> saves_list(const QString& dir, int kind = -1);
 // the name of a new save of that kind in dir, by the time now

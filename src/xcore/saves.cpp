@@ -116,6 +116,24 @@ static QJsonObject saves_json(const QString& dir) {
 	return QJsonDocument::fromJson(file.readAll()).object();
 }
 
+// the json of a save's game: the one beside it, else its folder's
+static QJsonObject saves_game_json(const QString& save) {
+	QFileInfo fi(save);
+	QFile side(fi.path() + "/" + fi.completeBaseName() + ".json");
+	if (side.open(QIODevice::ReadOnly))
+		return QJsonDocument::fromJson(side.readAll()).object();
+	return saves_json(fi.path());
+}
+
+// the game's name, or the machine's for a machine's folder; empty when it says neither
+static QString saves_folder_name(const QJsonObject& obj) {
+	if (!obj.value("hash").toString().isEmpty()) return obj.value("name").toString();
+	std::string id = obj.value("machine").toString().toStdString();
+	if (id.empty()) return QString();
+	const xMachine* m = xm_find(id);
+	return QString::fromLocal8Bit(m ? m->name.c_str() : id.c_str());
+}
+
 static void saves_json_write(const QString& dir, const QJsonObject& obj) {
 	QFile file(dir + "/game.json");
 	if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -158,13 +176,7 @@ void game_follow(const QString& image) {
 }
 
 void game_set_save(const QString& save) {
-	QFileInfo fi(save);
-	QFile side(fi.path() + "/" + fi.completeBaseName() + ".json");
-	QJsonObject obj;
-	if (side.open(QIODevice::ReadOnly))
-		obj = QJsonDocument::fromJson(side.readAll()).object();
-	else
-		obj = saves_json(fi.path());
+	QJsonObject obj = saves_game_json(save);
 	QJsonArray paths = obj.value("images").toArray();
 	if (obj.value("hash").toString().isEmpty() || paths.isEmpty()) {
 		game_forget();			// a machine's folder
@@ -318,6 +330,23 @@ static int saves_kind_of(const QString& name) {
 	return -1;
 }
 
+// a save as its name and the picture beside it say; kind -1 for a name of no kind
+static xSave saves_info(const QFileInfo& fi) {
+	xSave sv;
+	sv.path = fi.filePath();
+	sv.kind = saves_kind_of(fi.fileName());
+	if (sv.kind >= 0)
+		sv.time = QDateTime::fromString(fi.completeBaseName().mid(strlen(save_prefix[sv.kind]) + 1), "yyyyMMdd-HHmmss-zzz");
+	if (!sv.time.isValid()) sv.time = fi.lastModified();
+	sv.size = fi.size();
+	QString pic = fi.path() + "/" + fi.completeBaseName() + ".png";
+	if (QFileInfo::exists(pic)) {
+		sv.pic = pic;
+		sv.size += QFileInfo(pic).size();
+	}
+	return sv;
+}
+
 QList<xSave> saves_list(const QString& dir, int kind) {
 	QList<xSave> res;
 	if (dir.isEmpty()) return res;
@@ -326,19 +355,7 @@ QList<xSave> saves_list(const QString& dir, int kind) {
 	for (const QFileInfo& fi : files) {
 		int k = saves_kind_of(fi.fileName());
 		if ((k < 0) || ((kind >= 0) && (k != kind))) continue;
-		xSave sv;
-		sv.path = fi.filePath();
-		sv.kind = k;
-		QString stamp = fi.completeBaseName().mid(strlen(save_prefix[k]) + 1);
-		sv.time = QDateTime::fromString(stamp, "yyyyMMdd-HHmmss-zzz");
-		if (!sv.time.isValid()) sv.time = fi.lastModified();
-		sv.size = fi.size();
-		QString pic = d.filePath(fi.completeBaseName() + ".png");
-		if (QFileInfo::exists(pic)) {
-			sv.pic = pic;
-			sv.size += QFileInfo(pic).size();
-		}
-		res.append(sv);
+		res.append(saves_info(fi));
 	}
 	// all kinds together: by time, not by name
 	std::stable_sort(res.begin(), res.end(), [](const xSave& a, const xSave& b) {return a.time > b.time;});
@@ -395,12 +412,8 @@ QList<xSaveFolder> saves_folders() {
 		if (f.saves.isEmpty()) continue;
 		QJsonObject obj = saves_json(f.dir);
 		f.machine = obj.value("hash").toString().isEmpty();
-		if (f.machine) {
-			std::string id = obj.value("machine").toString().toStdString();
-			const xMachine* m = xm_find(id);
-			f.name = QString::fromLocal8Bit(m ? m->name.c_str() : id.c_str());
-		} else {
-			f.name = obj.value("name").toString();
+		f.name = saves_folder_name(obj);
+		if (!f.machine) {
 			for (const QJsonValue& v : obj.value("images").toArray())
 				f.images.append(v.toString());
 		}
@@ -414,16 +427,8 @@ QList<xSaveFolder> saves_folders() {
 		xSaveFolder f;
 		f.machine = false;
 		f.name = "Last session";
-		xSave sv;
-		sv.path = last.filePath();
+		xSave sv = saves_info(last);
 		sv.kind = SAVE_EXIT;
-		sv.time = last.lastModified();
-		sv.size = last.size();
-		QString pic = last.path() + "/" + last.completeBaseName() + ".png";
-		if (QFileInfo::exists(pic)) {
-			sv.pic = pic;
-			sv.size += QFileInfo(pic).size();
-		}
 		f.saves.append(sv);
 		f.size = sv.size;
 		res.append(f);
@@ -444,6 +449,13 @@ QString saves_newest_auto() {
 		}
 	}
 	return best.path;
+}
+
+xSave saves_resume(QString* name) {
+	QString path = conf.saves.last;
+	if (path.isEmpty() || !QFileInfo::exists(path)) path = saves_newest_auto();
+	if (name) *name = path.isEmpty() ? QString() : saves_folder_name(saves_game_json(path));
+	return path.isEmpty() ? xSave() : saves_info(QFileInfo(path));
 }
 
 QString saves_folder_of(const QString& image) {

@@ -12,9 +12,12 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QIcon>
 #include <QImage>
+#include <QImageReader>
 #include <QMenu>
+#include <QToolTip>
 #include <QUrl>
 
 // the picture of a save, no bigger than a Spectrum's screen: that one 1:1
@@ -135,11 +138,34 @@ void MainWin::timedSave(int ms) {
 
 // the last autosave; that one deleted, the newest left of any game
 bool MainWin::resumeLast() {
-	QString path = conf.saves.last;
-	if (path.isEmpty() || !QFileInfo::exists(path)) path = saves_newest_auto();
-	bool done = !path.isEmpty() && QFileInfo::exists(path) && loadState(path);
+	QString path = saves_resume().path;
+	bool done = !path.isEmpty() && loadState(path);
 	setMessage(done ? " last session resumed " : " no last session to resume ");
 	return done;
+}
+
+// File > Resume Last Session, on each show: on when there is a save to resume,
+// its picture and its game's name and time the tip (xMenu shows it, the File
+// menu's other items keep theirs for the toolbar)
+void MainWin::syncResume() {
+	QString name;
+	xSave sv = saves_resume(&name);
+	resumeAct->setEnabled(!sv.path.isEmpty());
+	QString tip;
+	if (!sv.path.isEmpty()) {
+		QString time = saves_time_text(sv.time);
+		int width = sv.pic.isEmpty() ? 0 : QImageReader(sv.pic).size().width();
+		if (!name.isEmpty()) {
+			QFontMetrics fm(QToolTip::font());
+			if (width > 0)		// one line under the picture
+				name = fm.elidedText(name, Qt::ElideRight, qMax(width - fm.horizontalAdvance(", " + time), fm.horizontalAdvance("M...")));
+			time = name + ", " + time;
+		}
+		tip = time.toHtmlEscaped();
+		if (!sv.pic.isEmpty())
+			tip = QString("<img src=\"%0\"><br>%1").arg(QUrl::fromLocalFile(sv.pic).toString(), tip);
+	}
+	resumeAct->setProperty("xTip", tip);
 }
 
 // Pause in menus holds the machine here too: the window is where a save is
