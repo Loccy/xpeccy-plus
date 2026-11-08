@@ -349,19 +349,21 @@ when there is none.
 Known ROMs come with labels of their own, with no file loaded: `LD_BYTES` at 0556 of the
 48K BASIC, the routines of the 128K editor (ROM 0) and of the four +2A/+3 ROMs, `DOS_OPEN`
 in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS with the functions it calls and the
-handlers of its commands (`FN_READ_SECTORS`, `CMD_FORMAT`). The names are also in the copies of these
-ROMs in the +2 and the clones (the Pentagon, Scorpion, Profi, ATM, ZX Evo); a routine a
-clone changed has no name there. A ROM is known by its contents, so a ROM file of yours with
-the same bytes has them too.
+handlers of its commands (`FN_READ_SECTORS`, `CMD_FORMAT`). The names are also in the
+copies of these ROMs in the +2 and the clones (the Pentagon, Scorpion, Profi, ATM, ZX Evo);
+a routine a clone changed has no name there. A ROM is known by its contents, so a ROM file
+of yours with the same bytes has them too.
 
 Each name belongs to the system it is part of: `BASIC48` (the 48 BASIC, in every machine
 that has it), `BASIC128` (the 128K editor), `P3ROM0` and `P3ROM1` (the +2A/+3 editor),
 `P3DOS`, `TRDOS`. Its full name is `BASIC48.LD_BYTES`; `LD_BYTES` alone does too, unless a
-label of yours or another system in the machine has that name. On a +3, `START` is in three
-of its ROMs, so typed alone it is an error that names them: `P3ROM0.START`,
-`P3ROM1.START`, `BASIC48.START`. The listing shows the short name, and the full one, the
-system's part paler, where the short one would mean something else; a tip over it shows the
-full name.
+label of yours has that name. A short name that several systems in the machine have is the
+one whose ROM is paged in now: on a +2A/+3, `LD_BYTES` is `P3ROM1.LD_BYTES` while ROM 1 is
+paged in and `BASIC48.LD_BYTES` while ROM 3 is, and a condition with it follows the paging
+as the program runs. With none of them paged in, or two, it is an error that names them:
+`START` with ROM 2 paged in names `P3ROM0.START` and `BASIC48.START`. The listing shows the
+short name, and the full one, the system's part paler, where the short one would mean
+something else now; a tip over it shows the full name.
 
 The ROM lists also say which parts of the ROM are data, and those are shown as data where
 you have marked nothing yourself: the 48K's character set at 3D00 as `DB` rows, the keyword
@@ -383,16 +385,16 @@ They work as other labels do: in the listing, typed as an address, in breakpoint
 conditions. A ROM that is not paged in still has its place, for a label of yours in it
 too: `CALL TRDOS_FUNCTION` and `DW TRDOS_FUNCTION` are `3D13` from BASIC too, and so is
 `TRDOS_FUNCTION` typed as an address - the dump then shows what is paged in there now. A
-condition such as `PC == LD_BYTES`, or a breakpoint on it, holds only while that ROM is
-paged in.
+condition such as `PC == TRDOS_FUNCTION`, or a breakpoint on it, holds only while that ROM
+is paged in.
 
 Your labels come first. A label of yours of the same name is the one an address or an
 instruction gets, and one at the same address is shown instead. A ROM label's name typed in
-the address column makes a label of yours, as a new name does; `@START` goes to the ROM's
-`START`. A ROM label cannot be removed, and **Save labels** does not save it. **ROM labels**
-on the **Debugger** page of **Options** switches the names and the data marks off, **System
-variables** the variables. Where they come from, and their licenses, is in
-`config/labels/README.md` beside the program.
+the address column makes a label of yours, as a new name does; `@LD_BYTES` goes to the ROM's
+`LD_BYTES` (on a +2A/+3, of the ROM paged in now). A ROM label cannot be removed, and **Save
+labels** does not save it. **ROM labels** on the **Debugger** page of **Options** switches
+the names and the data marks off, **System variables** the variables. Where they come from,
+and their licenses, is in `config/labels/README.md` beside the program.
 
 ```{index} Auto-load labels, label; loading automatically
 ```
