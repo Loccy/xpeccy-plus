@@ -90,6 +90,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **Opening an image in a folder of thousands of files no longer pauses**: the `.pok` beside
+  it is asked for by name, not looked for by listing the folder. *(thanks to Volutar for
+  finding it)*
 - **A reset the ZX Spectrum Next makes itself** (a program, or the firmware after a hard
   reset) now returns the CPU to 3.5 MHz and resets the UART and the sound, as its reset
   button does.

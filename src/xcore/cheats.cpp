@@ -11,7 +11,6 @@
 #include "xcore.h"
 #include "../libxpeccy/filetypes/filetypes.h"
 
-
 struct chState {
 	int on;
 	int val;
