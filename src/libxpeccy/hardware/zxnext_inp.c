@@ -132,7 +132,8 @@ static void nx_ps2_code(Computer* comp, int code, int ext, int rel) {
 	if (!rel && (k == 0x09)) nx_board_key(comp, 9);
 	int d = IN.keymap[k];
 	int drow = (d >> 3) & 7;
-	if (!rel && kbd->nxNmiDown && (k != 0x01) && ((d & 7) < 5) && ((drow == 3) || (drow == 4))) {
+	// (a key of the digits' rows, as the membrane scan sees it: CAPS + 5 is one too)
+	if (!rel && kbd->nxNmiDown && (k != 0x01) && ((d & 0xc0) != 0xc0) && ((d & 7) < 5) && ((drow == 3) || (drow == 4))) {
 		nx_board_key(comp, (drow == 3) ? (d & 7) : 9 - (d & 7));
 		kbd->nxNmiCut = 1;
 		*down &= ~bit;		// taken: its break is dropped as well

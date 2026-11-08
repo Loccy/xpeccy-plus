@@ -80,6 +80,7 @@ void nx_keyp(Computer*, keyEntry*);
 void nx_keyr(Computer*, keyEntry*);
 
 void nx_snd_reset(Computer*);
+void nx_snd_reset_at(Computer*, long long);
 void nx_snd_nr(Computer*, int, long long);
 void nx_snd_dac_nr(Computer*, int, int, long long);
 int nx_snd_in(Computer*, int);

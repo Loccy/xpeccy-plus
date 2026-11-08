@@ -94,6 +94,16 @@ void nx_snd_reset(Computer* comp) {
 	nx_snd_fe(comp, NX.pfe);	// the beeper's levels are the Next's
 }
 
+// a soft reset on edge w (NR 02 b0, F4): the chips as nx_snd_reset leaves them, the DACs'
+// change queued at w and what was queued before it still played
+void nx_snd_reset_at(Computer* comp, long long w) {
+	for (int i = 0; i < 32; i++) nxAyTab[i] = nxAyTab16[i >> 1];
+	nx_ay_reset(comp);
+	nx_dac_reset(comp);
+	nx_dac_push(comp, w);
+	nx_snd_fe(comp, NX.pfe);
+}
+
 // nr_06 or nr_08 written on edge w: entering psg_mode 11 resets the chips, nr_08 b3 = 0
 // holds the DACs in reset (zxnext.vhd 6436); the beeper's exclusive and issue 2 terms follow
 void nx_snd_nr(Computer* comp, int r, long long w) {

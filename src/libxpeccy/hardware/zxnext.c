@@ -1348,9 +1348,8 @@ static void nx_back(Computer* comp, int* h, int* v, int n) {
 
 // == nextreg ==
 
-static void nx_soft_reset(Computer* comp);
+static void nx_soft_reset(Computer* comp, long long w);
 static void nx_hard_reset(Computer* comp);
-static void nx_reset_core(Computer* comp, long long w);
 
 // The CLK_28 time a port 253B read samples the counters at: port_253b_dat follows the
 // register one CLK_28 behind, port_253b_dat_0 takes it on each falling cpu clock edge,
@@ -1544,7 +1543,7 @@ static void nx_nr_write(Computer* comp, int r, int v) {
 				nx_hard_reset(comp);
 				return;
 			}
-			if (v & 1) nx_soft_reset(comp);
+			if (v & 1) nx_soft_reset(comp, NX.nrLastW);
 			return;
 		case 0x04:
 			nr[0x04] = v & 0x7f;		// issue 2 board: 7 bits (zxnext.vhd 5708-5719)
@@ -2563,41 +2562,64 @@ static void nx_hard_reset(Computer* comp) {
 	cpu_reset(comp->cpu);
 }
 
-// NR 02 b0: the write's own edge (nx_nr_land), the copper's or the CPU's
-static void nx_soft_reset(Computer* comp) {
-	if (next_reset_open) {
-		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
-		return;
-	}
-	nx_reset_core(comp, NX.nrLastW);
+// nextreg 02's reset type: a soft reset moves its hard bit down
+static void nx_reset_type_soft(Computer* comp) {
+	NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
+}
+
+// the parts of the board a reset reaches besides the registers: the I2C lines let go
+// (zxnext.vhd 3231-3252), which the clock chip sees, and the UARTs
+static void nx_reset_lines(Computer* comp) {
+	NX.i2cScl = NX.i2cSda = 1;
+	nx_uart_reset(comp);
+	ds_bus(comp->rtc, 1, 1);
+}
+
+// The core's soft reset, i_RESET (zxnext.vhd 1730), as nr_02_soft_reset makes it for
+// NR 02 b0 and for F4, the RESET button's short press (6370): on edge w - the write's
+// own (nx_nr_land), the copper's or the CPU's - or, -1, where the ray stands. The
+// raster stays: it changes at a frame start only. Machine > Reset is the same reset
+// from outside a step (nx_reset).
+static void nx_soft_reset(Computer* comp, long long w) {
+	nx_reset_type_soft(comp);
+	if (next_reset_open) return;
+	long long e = (w >= 0) ? w : nx_now(comp);
+	long long up = nxv_before_reset(comp, w);
+	nx_regs_reset(comp);
+	compSetHwTurbo(comp, 1.0);		// 3.5 MHz again (nx_regs_reset's NR 07)
+	nx_reset_lines(comp);
+	nx_map_mem(comp);
+	nxv_reset(comp);
+	nxv_after_reset(comp, up);	// drawn on from there, as the dot after the reset did
+	nx_snd_reset_at(comp, e);
 	cpu_reset(comp->cpu);
 }
 
 // A board key made, F1..F10 as 0..9: what the core's hotkeys do with it (zxnext.vhd
-// 2090-2091, 5790-5845, 6335-6350, 6370). F4 is the RESET button's short press, so
-// the reset Machine > Reset makes. F9 is the NMI button, F10 the DRIVE button - the
-// divMMC NMI, which needs the divMMC's ports on too. F2 and F7 change only the video
-// output, F5 and F6 the expansion bus: nothing here. What changes the machine from
-// outside joins a recording (an NMI taken does that by itself); a recording played
-// leaves them alone, as the NMI key.
+// 2090-2091, 5790-5845, 6335-6350, 6370). F9 is the NMI button, F10 the DRIVE button -
+// the divMMC NMI, which needs the divMMC's ports on too. F2 and F7 change only the
+// video output, F5 and F6 the expansion bus: nothing here. What changes the machine
+// from outside joins a recording (an NMI taken does that by itself); a recording
+// played leaves them alone, as the NMI key.
 void nx_board_key(Computer* comp, int n) {
 	unsigned char* nr = NX.nr;
-	int old = nr[0x05];
 	if (comp->rzx.play) return;
 	switch (n) {
 		case 0:			// hard reset
 			if (next_reset_open) return;
 			nx_hard_reset(comp);
 			break;
-		case 2:			// 50/60 Hz (none on the Pentagon timing)
+		case 2: {		// 50/60 Hz (none on the Pentagon timing)
 			if (!(nr[0x06] & 0x20)) return;
+			int old = nr[0x05];
 			nx_nr_write(comp, 0x05, nr[0x05] ^ 4);
 			if (nr[0x05] == old) return;
 			break;
+		}
 		case 3:			// soft reset
-			if (NX.configMode) return;
-			compUserReset(comp, RES_DEFAULT);	// joins a recording itself
-			return;
+			if (NX.configMode || next_reset_open) return;
+			nx_soft_reset(comp, -1);
+			break;
 		case 7:			// the next CPU speed
 			if (!(nr[0x06] & 0x80)) return;
 			nx_nr_write(comp, 0x07, (nr[0x07] + 1) & 3);
@@ -2782,36 +2804,27 @@ static void nx_reset(Computer* comp) {
 	comp->cpu->xinta = nx_inta;
 	int fw = !NX.powered && NX.firmware;
 	NX.firmware = 0;
-	nx_reset_core(comp, -1);
-	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
-}
-
-// The core's reset, i_RESET (zxnext.vhd 1730): power-on's, or the soft one, which the
-// RESET button, F4 and NR 02 b0 all make alike (nr_02_soft_reset, 6370), on edge w -
-// -1 for where the ray stands. The raster stays: it changes at a frame start only.
-static void nx_reset_core(Computer* comp, long long w) {
 	long long up = -1;
 	if (!NX.powered) {
 		nx_power(comp);
 	} else {
-		NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
-		up = nxv_before_reset(comp, w);
+		// the reset button: the soft reset of nx_soft_reset, between steps (compReset
+		// sets the clock), with the machine set up again around it
+		nx_reset_type_soft(comp);
+		up = nxv_before_reset(comp, -1);	// the raster stays: it changes at a frame start only
 		nx_regs_reset(comp);
 		nx_layout(comp);
-		compSetHwTurbo(comp, 1.0);	// 3.5 MHz again (nx_regs_reset's NR 07)
 	}
-	// a reset lets the I2C lines go (zxnext.vhd 3231-3252); the clock chip sees that
-	NX.i2cScl = NX.i2cSda = 1;
-	nx_uart_reset(comp);
-	ds_bus(comp->rtc, 1, 1);
+	nx_reset_lines(comp);
 	comp->vid->inten |= 1;		// the ULA interrupt pixel is reported (nx_irq decides)
 	zx_set_pal(comp);
 	vid_set_mode(comp->vid, VID_NEXT);
 	comp_set_cont(comp, 0);		// the machine contends by itself (nx_cont)
 	nx_map_mem(comp);
 	nxv_reset(comp);
-	nxv_after_reset(comp, up);	// drawn on from where the reset found the ray
+	nxv_after_reset(comp, up);	// the button: drawn on from where the reset found the ray
 	nx_snd_reset(comp);
+	if (fw) comp->flgBOOT = 1;	// nx_firmware, once the card is in
 }
 
 // CLK_28 of each video timing (nextreg.txt 0x11): the CPU, the raster and everything
