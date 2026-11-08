@@ -47,6 +47,7 @@ typedef struct {
 	unsigned lfn:1;			// name doesn't fit 8.3, needs long name entries
 	unsigned dead:1;		// gone from the volume and the folder
 	unsigned pinned:1;		// from elsewhere (vfat_pin): the host side leaves it and all in it be
+	unsigned cut:1;			// a pinned folder holding only the program's file of its folder, or nothing
 	char* name;			// name shown to the guest, UTF-8
 	char* hname;			// name in the host folder, UTF-8 (NULL for the root)
 	char* hroot;			// a pinned folder's own host path, UTF-8

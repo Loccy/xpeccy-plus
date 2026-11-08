@@ -679,7 +679,7 @@ static void ext_put_string(szxBuf* d, const char* s) {
 
 // The Next's card: the path, a folder or not, the print of its directories, and the
 // folders of programs from elsewhere put on it (a pinned node of the root: its name and
-// its host folder). NextZXOS keeps what it read of the card in memory, so the card
+// its host folder, or the program's file when that went alone). NextZXOS keeps what it read of the card in memory, so the card
 // matters to the state; it is far too big to go in the file.
 static szxCard szxCardLast;
 
@@ -706,7 +706,15 @@ static void ext_card_save(szxBuf* b, Computer* comp) {
 	for (i = vf ? vf->node[0].child : -1; (i >= 0) && pins; i = vf->node[i].next) {
 		if (!vf->node[i].pinned || !vf->node[i].hroot || vf->node[i].dead) continue;
 		ext_put_string(b, vf->node[i].name);
-		ext_put_string(b, vf->node[i].hroot);
+		// one with only the program's file of its folder is named by that file
+		int f = vf->node[i].child;
+		if (vf->node[i].cut && (f >= 0) && !vf->node[f].dead && vf->node[f].hname) {
+			char host[2048];
+			snprintf(host, sizeof(host), "%s/%s", vf->node[i].hroot, vf->node[f].hname);
+			ext_put_string(b, host);
+		} else {
+			ext_put_string(b, vf->node[i].hroot);
+		}
 		pins--;
 	}
 	sb_dword(b, (unsigned)(print & 0xffffffffu));	// the print of what it holds, after all
