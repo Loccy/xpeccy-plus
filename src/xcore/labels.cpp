@@ -87,14 +87,14 @@ static unsigned char rom_view_code(const QString& str) {
 	return DBG_VIEW_CODE;
 }
 
-// The lists of Xpeccy+ are built in (res/labels); one under a license of its own
-// (the 48K BASIC's, GPL) is a file in config/labels of the installed program
+// The lists are files in config/labels of the installed program, each under the
+// license of its source (config/labels/README.md)
 static void rom_lists_read() {
 	static bool done = false;
 	if (done) return;
 	done = true;
 	QStringList paths;
-	foreach(QString dname, QStringList() << ":/res/labels" << (xconf_install_dir() + "/labels")) {
+	foreach(QString dname, QStringList() << (xconf_install_dir() + "/labels")) {
 		QDir dir(dname);
 		if (!dir.exists()) xlog(XLG_FILE, XLL_WARN, "ROM labels: no %s", dname.toLocal8Bit().constData());
 		foreach(QString fn, dir.entryList(QStringList("*.labels"), QDir::Files, QDir::Name))

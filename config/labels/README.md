@@ -3,9 +3,8 @@
 Names for the routines of known ROMs, the ranges in them that are data, and the system
 variables of their systems, shown by the Debugger where the user has no label or mark of
 their own. Switch them off in Options - Debugger - **ROM labels** and **System variables**.
-The lists of Xpeccy+ are built into the program (`res/labels/` in the sources); a list under
-a license of its own is a file in this folder, read by the program when it starts. This file
-says where they come from.
+The lists are the `.labels` files in this folder, read by the program when it starts; none
+is built into it. This file says where they come from.
 
 A ROM is known by its bytes: each list names the MD5 of every 16K bank it fits, so a ROM file
 with the same bytes gets the names wherever it comes from, and a changed one does not. A list
@@ -50,7 +49,7 @@ ranges of its `b`, `t` and `w` blocks and `B`, `T` and `W` sub-blocks added.
 
 ## 128K, +2A/+3 - Klive IDE, MIT
 
-Built in: `basic128.labels` (128K ROM 0, 1085 names), `basic128-plus2.labels` (+2 ROM 0, 757 of
+`basic128.labels` (128K ROM 0, 1085 names), `basic128-plus2.labels` (+2 ROM 0, 757 of
 them carried over), `p3rom0-40/41`, `p3rom1-40/41` (+2A/+3 ROM 0 and ROM 1, v4.0 and v4.1),
 `p3dos-40/41` (ROM 2, with the jump table below), and `basic48-sp128-1`, `basic48-spp3-40-3`,
 `basic48-spp3-41-3` (the 48 BASIC of these machines where it differs from the 48K's). Names and
@@ -93,7 +92,7 @@ Written for this project, MIT license.
 
 ## TR-DOS - Xpeccy+
 
-`trdos.labels`, built in: the entry points the TR-DOS manuals document - #3D00
+`trdos.labels`: the entry points the TR-DOS manuals document - #3D00
 (`TRDOS_ENTRY`, from BASIC), #3D03 (`TRDOS_REM`, a command in a REM), #3D13
 (`TRDOS_FUNCTION`, the function in C), #3D2F (`TRDOS_RET`, a RET that jumps to the address
 pushed). 5.03, 5.04T and the TR-DOS pages of the bundled clone ROMs. Written for this
@@ -101,7 +100,7 @@ project, MIT license.
 
 ## System variables - Xpeccy+
 
-Built in, shown in operands and tips when the system's ROM is in the machine, written for this
+Shown in operands and tips when the system's ROM is in the machine, written for this
 project, MIT license: `sysvars-basic48.labels` (#5C00-#5CB5, the names of the ZX Spectrum BASIC
 manual, chapter 25), `sysvars-basic128.labels` (#5B00-#5BFF, the ZX Spectrum +2 manual, chapter
 8 part 25), `sysvars-p3rom0.labels` (#5B00-#5BFF of the +2A/+3, the +3 manual, chapter 8 part
