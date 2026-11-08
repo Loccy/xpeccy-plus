@@ -48,8 +48,7 @@ only when it is run, and a disk only from drive A.
 A `.z80` names the model it was taken on, as an `.szx` does, and **Auto** opens it on that
 model: a 48K one on the 48K, a 128K one on the 128K rather than on a +2 or a Pentagon. The
 48K, the 128K and the Pentagon each have a frame of their own length, so a program timed to
-the screen runs right only on its own; the +2 has the 128K's frame but a ROM of its own. A
-Pentagon 1024 counts as a Pentagon. **Keep current** leaves it where you are.
+the screen runs right only on its own. A Pentagon 1024 counts as a Pentagon. **Keep current** leaves it where you are.
 
 Any other snapshot - a `.sna`, or a `.z80` with **Ask** or a machine picked in **Opened on** -
 runs on any machine with its memory paging. One taken inside the ROM - in the 128K menu or

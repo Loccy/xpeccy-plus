@@ -113,9 +113,11 @@ video timing, VGA 0 or VGA 1. Its other settings are not read.
 
 Open `.nex` programs and `.snx` snapshots as any file: by **File > Open**, by dropping them
 on the window, or on the command line (see [File menu](files.md)). They need the Next, and on
-another machine Xpeccy+ switches to it. On the Next, `.sna` and `.z80` snapshots of the
-48K, the 128K and the Pentagon open the same way; snapshots of other machines switch to
-a machine that runs them.
+another machine Xpeccy+ switches to it. On the Next, `.sna` snapshots of the 48K and the
+128K open the same way; snapshots of other machines switch to a machine that runs them. A
+`.z80` names its model, so with **Auto** on the
+[File types page](options-file-types.md) it switches to that model; with **Keep current**,
+or the Next picked for `.z80` there, it opens on the Next too.
 
 The Next does not load a program into its memory directly, as its firmware would start
 over anything put there. Xpeccy+ types the commands on the keyboard instead, as you would:

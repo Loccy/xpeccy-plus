@@ -69,8 +69,9 @@ on, Run starts a tape from a Hard Reset and cannot start a disk in a drive.
 
 If the current machine cannot run the file (a +3 disk on a Pentagon, for instance),
 Xpeccy+ switches to a machine that can - to the machine named in the file, if the file
-names one. When you next open a file that your own machine can run, Xpeccy+ switches back
-to your machine.
+names one; a `.z80` or `.szx` snapshot goes to the model it names even when the current
+machine could run it. When you next open a file that your own machine can run, Xpeccy+
+switches back to your machine.
 
 ```{index} Choose a Machine
 ```
