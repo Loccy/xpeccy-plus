@@ -256,7 +256,8 @@ void MainWin::socketRead() {
 	} else if ((com == "winshot") || (com == "winshot-menus")) {
 		// winshot FILE: the window as painted, or the menu or dialog open over it.
 		// winshot-menus FILE: the window with every menu open over it, where it
-		// stands; the answer adds a "menu x y w h" line for each. A path may have spaces
+		// stands, and a tip up over them; the answer adds a "menu x y w h" line
+		// for each menu. A path may have spaces
 		QWidget* w = NULL;
 		if (com == "winshot") {
 			w = QApplication::activePopupWidget();
@@ -316,14 +317,18 @@ void MainWin::socketRead() {
 			}
 			if (base != frame) pic = base->grab();
 			QList<QMenu*> pops;
+			QList<QWidget*> tips;
 			foreach(QWidget* t, QApplication::topLevelWidgets()) {
 				QMenu* m = qobject_cast<QMenu*>(t);
 				if (m && m->isVisible()) pops.append(m);
+				if (t->isVisible() && t->inherits("QTipLabel")) tips.append(t);
 			}
 			std::sort(pops.begin(), pops.end(), [](QMenu* a, QMenu* b) {return a->x() < b->x();});
 			QRect all(QPoint(0, 0), base->size());
 			foreach(QMenu* m, pops)
 				all |= QRect(base->mapFromGlobal(m->mapToGlobal(QPoint(0, 0))), m->size());
+			foreach(QWidget* t, tips)
+				all |= QRect(base->mapFromGlobal(t->mapToGlobal(QPoint(0, 0))), t->size());
 			const qreal r = widgetDpr(base);
 			QPixmap out(all.size() * r);
 			out.setDevicePixelRatio(r);
@@ -335,6 +340,8 @@ void MainWin::socketRead() {
 				pnt.drawPixmap(rc.topLeft() - all.topLeft(), m->grab());
 				menus += QString("menu %0 %1 %2 %3\r\n").arg(rc.x() - all.x()).arg(rc.y() - all.y()).arg(rc.width()).arg(rc.height());
 			}
+			foreach(QWidget* t, tips)
+				pnt.drawPixmap(base->mapFromGlobal(t->mapToGlobal(QPoint(0, 0))) - all.topLeft(), t->grab());
 			pnt.end();
 			pic = out;
 		}
@@ -457,11 +464,23 @@ void MainWin::socketRead() {
 		}
 	} else if (com == "tip") {
 		// tip X Y TITLE: the tip a resting mouse gets at winshot's X Y (Qt sends it only
-		// to the active window, which a hidden desktop never has); answers it or nothing
+		// to the active window, which a hidden desktop never has); answers it or nothing.
+		// TITLE @menu: the open menu at the main window's X Y, as click counts them
 		QString name = prm.mid(3).join(" ");
 		QWidget* win = NULL;
+		if ((name == "@menu") && (prm.size() > 3)) {
+			// by geometry: the window system finds nothing on a hidden desktop
+			QPoint gp = frame->mapToGlobal(QPoint(prm[1].toInt(), prm[2].toInt()));
+			foreach(QWidget* t, QApplication::topLevelWidgets()) {
+				if (qobject_cast<QMenu*>(t) && t->isVisible() && t->geometry().contains(gp)) win = t;
+			}
+			if (win) {
+				prm[1] = QString::number(win->mapFromGlobal(gp).x());
+				prm[2] = QString::number(win->mapFromGlobal(gp).y());
+			}
+		}
 		foreach(QWidget* w, QApplication::topLevelWidgets()) {
-			if (w->isVisible() && !name.isEmpty() && w->windowTitle().startsWith(name)) {
+			if (!win && w->isVisible() && !name.isEmpty() && w->windowTitle().startsWith(name)) {
 				win = w;
 				break;
 			}
