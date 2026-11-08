@@ -229,9 +229,102 @@ static int switch_check(void) {
 	return 0;
 }
 
+// --reset: a reset from 28 MHz - the RESET button's short press (F4 on the ps/2
+// keyboard), NR 02 b0, Machine > Reset, NR 02 b1 - leaves the CPU at 3.5 MHz with its
+// T-states on the dot starts of odd hc_ula, where 48K contention reads them, as at
+// power-on (zxnext.vhd 5785-5830); each case runs a contended loop and checks every
+// instruction boundary
+enum {RS_POWER = 0, RS_F4, RS_NR02, RS_MENU, RS_HARD};
+static const char* rsNames[] = {"power", "F4", "NR 02 b0", "Machine > Reset", "NR 02 b1 (hard)"};
+
+static void reset_poke(Computer* comp, int adr, const unsigned char* b, int n) {
+	for (int i = 0; i < n; i++) comp_poke(comp, adr + i, b[i], 0);
+}
+
+static int reset_case(int kind, int delay) {
+	// 8000: 48K timing, 28 MHz, a while at it, then NR 02 (its cases) or a loop
+	static const unsigned char fast[] = {
+		0xf3,				// di
+		0xed, 0x91, 0x03, 0x90,		// nextreg 3,#90: 48K timing
+		0xed, 0x91, 0x07, 0x03,		// nextreg 7,3: 28 MHz
+		0x06, 0x00, 0x10, 0xfe,		// ld b,0: djnz $
+		0x06, 0x37, 0x10, 0xfe,		// ld b,#37: djnz $ (the phase the reset lands on)
+		0x18, 0x04,			// jr +4 (the NR 02 cases: nop nop over it)
+		0xed, 0x91, 0x02, 0x01,		// nextreg 2,1
+		0x18, 0xfe			// jr $
+	};
+	// 8100: the contended loop at 3.5 MHz
+	static const unsigned char slow[] = {
+		0xf3,				// di
+		0x3a, 0x00, 0x40,		// ld a,(#4000)
+		0x18, 0xfb			// jr -5
+	};
+	Computer* comp = compCreate();
+	compSetHardware(comp, "ZXNext");
+	compSetBaseFrq(comp, 3.5);
+	compReset(comp, RES_DEFAULT);
+	comp->flgBOOT = 0;
+	comp->next->configMode = 0;
+	reset_poke(comp, 0x8000, fast, sizeof(fast));
+	reset_poke(comp, 0x8100, slow, sizeof(slow));
+	comp_poke(comp, 0x800e, 0x30 + delay, 0);
+	if ((kind == RS_NR02) || (kind == RS_HARD)) comp_poke(comp, 0x8011, 0, 0), comp_poke(comp, 0x8012, 0, 0);
+	if (kind == RS_HARD) comp_poke(comp, 0x8016, 2, 0);		// nextreg 2,2: the hard reset
+	if (kind != RS_POWER) {
+		comp->cpu->regPC = 0x8000;
+		// to the jr $ - or, NR 02's cases, into the ROM the reset starts
+		for (int i = 0; (i < 200000) && (comp->cpu->regPC != 0x8017) && (comp->cpu->regPC >= 0x4000); i++)
+			compExec(comp);
+		switch (kind) {
+			case RS_F4: {
+				keyEntry k;
+				memset(&k, 0, sizeof(k));
+				k.atCode = 0x0c;	// F4's set 2 code
+				comp->hw->keyp(comp, &k);
+				comp->hw->keyr(comp, &k);
+				break;
+			}
+			case RS_MENU:
+				compReset(comp, RES_DEFAULT);
+				break;
+		}
+	}
+	comp->cpu->regPC = 0x8100;
+	int bad = 0, n = 0;
+	for (int i = 0; i < 20000; i++) {
+		compExec(comp);
+		if (i < 2) continue;		// a speed change waits for a bus cycle
+		int hc, vc, cvc;
+		next_counters(comp, &hc, &vc, &cvc);
+		// (the frame after a power-on flips hc_ula's parity at its first restart, and the
+		// next bus cycle takes the dot back, nx_relock: the boundary between is not one)
+		if (comp->next->powerFrame) continue;
+		if (!(hc & 1)) bad++;
+		n++;
+	}
+	int ok = !bad && (comp->next->speed == 0) && (comp->hwMul == 1.0);
+	if (!ok) fprintf(stderr, "%s, delay %d: %d of %d boundaries on even hc_ula, speed %d, x%g\n", rsNames[kind], delay, bad, n, comp->next->speed, comp->hwMul);
+	compDestroy(comp);
+	return ok;
+}
+
+static int reset_check(void) {
+	xhost_time_fixed = 1759665600;
+	printf("== reset speed\n");
+	int all = 1;
+	for (int k = RS_POWER; k <= RS_HARD; k++) {
+		int ok = 1;
+		for (int d = 0; d < 8; d++) ok &= reset_case(k, d);	// eight phases the reset lands on
+		printf("%s: %s\n", rsNames[k], ok ? "ok" : "FAIL");
+		all &= ok;
+	}
+	return all ? 0 : 1;
+}
+
 int debugger_check(void);
 
 int main(int argc, char** argv) {
+	if ((argc == 2) && !strcmp(argv[1], "--reset")) return reset_check();
 	if ((argc == 2) && !strcmp(argv[1], "--switch")) return switch_check();
 	if ((argc == 2) && !strcmp(argv[1], "--debugger")) return debugger_check();
 	if (argc < 3) {
