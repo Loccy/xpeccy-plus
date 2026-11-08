@@ -12,6 +12,7 @@ rodland_fast    zx128     auto  2000  300     "tape/Rod-Land - Re-Imagined (2012
 chromatron_fast zx128     auto  2500  300     "tape/Chromatrons Attack (2013)(R-Tape)(128K).tzx" cfg:TAPE.fast=yes cfg:TAPE.autoplay=no
 influence_full  zx128     auto  1500  300     tape/INFLUENC.TAP                     cfg:TAPE.fast=yes --bench-full
 robocop         zx128     open  50    300     snap/robocop.z80
+overlander_fuel zx128     open  50    300     snap/overlander_fuel.szx              mac:input.joy=kempston --bench-full
 aytest_full     zx128     auto  3600  300     tape/AYtest_v0.2.tap                  keys:3000:E,3200:E,3400:1 --bench-full
 ula128_p2       zxplus2   auto  2500  200     ULA/ula128.tap
 snow_p2         zxplus2   open  50    300     snap/basic_snow_+2.sna
