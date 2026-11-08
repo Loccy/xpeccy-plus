@@ -411,6 +411,7 @@ void kbdReleaseAll(Keyboard* kbd) {
 	memset(kbd->nxDown, 0, sizeof(kbd->nxDown));
 	memset(kbd->nxW, 0, sizeof(kbd->nxW));
 	kbd->nxScan = 0;
+	kbd->nxNmiDown = 0;
 	kbd->cbWait = 0;
 	kbd->keycode = 0;
 	kbd->lastkey = 0;

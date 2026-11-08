@@ -114,10 +114,30 @@ static void nx_ps2_code(Computer* comp, int code, int ext, int rel) {
 	if (rel ? !(*down & bit) : (*down & bit)) return;
 	if (rel) *down &= ~bit;
 	else *down |= bit;
-	// F9 or left Win, F10 or right Win: the buttons' lines (ps2_keyb.vhd 119-141)
-	if (!rel && (k == (ext ? 0x11f : 0x01))) nx_board_key(comp, 8);
-	if (!rel && (k == (ext ? 0x127 : 0x09))) nx_board_key(comp, 9);
-	int d = IN.keymap[(ext << 8) | code];
+	// F9 and F10 are the NMI and DRIVE buttons' lines (ps2_keyb.vhd 119-141; the Win keys
+	// too, which no host key here sends). DRIVE goes at the press; NMI at the release of
+	// a press under a second, and while it is down a digit is a function key instead,
+	// 1..0 = F1..F10, with no NMI after (emu_fnkeys.vhd)
+	if (k == 0x01) {
+		if (!rel) {
+			kbd->nxNmiDown = 1;
+			kbd->nxNmiAt = nx_now(comp);
+			kbd->nxNmiCut = 0;
+		} else if (kbd->nxNmiDown) {
+			kbd->nxNmiDown = 0;
+			long long t = nx_now(comp) - kbd->nxNmiAt;
+			if (!kbd->nxNmiCut && (t >= 0) && (t < NX_BUTTON_SHORT)) nx_board_key(comp, 8);
+		}
+	}
+	if (!rel && (k == 0x09)) nx_board_key(comp, 9);
+	int d = IN.keymap[k];
+	int drow = (d >> 3) & 7;
+	if (!rel && kbd->nxNmiDown && (k != 0x01) && ((d & 7) < 5) && ((drow == 3) || (drow == 4))) {
+		nx_board_key(comp, (drow == 3) ? (d & 7) : 9 - (d & 7));
+		kbd->nxNmiCut = 1;
+		*down &= ~bit;		// taken: its break is dropped as well
+		return;
+	}
 	if ((d & 0xc0) == 0xc0) {
 		if (!rel) nx_board_key(comp, d & 7);
 		return;

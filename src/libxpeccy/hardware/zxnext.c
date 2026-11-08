@@ -1348,7 +1348,7 @@ static void nx_back(Computer* comp, int* h, int* v, int n) {
 
 // == nextreg ==
 
-static void nx_soft_reset(Computer* comp, long long w);
+static void nx_soft_reset(Computer* comp);
 static void nx_hard_reset(Computer* comp);
 
 // The CLK_28 time a port 253B read samples the counters at: port_253b_dat follows the
@@ -1543,7 +1543,7 @@ static void nx_nr_write(Computer* comp, int r, int v) {
 				nx_hard_reset(comp);
 				return;
 			}
-			if (v & 1) nx_soft_reset(comp, NX.nrLastW);
+			if (v & 1) nx_soft_reset(comp);
 			return;
 		case 0x04:
 			nr[0x04] = v & 0x7f;		// issue 2 board: 7 bits (zxnext.vhd 5708-5719)
@@ -2562,12 +2562,11 @@ static void nx_hard_reset(Computer* comp) {
 	cpu_reset(comp->cpu);
 }
 
-// NR 02 b0 at the write's own edge w (nx_nr_land), the copper's or the CPU's;
-// the F4 key at the ray (w -1)
-static void nx_soft_reset(Computer* comp, long long w) {
+static void nx_soft_reset(Computer* comp) {
 	NX.resetType = (NX.resetType >> 2 & 1) << 1 | ((NX.resetType & 3) ? 1 : 0);
 	if (next_reset_open) return;
-	long long up = nxv_before_reset(comp, w);
+	// NR 02 b0: the write's own edge (nx_nr_land), the copper's or the CPU's
+	long long up = nxv_before_reset(comp, NX.nrLastW);
 	nx_regs_reset(comp);
 	if (NX.speed) compSetHwTurbo(comp, 1.0);
 	nx_map_mem(comp);
@@ -2577,27 +2576,30 @@ static void nx_soft_reset(Computer* comp, long long w) {
 }
 
 // A board key made, F1..F10 as 0..9: what the core's hotkeys do with it (zxnext.vhd
-// 2090-2091, 5790-5845, 6335-6350, 6370). F9 is the NMI button's line, F10 the DRIVE
-// button's - the divMMC NMI, which needs the divMMC's ports on too. F2 and F7 change
-// only the video output, F5 and F6 the expansion bus: nothing here. What changes the
-// machine from outside joins a recording (an NMI taken does that by itself); a
-// recording played leaves them alone, as the NMI key.
+// 2090-2091, 5790-5845, 6335-6350, 6370). F4 is the RESET button's short press, so
+// the reset Machine > Reset makes. F9 is the NMI button, F10 the DRIVE button - the
+// divMMC NMI, which needs the divMMC's ports on too. F2 and F7 change only the video
+// output, F5 and F6 the expansion bus: nothing here. What changes the machine from
+// outside joins a recording (an NMI taken does that by itself); a recording played
+// leaves them alone, as the NMI key.
 void nx_board_key(Computer* comp, int n) {
 	unsigned char* nr = NX.nr;
+	int old = nr[0x05];
 	if (comp->rzx.play) return;
 	switch (n) {
 		case 0:			// hard reset
 			if (next_reset_open) return;
 			nx_hard_reset(comp);
 			break;
-		case 2:			// 50/60 Hz
+		case 2:			// 50/60 Hz (none on the Pentagon timing)
 			if (!(nr[0x06] & 0x20)) return;
 			nx_nr_write(comp, 0x05, nr[0x05] ^ 4);
+			if (nr[0x05] == old) return;
 			break;
 		case 3:			// soft reset
 			if (NX.configMode) return;
-			nx_soft_reset(comp, -1);
-			break;
+			compUserReset(comp, RES_DEFAULT);	// joins a recording itself
+			return;
 		case 7:			// the next CPU speed
 			if (!(nr[0x06] & 0x80)) return;
 			nx_nr_write(comp, 0x07, (nr[0x07] + 1) & 3);
