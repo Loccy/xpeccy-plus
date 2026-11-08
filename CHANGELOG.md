@@ -40,6 +40,8 @@ before that point is upstream's history and is not repeated here.
 - **System variables are named in the Debugger's instructions**: `LD HL,(CH_ADD)` - for 48
   BASIC, the 128K, the +2A/+3 and TR-DOS. Options > Debugger > System variables.
 - **A local label's global part is paler in the Debugger**: `draw` of `draw.loop`.
+- **Delete breakpoint in the right-click menu of the Breakpoints list**, and Del in the list
+  does the same. *(requested by Volutar)*
 
 ### Changed
 
@@ -77,6 +79,11 @@ before that point is upstream's history and is not repeated here.
 - **Auto opens a `.z80` snapshot on the model it names**, as it does an SZX: a 128K demo timed
   to the screen no longer stays on a Pentagon, nor a 48K game on a 128K or the Next.
   *(thanks to ZXLion for the test)*
+- **A folder SD card is read only by the machines with the SD slot** (the ZX Evo and the
+  Next): switching to and from the others no longer waits for a big folder, and a read that
+  takes over a second says so in the status bar. *(reported by Volutar)*
+- **The Debugger's Stack panel is narrower**: less room between the offsets and the words.
+  *(requested by Volutar)*
 
 ### Fixed
 
@@ -139,6 +146,13 @@ before that point is upstream's history and is not repeated here.
 - **Ok or Apply in Options leaves the running program as it is**: a Next program opened from
   outside the SD card no longer stops later on, TSConf keeps its own interrupt line, and
   closing Options keeps a palette the machine set (BaseConf).
+- **A snapshot opened on the Next no longer hangs on the SD card or warns of it every
+  time**: a snapshot with no card of its own (another program's, an older one, another
+  machine's) leaves the card as it is, a card moved or copied with the emulator is the same
+  card, and a card that did change is said in a line on the screen, not a box. Frame skip is
+  no longer offered after such a wait. *(reported by Volutar)*
+- **Submenu arrows no longer run into the names** under a style (Gruvbox and the others), as
+  in the toolbar's Buttons menu.
 
 ## 2026.9 - 2026-11-02
 
