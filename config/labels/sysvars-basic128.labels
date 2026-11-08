@@ -3,7 +3,7 @@
 ; Xpeccy+, MIT license.
 ;
 ; @ram <bank>: names of RAM cells in that bank, at the CPU address it
-; has at #4000-#7FFF
+; has at #4000-#7FFF; ADDR NAME [SIZE], the size where the next name is not its end
 @ns BASIC128
 @ram 5
 5B00 SWAP
@@ -44,6 +44,6 @@
 5B92 RNLINE
 5B94 RNFIRST
 5B96 RNSTEP
-5B98 STRIP1
-5BA0 STRIP2
-5BFF TSTACK
+5B98 STRIP1 8
+5BA0 STRIP2 8
+5BFF TSTACK 1

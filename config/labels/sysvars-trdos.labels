@@ -3,7 +3,7 @@
 ; interface" (Mac Buster^Extreme, 1999-2000). Part of Xpeccy+, MIT license.
 ;
 ; @ram <bank>: names of RAM cells in that bank, at the CPU address it
-; has at #4000-#7FFF
+; has at #4000-#7FFF; ADDR NAME [SIZE], the size where the next name is not its end
 @ns TRDOS
 @ram 5
 5CC2 SOS_RET
@@ -45,4 +45,4 @@
 5D19 DEFAULT_DRIVE
 5D1C SP_COPY
 5D1E FOUND_FILE
-5D26 DOS_CHANS
+5D26 DOS_CHANS 20

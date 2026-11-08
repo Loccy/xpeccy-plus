@@ -4,7 +4,7 @@
 ; Part of Xpeccy+, MIT license.
 ;
 ; @ram <bank>: names of RAM cells in that bank, at the CPU address it
-; has at #4000-#7FFF
+; has at #4000-#7FFF; ADDR NAME [SIZE], the size where the next name is not its end
 @ns BASIC48
 @ram 5
 5C00 KSTATE

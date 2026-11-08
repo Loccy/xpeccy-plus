@@ -28,6 +28,7 @@ one keeps the terms of its own source, listed below.
 @rom <MD5> <image> [-NAME] [-@ADDR]   a 16K bank the list fits; what it has not
 @ram 5                            the names below are RAM cells of bank 5 (system variables)
 0556 LD_BYTES                     a name: address, name
+5BA0 STRIP2 8                     a system variable that says its size (else up to the next)
 3D00 3FFF db                      data: first, last address, view (db, dw, da, text)
 ```
 
