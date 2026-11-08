@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 
 #include "cheats.h"
 #include "xcore.h"
@@ -158,22 +159,50 @@ int cheats_open(const QString& path, bool picked) {
 	return POK_OK;
 }
 
+// The names a .pok of the image may have: its own, then a TOSEC name without its
+// [tags], then cut after (date)(publisher) - the 2023 set names a game's pokes so
+static QStringList pok_names(const QString& base) {
+	static const QRegularExpression date("\\((19|20)[0-9x]{2}[^)]*\\)|\\(-\\)");
+	QStringList res = {base};
+	QString cut = base;
+	const int tag = cut.indexOf('[');
+	if (tag > 0) cut = cut.left(tag).trimmed();
+	if (!res.contains(cut)) res.append(cut);
+	const QRegularExpressionMatch m = date.match(cut);
+	if (m.hasMatch()) {
+		int end = m.capturedEnd();
+		if ((end < cut.size()) && (cut[end] == '(')) {
+			const int pub = cut.indexOf(')', end);
+			if (pub > 0) end = pub + 1;
+		}
+		cut = cut.left(end);
+		if (!res.contains(cut)) res.append(cut);
+	}
+	return res;
+}
+
 // Fuse's and Spectaculator's rule, and how every archive with pokes has it:
-// POKES/NAME.POK beside the image, else NAME.pok beside it. Asked for by name, as
-// listing a TOSEC folder takes a third of a second; where case counts, in the
-// spellings collections use, and where it does not, the first one answers.
+// POKES/NAME.POK beside the image, else NAME.pok beside it; each name of pok_names()
+// in turn. Asked for by name, as listing a TOSEC folder takes a third of a second;
+// where case counts, in the spellings collections use, and where it does not, the
+// first one answers.
 static QString pok_beside(const QString& image) {
 	const QFileInfo inf(image);
 	const QString dir = inf.absolutePath();
-	const QString base = inf.completeBaseName();
-	const QString want = base + ".pok";
-	QStringList names;
-	for (const QString& one : {want, base + ".POK", want.toUpper(), want.toLower()})
-		if (!names.contains(one)) names.append(one);
-	for (const QString& sub : {QString("POKES/"), QString("pokes/"), QString("Pokes/"), QString()}) {
-		for (const QString& name : names) {
-			const QString path = dir + "/" + sub + name;
-			if (QFileInfo(path).isFile()) return path;
+	QStringList subs;
+	for (const QString& sub : {QString("POKES/"), QString("pokes/"), QString("Pokes/")})
+		if (QFileInfo(dir + "/" + sub).isDir()) subs.append(sub);
+	subs.append(QString());
+	for (const QString& base : pok_names(inf.completeBaseName())) {
+		const QString want = base + ".pok";
+		QStringList names;
+		for (const QString& one : {want, base + ".POK", want.toUpper(), want.toLower()})
+			if (!names.contains(one)) names.append(one);
+		for (const QString& sub : subs) {
+			for (const QString& name : names) {
+				const QString path = dir + "/" + sub + name;
+				if (QFileInfo(path).isFile()) return path;
+			}
 		}
 	}
 	return QString();
