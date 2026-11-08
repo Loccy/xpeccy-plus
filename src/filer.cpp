@@ -346,7 +346,8 @@ static int save_szx(Computer* comp, const char* name, int drv) {
 // command line .cd goes into the file's folder and NEXLOAD or SPECTRUM starts it - the
 // program finds its own files, and an open file handle, where it expects them. A file
 // on the card itself starts where it is, so what it saves stays there; one from
-// elsewhere has its folder put onto the card as a folder of the root.
+// elsewhere has its folder put onto the card as a folder of the root - with the file
+// alone in it for a snapshot or a file out of a collection (PIN_MAX).
 // a node of a folder card by its name, without case as the guest sees it; -1 if none
 static int vf_child(vFat* vf, int dir, const char* name) {
 	for (int i = (dir >= 0) ? vf->node[dir].child : -1; i >= 0; i = vf->node[i].next) {
@@ -369,6 +370,33 @@ static int nex_arm(Computer* comp, int dir, const QByteArray& cd, const QFileInf
 		return autostart_arm_nex(comp, cd.constData(), sn.toLatin1().constData(), welcome, snx, powered) ? ERR_OK : ERR_NEX_NAME;
 	}
 	return ERR_NEX_NAME;
+}
+
+// The folder goes with the program for what it reads beside it (res/, data/ and the like),
+// but not a collection: one of more entries than this puts the program's file on alone
+#define PIN_MAX		2000
+
+// more than PIN_MAX entries down the folder's tree; the count stops there
+static bool pin_huge(const QString& dir) {
+	QDirIterator it(dir, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::System, QDirIterator::Subdirectories);
+	for (int n = 0; it.hasNext(); n++) {
+		it.next();
+		if (n >= PIN_MAX) return true;
+	}
+	return false;
+}
+
+// dir put on the card as name, whole or with only that file of it (none if empty), and
+// said in the log with why
+static bool pin_put(Computer* comp, const QString& dir, const QString& name, const QString* only, const QString& why) {
+	int n = 0;
+	if (!sdc_mount_over(comp->sdc, dir, name, only, &n)) return false;
+	QString what = !only ? QString("%0 put on the card as /%1, %2 entries").arg(dir, name, QString::number(n))
+		: (only->isEmpty() || !n) ? QString("%0 put on the card as an empty /%1").arg(dir, name)
+		: QString("%0 put on the card alone as /%1").arg(QDir(dir).filePath(*only), name);
+	if (!why.isEmpty()) what += ": " + why;
+	xlog(XLG_FILE, XLL_INFO, "next: %s", what.toUtf8().constData());
+	return true;
 }
 
 static int load_next(Computer* comp, const char* name, int snx) {
@@ -412,7 +440,12 @@ static int load_next(Computer* comp, const char* name, int snx) {
 	// not found ("No such file or dir"). So off and on first, the card read again (as
 	// Read-only or not, as the user said), then the folder put on.
 	xm_power_cycle();
-	if (!sdc_mount_over(comp->sdc, inf.absolutePath(), dir)) return ERR_NEX_CARD;
+	// a .sna or .z80 is loaded whole and reads nothing beside it
+	QString ext = inf.suffix().toLower();
+	QString file = inf.fileName();
+	QString why = ((ext == "sna") || (ext == "z80")) ? QString("a snapshot reads nothing beside it")
+		: pin_huge(inf.absolutePath()) ? QString("its folder holds over %0 entries").arg(PIN_MAX) : QString();
+	if (!pin_put(comp, inf.absolutePath(), dir, why.isEmpty() ? NULL : &file, why)) return ERR_NEX_CARD;
 	return nex_arm(comp, vf_child(comp->sdc->vfat, 0, dir.toUtf8().constData()), dir.toLatin1(), inf, welcome(), snx, 1);
 }
 
@@ -1077,19 +1110,31 @@ static void szx_card_mount(Computer* comp, bool load) {
 			xlog(XLG_FILE, XLL_WARN, "szx: SD card %s not found", c->path);
 		}
 	}
-	// the folder a program from elsewhere ran in, put on the card again (one at a time,
-	// as opening one does)
+	// the folder a program from elsewhere ran in, put on the card again by the same rule
+	// (one at a time, as opening one does); one named by a file holds that file alone
 	if (load && same() && comp->sdc->vfat && c->pins) {
-		QString host = QString::fromUtf8(c->pin[0].host);
+		QFileInfo hinf(QString::fromUtf8(c->pin[0].host));
 		QString name = QString::fromUtf8(c->pin[0].name);
+		bool alone = hinf.isFile();
+		QString dir = alone ? hinf.absolutePath() : hinf.absoluteFilePath();
+		QString file = alone ? hinf.fileName() : QString();
 		vFat* vf = comp->sdc->vfat;
 		int node = vf_child(vf, 0, c->pin[0].name);
 		bool there = (node >= 0) && vf->node[node].pinned && vf->node[node].hroot
-			&& (QFileInfo(QString::fromUtf8(vf->node[node].hroot)).canonicalFilePath() == QFileInfo(host).canonicalFilePath());
-		if (!there && !QFileInfo(host).isDir()) {
-			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s not found", c->pin[0].host);
-		} else if (!there && !sdc_mount_over(comp->sdc, host, name)) {
-			xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s could not go on the card", c->pin[0].host);
+			&& (QFileInfo(QString::fromUtf8(vf->node[node].hroot)).canonicalFilePath() == QFileInfo(dir).canonicalFilePath());
+		// a folder is there as the rule put it, whole or empty; a file, with that file in it
+		if (there) {
+			int f = vfat_pin_file(vf, node);
+			there = alone ? ((f >= 0) && (file == QString::fromUtf8(vf->node[f].name)))
+				: (!vf->node[node].cut || (vf->node[node].child < 0));
+		}
+		if (!there && !alone && !hinf.isDir()) {
+			xlog(XLG_FILE, XLL_WARN, "szx: %s, the program's folder or file, not found", c->pin[0].host);
+		} else if (!there) {
+			QString why = (!alone && pin_huge(dir)) ? QString("it holds over %0 entries").arg(PIN_MAX) : QString();
+			bool cut = alone || !why.isEmpty();
+			if (!pin_put(comp, dir, name, cut ? &file : NULL, why))
+				xlog(XLG_FILE, XLL_WARN, "szx: the program's folder %s could not go on the card", c->pin[0].host);
 		}
 	}
 	szxCardChanged = c->print && (sdc_dir_print(comp->sdc) != c->print);

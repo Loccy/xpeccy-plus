@@ -135,6 +135,9 @@ NextZXOS's **NextBASIC**, `.cd` to the program's folder, and `.nexload` for a `.
 - **A program on the card** is started where it is, and its saves stay on the card.
 - **A program from elsewhere** is put on the card as an extra folder for as long as the
   card is in. The Next is switched off and on first, so that NextZXOS sees the new folder.
+  The folder comes with everything in it, for the files a program reads beside it - unless
+  it holds over 2000 files and folders, a collection, or the program is a `.sna` or `.z80`:
+  then the program's file is the only one in it.
   What the program saves there is kept only in memory and lost on a reset; the message
   **saves lost on reset: put the game on the card** says so. To keep saves, copy the
   program into the card's folder.

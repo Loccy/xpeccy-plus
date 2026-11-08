@@ -249,7 +249,7 @@ static QString real_dir(const QString& path) {
 // the loader in the root. A folder reached a second time - a junction back up the tree,
 // two to one place - is taken once, and a junction into the tree itself not at all:
 // deleting one copy would take the file from the other.
-static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, const QString& subName, bool writable, vfsDrop& drop) {
+static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, const QString& subName, const QString* only, bool writable, vfsDrop& drop) {
 	QList<vfsDir> queue;
 	QSet<QString> seen;
 	QString top = real_dir(root);
@@ -261,7 +261,17 @@ static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, co
 		int idx = vfat_add(vf, 0, name.constData(), 0, QFileInfo(sub).lastModified().toMSecsSinceEpoch() / 1000, 1);
 		if (idx >= 0) {
 			vfat_pin(vf, idx, QDir::cleanPath(QFileInfo(sub).absoluteFilePath()).toUtf8().constData());
-			queue.append({idx, sub, 1});
+			if (!only) {
+				queue.append({idx, sub, 1});
+			} else {
+				// the folder is not listed: the one file is asked for by its name
+				vf->node[idx].cut = 1;
+				QFileInfo inf(QDir(sub).filePath(*only));
+				if (!only->isEmpty() && inf.isFile() && (inf.size() <= VF_MAXFILE)) {
+					if (vfat_add(vf, idx, only->toUtf8().constData(), (unsigned int)inf.size(), inf.lastModified().toMSecsSinceEpoch() / 1000, 0) >= 0)
+						drop.bytes += inf.size();
+				}
+			}
 		}
 	}
 	for (int q = 0; q < queue.size(); q++) {
@@ -328,9 +338,10 @@ static void vfat_scan_tree(vFat* vf, const QString& root, const QString& sub, co
 	}
 }
 
-// sub: one more folder, put in the root as subName (a name the root does not have);
-// sectors: the volume's size, 0 for what it holds plus room to write in when writable
-static vFat* vfat_scan_in(const QString& path, bool writable, const QString& sub, const QString& subName, unsigned int sectors) {
+// sub: one more folder, put in the root as subName (a name the root does not have), with
+// only that file of it if only is given (none if it is empty); sectors: the volume's size,
+// 0 for what it holds plus room to write in when writable
+static vFat* vfat_scan_in(const QString& path, bool writable, const QString& sub, const QString& subName, const QString* only, unsigned int sectors) {
 	QFileInfo inf(path);
 	if (!inf.isDir() || !inf.isReadable()) return NULL;
 	vFat* vf = vfat_create();
@@ -345,7 +356,7 @@ static vFat* vfat_scan_in(const QString& path, bool writable, const QString& sub
 		drop.slow = vfsSlowRoots.contains(path);
 	}
 	vfat_add(vf, -1, "", 0, mtime, 1);		// root
-	vfat_scan_tree(vf, path, sub, subName, writable, drop);
+	vfat_scan_tree(vf, path, sub, subName, only, writable, drop);
 	{
 		QMutexLocker lock(&vfsSlowLock);
 		if (paceClockNs() - drop.start > VFS_SLOW_NS) vfsSlowRoots.insert(path);
@@ -379,13 +390,13 @@ static vFat* vfat_scan_in(const QString& path, bool writable, const QString& sub
 	return vf;
 }
 
-vFat* vfat_scan(const QString& path, bool writable, const QString& sub, const QString& subName) {
-	return vfat_scan_in(path, writable, sub, subName, 0);
+vFat* vfat_scan(const QString& path, bool writable, const QString& sub, const QString& subName, const QString* only) {
+	return vfat_scan_in(path, writable, sub, subName, only, 0);
 }
 
 // for an image made of the folder: laid out as a volume that takes writes
 vFat* vfat_scan_sized(const QString& path, unsigned int sectors) {
-	return vfat_scan_in(path, true, QString(), QString(), sectors);
+	return vfat_scan_in(path, true, QString(), QString(), NULL, sectors);
 }
 
 // the Next's own card, made in the Next SD Card window: it takes writes and asks nothing
@@ -483,11 +494,12 @@ void sdc_remount(SDCard* sdc) {
 	sdc_mount(sdc, path);
 }
 
-bool sdc_mount_over(SDCard* sdc, const QString& sub, const QString& subName) {
+bool sdc_mount_over(SDCard* sdc, const QString& sub, const QString& subName, const QString* only, int* entries) {
 	if (!sdc || !sdc->image || !sdc->vfat) return false;
 	QString path = QString::fromLocal8Bit(sdc->image);
-	vFat* vf = vfat_scan(path, sdc->vfat->writable, sub, subName);
+	vFat* vf = vfat_scan(path, sdc->vfat->writable, sub, subName, only);
 	if (!vf) return false;
+	if (entries) *entries = vfat_pin_entries(vf, vfat_pin_node(vf, subName.toUtf8().constData()));
 	vf->hold = sdc->vfat->hold;		// read again, not mounted anew: asked or not, as it was
 	vf->frozen = sdc->vfat->frozen;		// and made read-only or not
 	sdcSetFolder(sdc, path.toLocal8Bit().constData(), vf);
