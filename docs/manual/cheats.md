@@ -31,7 +31,7 @@ When you open a tape, snapshot or disk, Xpeccy+ looks for its cheat file by itse
 name. A name in the TOSEC style, such as `Game (1986)(Publisher)(128K)[a].tzx`, is then tried
 without its tags in square brackets, `Game (1986)(Publisher)(128K)`, and then cut down to the
 game and its publisher, `Game (1986)(Publisher)` - the way TOSEC sets name their cheat files.
-The file goes into the window with nothing ticked, and the window says
+An image opened from inside an archive is not looked for. The file goes into the window with nothing ticked, and the window says
 **(found beside the image)**. Opening an image without one takes such a file out of the
 window again; a file you opened yourself stays, and so does the game's own when you pick
 another side of it from its list.
