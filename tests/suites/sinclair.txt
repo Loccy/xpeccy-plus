@@ -22,6 +22,9 @@ ula3_2a         zxplus2a  auto  3000  300     "zx-tests/ULA 128E +3 Test (2012-1
 influence_2a    zxplus2a  auto  1500  300     tape/INFLUENC.TAP                     cfg:TAPE.fast=yes
 paging_2a       zxplus2a  auto  3200  300     "zx-tests/+2A-+3 Paging Tests (2021-12-17)(Woodmass, Mark)[!].tap" keys:3000:1
 hikaru_2a       zxplus2a  auto  3200  300     "zx-tests/+2A-+3 Floating Bus Test v1.2 (2017-09-13)(Hikaru)[!].tap" keys:3000:_
+ed48run_2a      zxplus2a  open  50    300     snap/ed48run.z80                      keys:10:E
+usr0run_2a      zxplus2a  open  50    300     snap/usr0run.sna                      keys:10:E
+menu_2a         zxplus2a  open  50    300     snap/menu_2a.sna
 melange_p3      zxplus3   auto  3000  300     disk/melange.DSK
 gauntlet_p3     zxplus3   auto  3000  300     "disk/Gauntlet (1986)(U.S. Gold)(+3).dsk"
 chasehq_p3      zxplus3   auto  6000  300     "disk/plus3/Chase HQ.dsk"
