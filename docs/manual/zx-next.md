@@ -40,7 +40,7 @@ The Next has three buttons on its side, RESET, DRIVE and NMI:
 - **NMI**: **Machine > NMI** presses it. NextZXOS stops the program and shows its NMI menu:
   snapshots, screenshots, pokes and the like (see [NMI](machines.md#nmi)).
 - **DRIVE**: the divMMC's NMI button. Only esxDOS uses it, when the Next boots a machine
-  with esxDOS in place of NextZXOS; NextZXOS does nothing with it. Xpeccy+ boots the Next
+  with esxDOS in place of NextZXOS; NextZXOS turns it off. Xpeccy+ boots the Next
   with NextZXOS only, so the menus have no DRIVE command. F10 presses it, as on the Next's
   own PS/2 keyboard (see [Keyboard and joysticks](#keyboard-and-joysticks)).
 
