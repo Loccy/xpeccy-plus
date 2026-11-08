@@ -197,7 +197,7 @@ The F-keys work as on the Next's PS/2 keyboard:
 | Key | On the Next |
 |---|---|
 | F3 | switches between 50 and 60 Hz |
-| F4 | soft reset, as **Machine > Reset** |
+| F4 | soft reset: a short press of RESET |
 | F8 | the next CPU speed: 3.5, 7, 14, 28 MHz |
 | F9 | the NMI button, when let go within a second |
 | F10 | the DRIVE button |
