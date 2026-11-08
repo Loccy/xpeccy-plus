@@ -115,8 +115,8 @@ static void rom_lists_read() {
 			} else if (arr.first() == "@rom") {
 				if (arr.size() < 2) continue;
 				QSet<QString> drop;
-				foreach(QString wrd, arr.mid(2))
-					if (wrd.startsWith('-')) drop.insert(wrd.mid(1));
+				foreach(QString wrd, arr.mid(2))	// a range's address in any case, as its line has it
+					if (wrd.startsWith('-')) drop.insert(wrd.startsWith("-@") ? wrd.mid(1).toUpper() : wrd.mid(1));
 				lst.banks[arr.at(1).toLatin1().toLower()] = drop;
 			} else if (arr.size() == 2) {
 				bool ok;
@@ -186,7 +186,8 @@ void labels_rom_scan(Computer* comp) {
 				if (it->contains(short_name(nm))) continue;
 				int abs = b * MEM_16K + lst.labs.at(i).first;
 				romByAbs[abs] = nm;
-				romByName[nm].append(abs);
+				QList<int>& cells = romByName[nm];
+				if (!cells.contains(abs)) cells.append(abs);	// two lists of a bank may share names
 				short_add(romShort, nm);
 			}
 			foreach(const romLabData& dat, lst.data) {
@@ -195,9 +196,11 @@ void labels_rom_scan(Computer* comp) {
 			}
 		}
 	}
-	// the system variables of the systems in the machine: cells of bank lst.ram
+	// the system variables of the systems in the machine: cells of bank lst.ram,
+	// as the 128K numbers its banks - not the Next, whose RAM cells go another way
+	bool next = comp && (comp->hw->id == HW_ZXNEXT);
 	foreach(const romLabList& lst, romLists) {
-		if ((lst.ram < 0) || !fitted.contains(lst.ns)) continue;
+		if ((lst.ram < 0) || next || !fitted.contains(lst.ns)) continue;
 		for (int i = 0; i < lst.labs.size(); i++) {
 			xAdr xadr;
 			xadr.type = MEM_RAM;
@@ -476,6 +479,8 @@ QString find_label(xAdr xadr, bool* rom, int how) {
 		builtin = !lab.isEmpty();
 	} else if (lab.isEmpty() && (xadr.type == MEM_RAM) && (how & LAB_SYSVAR) && conf.dbg.sysvars) {
 		lab = sysByAbs.value(xadr.abs);
+		// only where the system has it: bank 5 seen at C000 too is not its variables
+		if (!lab.isEmpty() && (xadr.adr >= 0) && ((xadr.adr & 0xffff) != sysByName.value(lab).adr)) lab.clear();
 		builtin = !lab.isEmpty();
 	}
 	if (builtin && !(how & LAB_FULL)) lab = builtin_shown(lab);

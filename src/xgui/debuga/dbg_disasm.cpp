@@ -282,16 +282,15 @@ static int dasm_access(Computer* comp, int adr) {
 	return dasm_is_pc(comp, adr) ? MEM_VIEW_FETCH : MEM_VIEW_PC;
 }
 
-// A cell's flags as the listing reads it: the cell the row shows (a page view's
-// own), its breakpoints and view mark - or, where it has no mark, the one a ROM
-// list gives it (the font as bytes)
+// A cell's flags as the listing reads it: its breakpoints and view mark, read
+// where setData() writes them (a page view too) - or, where it has no mark, the
+// one a ROM list gives the cell the row shows (the font as bytes)
 static unsigned char dasm_flag(Computer* comp, int adr, int access = MEM_VIEW_PC) {
+	if (mode != XVIEW_CPU) access = MEM_VIEW_READ;
+	unsigned char fl = getBrkView(comp, adr, access);
+	if (fl & 0xf0) return fl;
 	xAdr xadr = dasm_xadr(comp, adr, access);
-	unsigned char fl;
-	if (mode == XVIEW_ROM) fl = comp->brkRomMap[xadr.abs & comp->mem->romMask];
-	else if (mode == XVIEW_RAM) fl = comp->brkRamMap[xadr.abs & comp->mem->ramMask];
-	else fl = getBrkView(comp, adr, access);
-	if (!(fl & 0xf0) && (xadr.type == MEM_ROM)) fl |= labels_rom_view(xadr.abs);
+	if (xadr.type == MEM_ROM) fl |= labels_rom_view(xadr.abs);
 	return fl;
 }
 
@@ -980,6 +979,7 @@ bool xDisasmModel::setData(const QModelIndex& cidx, const QVariant& val, int rol
 						idx++;
 					}
 					len = idx;
+					if (isdc && (idx < str.size())) len = 0;	// not all of it: its end would be lost
 					if (isdc && (len > 0)) buf[len - 1] |= 0x80;
 				} else if (isdc) {
 					len = 0;

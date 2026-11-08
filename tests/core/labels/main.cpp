@@ -162,7 +162,8 @@ int main(int argc, char** argv) {
 	installDir = temp.path();
 	const char* lists[][2] = {
 		{"a.labels", "@ns SYSA\n@rom %1\n0010 ENTRY\n0020 ONLYA\n3D00 3D07 db\n0100 0103 text\n"},
-		{"b.labels", "@ns SYSB\n@rom %1 -@0200\n0018 ENTRY\n0200 0201 dw\n0300 0301 dw\n"},
+		{"b.labels", "@ns SYSB\n@rom %1 -@0200 -@3e00\n0018 ENTRY\n0200 0201 dw\n0300 0301 dw\n3E00 3E01 db\n"},
+		{"b2.labels", "@ns SYSA\n@rom %1\n0020 ONLYA\n"},
 		{"c.labels", "@ns SYSA\n@ram 5\n5C3D ERR_SP\n"},
 		{"d.labels", "@ns SYSC\n@ram 5\n5C00 NOT_FITTED\n"}};
 	for (auto& lst : lists) {
@@ -189,11 +190,15 @@ int main(int argc, char** argv) {
 	check("data ranges, one dropped on that bank", labels_rom_view(0x3D00) == DBG_VIEW_BYTE
 		&& labels_rom_view(0x3D07) == DBG_VIEW_BYTE && labels_rom_view(0x3D08) == DBG_VIEW_CODE
 		&& labels_rom_view(0x101) == DBG_VIEW_TEXT && labels_rom_view(0x200) == DBG_VIEW_CODE
-		&& labels_rom_view(0x300) == DBG_VIEW_WORD);
+		&& labels_rom_view(0x300) == DBG_VIEW_WORD && labels_rom_view(0x3E00) == DBG_VIEW_CODE);
+	check("a name two lists of a bank share is one cell", labels_rom_cells("SYSA.ONLYA").size() == 1);
 	xAdr var = comp_get_xadr(comp, 0x5C3D, MEM_VIEW_READ);
 	check("system variables in operands only", find_label(var).isEmpty()
 		&& find_label(var, nullptr, LAB_SYSVAR) == "ERR_SP" && find_label(var, nullptr, LAB_SYSVAR | LAB_FULL) == "SYSA.ERR_SP"
 		&& eval("ERR_SP").value == 0x5C3D && eval("SYSA.ERR_SP").value == 0x5C3D);
+	xAdr high = var;
+	high.adr = 0xDC3D;		// bank 5 paged at C000 as well
+	check("a system variable only at its own address", find_label(high, nullptr, LAB_SYSVAR).isEmpty());
 	check("a system not in the machine names nothing", find_label("NOT_FITTED").type < 0
 		&& find_label("SYSC.NOT_FITTED").type < 0);
 	conf.dbg.sysvars = 0;
