@@ -348,7 +348,8 @@ when there is none.
 
 Known ROMs come with labels of their own, with no file loaded: `LD_BYTES` at 0556 of the
 48K BASIC, the routines of the 128K editor (ROM 0) and of the four +2A/+3 ROMs, `DOS_OPEN`
-in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS. The names are also in the copies of these
+in the +3DOS, `TRDOS_FUNCTION` at 3D13 of TR-DOS with the functions it calls and the
+handlers of its commands (`FN_READ_SECTORS`, `CMD_FORMAT`). The names are also in the copies of these
 ROMs in the +2 and the clones (the Pentagon, Scorpion, Profi, ATM, ZX Evo); a routine a
 clone changed has no name there. A ROM is known by its contents, so a ROM file of yours with
 the same bytes has them too.
