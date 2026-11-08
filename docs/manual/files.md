@@ -318,7 +318,8 @@ A save of the ZX Spectrum Next does not take its SD card with it, only its name:
 ```
 
 When the program closes, it saves the machine. **File > Resume Last Session** puts that
-back: the machine, the game and its media. To start where you left off every time, choose
+back: the machine, the game and its media. With the pointer on it, the item shows the save
+it will load: its picture, the game and the time. To start where you left off every time, choose
 **Resume last session** in **Machine at start** on the [Application page](options-application.md).
 
 The autosave on exit goes where a quick save would: into the folder of the game that runs, or

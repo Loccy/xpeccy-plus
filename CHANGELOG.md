@@ -48,6 +48,8 @@ before that point is upstream's history and is not repeated here.
 
 ### Changed
 
+- **File > Resume Last Session shows the save it will load**: its picture, the game and the
+  time, with the pointer on it.
 - **A TOSEC image finds its game's cheat file** by the name without its `[tags]`, or cut
   down to the game and its publisher, as TOSEC sets name their `.pok` files.
 - **The Debugger's addresses carry their hex sign, `#8000`**, and a number typed into an

@@ -25,6 +25,8 @@
 #include <QLayout>
 #include <QWindow>
 #include <QContextMenuEvent>
+#include <QHelpEvent>
+#include <QToolTip>
 #include <QShortcut>
 #include <QSet>
 #include <QStyleOption>
@@ -2473,6 +2475,7 @@ class xMenu : public QMenu {
 		xMenu(QWidget* p = nullptr) : QMenu(p) {}
 		xMenu(const QString& title, QWidget* p = nullptr) : QMenu(title, p) {}
 	protected:
+		bool event(QEvent*) override;
 		void paintEvent(QPaintEvent*) override;
 #if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
 		void initStyleOption(QStyleOptionMenuItem* opt, const QAction* act) const override {
@@ -2497,6 +2500,21 @@ static void webAction(QAction* act, bool on) {
 	Q_UNUSED(act);
 	Q_UNUSED(on);
 #endif
+}
+
+// An item with an xTip property shows it as its tip, though the menu shows no
+// others: File's items carry the toolbar's tips. Gone when the pointer leaves it.
+bool xMenu::event(QEvent* ev) {
+	if (ev->type() == QEvent::ToolTip) {
+		QHelpEvent* hev = static_cast<QHelpEvent*>(ev);
+		QAction* act = actionAt(hev->pos());
+		QString tip = act ? act->property("xTip").toString() : QString();
+		if (!tip.isEmpty()) {
+			QToolTip::showText(hev->globalPos(), tip, this, actionGeometry(act));
+			return true;
+		}
+	}
+	return QMenu::event(ev);
 }
 
 // Where the style ends a key, and in what colour, is the style's own: the item is
@@ -3062,6 +3080,7 @@ void MainWin::initMenuBar() {
 		menuWatch(menu);
 	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::syncActions);
 	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::fillRecent);
+	connect(fileMenu, &QMenu::aboutToShow, this, &MainWin::syncResume);
 	connect(viewMenu, &QMenu::aboutToShow, this, &MainWin::syncActions);
 
 	// Fullscreen has no room for the menu bar, so the same menus come up over
@@ -3314,7 +3333,6 @@ void MainWin::popupRecent() {
 // A click on an item or its digit opens the image, one with saves too: those
 // are its menu, opened by hovering.
 void MainWin::fillRecent() {
-	resumeAct->setEnabled(!conf.saves.last.isEmpty() && QFileInfo::exists(conf.saves.last));
 	xRecentMenu* menu = static_cast<xRecentMenu*>(recentMenu);
 	menu->reset();
 	int n = 0;
