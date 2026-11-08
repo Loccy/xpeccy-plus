@@ -330,7 +330,7 @@ void MainWin::fillDrivesMenu() {
 	}
 
 	int hw = comp->hw->id;
-	if (xm_has_sd(comp))
+	if (hw_has_sd(comp->hw))
 		fillCardMenu(sdcMenu, -1);
 	fillDivMenu();
 

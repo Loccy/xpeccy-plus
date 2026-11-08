@@ -1131,16 +1131,10 @@ static void mac_cold_ram(Computer* comp, const std::string& pat, int noise) {
 	mem_cold_fill(comp->mem, (const unsigned char*)bytes.constData(), bytes.size(), noise);
 }
 
-// The machines with the SD slot (comp->sdc): a card in it means nothing to the others
-bool xm_has_sd(Computer* comp) {
-	int id = comp->hw ? comp->hw->id : -1;
-	return (id == HW_PENTEVO) || (id == HW_TSLAB) || (id == HW_ZXNEXT);
-}
-
 // A card into the slot: a folder is read only on a machine that has one
 void xm_sd_mount(const QString& path) {
 	Computer* comp = conf.zx;
-	if (xm_has_sd(comp)) sdc_mount(comp->sdc, path);
+	if (hw_has_sd(comp->hw)) sdc_mount(comp->sdc, path);
 	else sdc_mount_later(comp->sdc, path);
 }
 
@@ -1149,7 +1143,7 @@ void xm_sd_mount(const QString& path) {
 static void mac_reread_folders(Computer* comp) {
 	SDCard* cards[3] = {comp->sdc, comp->div->card[0], comp->div->card[1]};
 	for (int i = 0; i < 3; i++) {
-		if (cards[i]->vfat && (i || xm_has_sd(comp))) sdc_remount(cards[i]);
+		if (cards[i]->vfat && (i || hw_has_sd(comp->hw))) sdc_remount(cards[i]);
 	}
 	if (comp->ide->master->vfat) ide_mount(comp->ide, IDE_MASTER, QString::fromLocal8Bit(comp->ide->master->image));
 	if (comp->ide->slave->vfat) ide_mount(comp->ide, IDE_SLAVE, QString::fromLocal8Bit(comp->ide->slave->image));
@@ -1286,7 +1280,7 @@ void xm_next_card(bool force) {
 	QString own = xm_next_own();
 	if (own.isEmpty()) {
 		// the user's card, set back above unread, stays in: read it after all
-		if (force && comp->sdc->image && !comp->sdc->vfat && !comp->sdc->file) sdc_remount(comp->sdc);
+		if (sdc_unread(comp->sdc)) sdc_remount(comp->sdc);
 		nextWants = true;
 		return;
 	}
@@ -1362,7 +1356,7 @@ bool xm_set(std::string id) {
 	// emulator, not of the machine, and it stays mounted across a switch. A
 	// folder served as a disk is re-read here, which is the other half of it.
 	ide_remount(conf.zx->ide);
-	if (xm_has_sd(conf.zx)) sdc_remount(conf.zx->sdc);	// the others keep its path only
+	if (hw_has_sd(conf.zx->hw)) sdc_remount(conf.zx->sdc);	// the others leave it as it is
 	sdc_remount(conf.zx->div->card[0]);
 	sdc_remount(conf.zx->div->card[1]);
 	xm_next_card();

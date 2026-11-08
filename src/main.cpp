@@ -209,6 +209,15 @@ static void menu_relayout(QMenu* menu) {
 	QCoreApplication::sendEvent(menu, &ev);
 }
 
+// an item's name as QStyleSheetStyle measures it; a shortcut after a tab adds 12
+static int menu_text_width(QMenu* menu, QAction* act) {
+	QString txt = act->text();
+	int tab = txt.indexOf('\t');
+	QFontMetrics fm(act->font().resolve(menu->font()));
+	int wid = fm.boundingRect(QRect(), Qt::TextSingleLine | Qt::TextShowMnemonic, tab < 0 ? txt : txt.left(tab)).width();
+	return (tab >= 0) ? wid + 12 : wid;
+}
+
 #if QT_VERSION < QT_VERSION_CHECK(6,0,0)
 // Under a style sheet Qt 5 draws every item's text after the icon column, but an
 // item with no icon or tick is measured without it (Qt 6 counts it), so the widest
@@ -224,11 +233,7 @@ static void menu_qt5_width(QMenu* menu, bool icons) {
 	int bare = 0;		// the widest with no icon or tick
 	foreach(QAction* act, menu->actions()) {
 		if (act->isSeparator() || !act->isVisible() || qobject_cast<QWidgetAction*>(act)) continue;
-		QString txt = act->text();
-		int tab = txt.indexOf('\t');
-		QFontMetrics fm(act->font().resolve(menu->font()));
-		int wid = fm.boundingRect(QRect(), Qt::TextSingleLine | Qt::TextShowMnemonic, tab < 0 ? txt : txt.left(tab)).width();
-		if (tab >= 0) wid += 12;		// as QStyleSheetStyle adds it
+		int wid = menu_text_width(menu, act);
 		if (act->icon().isNull() && !act->isCheckable()) {
 			bare = qMax(bare, wid);
 			wide = qMax(wide, wid);
@@ -244,10 +249,10 @@ static void menu_qt5_width(QMenu* menu, bool icons) {
 #endif
 
 // Under a style sheet Qt keeps no room for a submenu's arrow: it is drawn in the item's right
-// padding (QMenu::right-arrow, "right: 7px"), over the end of the widest name when that one
-// has a submenu - "Machine" in the toolbar's Buttons menu. The menu is widened so that name
-// keeps a gap before the arrow. What was added is undone before the next measure, or the
-// width would grow at every show (Qt counts the minimum width in its own).
+// padding, over the end of the widest name when that one has a submenu (the toolbar's
+// Buttons menu). Such a menu is widened; what was added is undone before the next measure,
+// as Qt counts the minimum width in its own. A menu with shortcuts has their column for the
+// arrow, and one with a widget is left as it is.
 static void menu_arrow_room(QMenu* menu) {
 	if (menu->property("xarrowSet").isValid() && (menu->minimumWidth() == menu->property("xarrowSet").toInt())) {
 		menu->setMinimumWidth(menu->property("xarrowBase").toInt());
@@ -255,23 +260,19 @@ static void menu_arrow_room(QMenu* menu) {
 	}
 	menu->setProperty("xarrowSet", QVariant());
 	if (qApp->styleSheet().isEmpty()) return;
-	QFontMetrics fm(menu->font());
 	int wide = 0;		// the widest name
 	int sub = -1;		// ...of those with a submenu
 	foreach(QAction* act, menu->actions()) {
-		if (act->isSeparator() || !act->isVisible() || qobject_cast<QWidgetAction*>(act)) continue;
-		QString txt = act->text();
-		int tab = txt.indexOf('	');
-		QFontMetrics afm(act->font().resolve(menu->font()));
-		int wid = afm.boundingRect(QRect(), Qt::TextSingleLine | Qt::TextShowMnemonic, tab < 0 ? txt : txt.left(tab)).width();
-		if (tab >= 0) wid += 12;		// as QStyleSheetStyle adds it
+		if (act->isSeparator() || !act->isVisible()) continue;
+		if (qobject_cast<QWidgetAction*>(act) || act->text().contains('\t')) return;
+		int wid = menu_text_width(menu, act);
 		wide = qMax(wide, wid);
 		if (act->menu()) sub = qMax(sub, wid);
 	}
 	if (sub < 0) return;
-	// the arrow: (item height - 4) / 2 square, 7 px from the right; then a gap as wide again
-	// as the arrow - all of it past the 14 px of right padding the sheets give
-	int dim = (fm.height() + 8 - 4) / 2;
+	// the arrow: (item height - 4) / 2 square, 7 px from the right; a gap as wide again
+	// before it, past the sheets' 14 px of right padding
+	int dim = (QFontMetrics(menu->font()).height() + 8 - 4) / 2;
 	int lack = sub + 7 + 2 * dim - 14 - wide;
 	if (lack <= 0) return;
 	int base = menu->minimumWidth();

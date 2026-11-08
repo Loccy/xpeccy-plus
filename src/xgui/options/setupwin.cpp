@@ -2448,7 +2448,7 @@ void SetupWin::showDriveRows() {
 // rows only some cores have
 void SetupWin::showDevRows() {
 	int hw = conf.zx->hw->id;
-	bool sd = xm_has_sd(conf.zx);
+	bool sd = hw_has_sd(conf.zx->hw);
 	bool slot = (hw == HW_ZX48) || (hw == HW_ALF);
 	// only these read PC scancodes
 	bool kbd = (hw == HW_ATM2) || (hw == HW_PENTEVO) || (hw == HW_TSLAB);

@@ -91,6 +91,7 @@ void sdc_power_on(SDCard*);	// spec cards: the supply comes up, back in SD mode 
 void sdcSetImage(SDCard*,const char*);
 void sdcSetFolder(SDCard*,const char*,vFat*);
 void sdcSetUnread(SDCard*,const char*);	// a folder's path kept, nothing read: it reads as no card
+int sdc_unread(SDCard*);			// ...and is one such
 int sdc_protected(SDCard*);
 void sdcSetLock(SDCard*,int);
 int sdc_read_lba(SDCard*, unsigned int lba, unsigned char* buf);	// a sector outside any transfer: 1 if the card has it

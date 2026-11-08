@@ -92,12 +92,8 @@ void sdcSetImage(SDCard* sdc, const char* name) {
 // of the volume; the folder path is kept in ->image, so everything checking for
 // an inserted card keeps working.
 void sdcSetFolder(SDCard* sdc, const char* name, vFat* vf) {
-	sdcCloseFile(sdc);
-	if (sdc->image) free(sdc->image);
-	sdc->image = NULL;
+	sdcSetUnread(sdc, vf ? name : NULL);
 	if (!vf) return;
-	sdc->image = (char*)malloc(strlen(name) + 1);
-	strcpy(sdc->image, name);
 	sdc->vfat = vf;
 	sdc->maxlba = vf->volume;
 	sdc->capacity = vf->volume >> 11;	// 512-byte sectors -> Mb
@@ -114,6 +110,10 @@ void sdcSetUnread(SDCard* sdc, const char* name) {
 	if (!name || !*name) return;
 	sdc->image = (char*)malloc(strlen(name) + 1);
 	strcpy(sdc->image, name);
+}
+
+int sdc_unread(SDCard* sdc) {
+	return sdc->image && !sdc->vfat && !sdc->file;
 }
 
 // the card's lock switch, the user's; a folder that takes no writes is protected whatever it says

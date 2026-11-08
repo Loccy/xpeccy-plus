@@ -23,10 +23,8 @@ int xStackView::rowsFit() const {
 	return (free - one) / rowPitch() + 1;
 }
 
-// one line, as wide as the widest the numbers can be: an address is the widest word, and
-// the +0 row's name is one with a colon. Measured as whole strings of the format, every
-// digit the widest one, and a pixel to spare for each: a string at a fractional scale can
-// come out wider than its characters added up.
+// one line as wide as an address can be, the word and the +0 row's name with its colon:
+// whole strings, every digit the widest, a pixel to spare each for a fractional scale
 QSize xStackView::minimumSizeHint() const {
 	QFontMetrics fm = fontMetrics();
 	bool dec = (conf.dbg.numfmt == CPU_NUM_DEC);
