@@ -208,7 +208,9 @@ files the emulator reads when it starts, not built into it, each under the terms
 source. `48.labels`, the 48K BASIC's, comes from SkoolKit by Richard Dymond and stays under
 the GNU GPL v3 or later. The names and data ranges of the 128K and +2A/+3 ROMs come from the
 ROM annotations of [Klive IDE](https://github.com/Dotneteer/kliveide) by Istvan Novak, under
-the MIT license. Sources and terms of every list:
+the MIT license. TR-DOS's come from [TR-DOS
+Disassembled](https://github.com/programandala-net/tr-dos) by Marcos Cruz, used with his
+permission. Sources and terms of every list:
 [`config/labels/README.md`](config/labels/README.md).
 
 The debugger's default font, DejaVu Sans Mono 2.37, is built into the binary so it looks the

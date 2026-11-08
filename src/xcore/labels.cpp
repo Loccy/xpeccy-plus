@@ -548,7 +548,7 @@ QString find_label(xAdr xadr, bool* rom, int how) {
 }
 
 // A label in ROM whose bank is paged out: where that ROM runs, 0000-3FFF, for a
-// typed address and the assembler (CALL TRDOS_FUNCTION from BASIC). Breakpoints
+// typed address and the assembler (CALL TRDOS_ENTRY_EXECUTE_COMMAND_IN_C from BASIC). Breakpoints
 // and conditions go by label_cpu(), only where it is now
 xAdr label_home(xAdr xadr) {
 	if ((xadr.type == MEM_ROM) && (xadr.adr < 0)) xadr.adr = xadr.abs & 0x3fff;

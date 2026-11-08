@@ -91,22 +91,23 @@ In `p3dos-40/41.labels`: the jump table at #0100 of the +2A/+3 ROM 2, 53 entries
 names the +3 manual gives the +3DOS and disk driver calls (`DOS_OPEN`, `DD_READ_SECTOR`...).
 Written for this project, MIT license.
 
-## TR-DOS - Xpeccy+
+## TR-DOS - Marcos Cruz, by his permission
 
-`trdos.labels`: the entry points the TR-DOS manuals document - #3D00
-(`TRDOS_ENTRY`, from BASIC), #3D03 (`TRDOS_REM`, a command in a REM), #3D13
-(`TRDOS_FUNCTION`, the function in C), #3D2F (`TRDOS_RET`, a RET that jumps to the address
-pushed). 5.03, 5.04T and the TR-DOS pages of the bundled clone ROMs. Written for this
-project, MIT license.
-
-`trdos-503.labels`, `trdos-prof39f-bank-3.labels`, `trdos-zxevo-fe-bank-9.labels`: 48 names
-read from each TR-DOS ROM's own tables - the functions #3D13 calls by the number in C
-(`FN_READ_SECTORS`, `FN_FIND_FILE`..., at #288C in 5.03), named after what each does in the
-code and in the TR-DOS manuals, and the handlers of its BASIC commands (`CMD_CAT`,
-`CMD_FORMAT`..., the tokens at #2FF3 and their addresses at #3008 in 5.03). 5.03, 5.04T and
-the clones' TR-DOS pages each by their own tables, so a patched build whose routines moved
-has them where they are; one list for the banks whose tables are alike. Written for this
-project, MIT license.
+`trdos.labels` (the entry points at #3D00-#3D2F, every TR-DOS page), `trdos-503.labels`
+(TR-DOS 5.03, 5.04T and the clones' pages with its code at the same places, 208 names, 106
+data ranges), `trdos-prof39f-bank-3.labels` and `trdos-zxevo-fe-bank-9.labels` (builds whose
+code moved, 200 names each), `sysvars-trdos.labels` (81 variables, #5CB6-#5D39). Names and
+data ranges from "TR-DOS Disassembled" by Marcos Cruz (programandala.net, 2016-2017,
+<https://github.com/programandala-net/tr-dos>, commit 3f58896b, 2023-10-31), used with his
+permission: "you can use the labels and any other material from my TR-DOS 5.03
+dissassembly in any way you need" (e-mail of 2026-11-08). Changed for Xpeccy+ on
+2026-11-08: names in capitals with a dot written as an underscore (`cli_command.cat` as
+`CLI_COMMAND_CAT`); `cli_command.gosub` renamed `CLI_COMMAND_LOAD`, the handler his own
+table gives the LOAD token; `message.insert_destination_disk` moved from #2725 (inside an
+instruction) to #2785, where that text is; the message, token and title blocks shown as
+text; of the variables, the names of single bytes inside one (`filename.1`, `.high`) and the
+fields of a disk sector in the buffer left out. On a build whose code moved, his names go
+where it has the same code, and the functions and commands where its own tables point.
 
 ## System variables - Xpeccy+
 
@@ -114,5 +115,4 @@ Shown in operands and tips when the system's ROM is in the machine, written for 
 project, MIT license: `sysvars-basic48.labels` (#5C00-#5CB5, the names of the ZX Spectrum BASIC
 manual, chapter 25), `sysvars-basic128.labels` (#5B00-#5BFF, the ZX Spectrum +2 manual, chapter
 8 part 25), `sysvars-p3rom0.labels` (#5B00-#5BFF of the +2A/+3, the +3 manual, chapter 8 part
-25), `sysvars-trdos.labels` (#5CC2-#5D26, names given by Xpeccy+ to the variables described in
-"Tr-Dos v5.xx variables in Beta 128 Disk interface", Mac Buster^Extreme, 1999-2000).
+25). TR-DOS's are Marcos Cruz's, above.
