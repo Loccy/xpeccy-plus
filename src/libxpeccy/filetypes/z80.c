@@ -165,11 +165,44 @@ int z80_hardware_of(const unsigned char* buf, int len) {
 	return z80_hardware((buf[30] | (buf[31] << 8)) > 23, buf[34], buf[37] & 0x80);
 }
 
+// The word at adr of a 128K snapshot's memory: #4000 is bank 5 (block 8),
+// #8000 bank 2 (block 5), #C000 the bank 7FFD pages in. -1 if it is not there.
+static int z80_word_at(FILE* file, long blocks, int p7ffd, int adr) {
+	static const int blk_of[4] = {-1, 8, 5, 0};
+	if ((adr < 0x4000) || ((adr & 0x3fff) == 0x3fff)) return -1;
+	int want = (adr < 0xc000) ? blk_of[adr >> 14] : (p7ffd & 7) + 3;
+	static char page[0x4000];
+	fseek(file, blocks, SEEK_SET);
+	int blk;
+	while ((blk = z80readblock(file, page)) >= 0) {
+		if (blk == want)
+			return (page[adr & 0x3fff] & 0xff) | ((page[(adr & 0x3fff) + 1] & 0xff) << 8);
+	}
+	return -1;
+}
+
 int z80GetHardware(const char* name) {
 	FILE* file = fopen(name, "rb");
 	if (!file) return SNAP_HW_UNKNOWN;
 	unsigned char buf[38];
-	int res = z80_hardware_of(buf, (int)fread(buf, 1, sizeof(buf), file));
+	int len = (int)fread(buf, 1, sizeof(buf), file);
+	int res = z80_hardware_of(buf, len);
+	int ext = buf[30] | (buf[31] << 8);
+	int p1ffd = 0;					// 86: 1FFD, in a 55-byte header
+	if ((len >= 38) && (ext > 54) && !fseek(file, 86, SEEK_SET)) p1ffd = fgetc(file) & 0xff;
+	// a +2A/+3 in its all-RAM paging (1FFD bit 0) has no ROM in at all
+	int allram = ((res == SNAP_HW_PLUS2A) || (res == SNAP_HW_PLUS3)) && (p1ffd & 1);
+	if ((res != SNAP_HW_48K) && (res != SNAP_HW_UNKNOWN) && !allram) {
+		int pc = buf[32] | (buf[33] << 8);		// 35: 7FFD
+		if (pc == 0x0038) {			// as the interrupt came: where it came at
+			int w = z80_word_at(file, 32 + ext, buf[35], buf[8] | (buf[9] << 8));
+			if (w >= 0) pc = w;
+		}
+		res |= snap_rom_flags(pc, buf[35]);
+		// a Pentagon's PC in ROM may be in TR-DOS, which the file does not record
+		if ((pc < 0x4000) && (SNAP_HW_OF(res) == SNAP_HW_PENTAGON))
+			res |= SNAP_IN_ROM;
+	}
 	fclose(file);
 	return res;
 }
@@ -278,11 +311,14 @@ xlog(XLG_FILE, XLL_DEBUG, ".z80 version 2");
 		}
 		// 1ffd is a different port on each machine that has it, and goes
 		// first: a +3 takes it only while 7ffd is unlocked
-		if ((p1ffd >= 0) && z80_hw(hw)->p1ffd && snapHwRuns(hw, comp->hw->id))
-			comp->hw->out(comp, 0x1ffd, p1ffd);
 		// a 48K has no paging, and byte 35 means nothing there: taking it
 		// as 7ffd would put the 128 rom in on a machine that has one
-		comp->hw->out(comp, 0x7ffd, (hw == SNAP_HW_48K) ? 0x10 : pg);
+		if (hw == SNAP_HW_48K) pg = 0x10;
+		if ((p1ffd >= 0) && z80_hw(hw)->p1ffd && snapHwRuns(hw, comp->hw->id, comp->snapModel))
+			comp->hw->out(comp, 0x1ffd, p1ffd);
+		else
+			snap_plus3_basic48(comp, hw, pg);
+		comp->hw->out(comp, 0x7ffd, pg);
 		switch (hw) {
 			case SNAP_HW_48K:
 			case SNAP_HW_128K:
@@ -316,6 +352,7 @@ xlog(XLG_FILE, XLL_DEBUG, ".z80 version 2");
 		}
 	} else {			// version 1
 xlog(XLG_FILE, XLL_DEBUG, ".z80 version 1");
+		snap_plus3_basic48(comp, SNAP_HW_48K, 0x10);
 		comp->hw->out(comp, 0x7ffd, 0x10);	// a 48K snapshot: the 48 rom in
 		if (hd.flag12 & 0x20) {
 			xlog(XLG_FILE, XLL_DEBUG, "data is compressed");
