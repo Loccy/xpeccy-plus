@@ -127,7 +127,8 @@ On a machine that cannot start from that ROM, the key only shows a short message
 **Machine > NMI** sends a non-maskable interrupt to the CPU. What happens then is up to the
 machine's ROM. It does nothing while an RZX recording plays. The key is F10 in the Classic
 preset and Shift+F10 in the Modern one. With a [divMMC](divmmc.md) on, it is the
-board's NMI button.
+board's NMI button. On the ZX Spectrum Next it is the yellow NMI button on its side (see
+[ZX Spectrum Next](zx-next.md)).
 
 ## Turbo Mode
 

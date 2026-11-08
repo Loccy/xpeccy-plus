@@ -251,8 +251,8 @@ given. The keys of one item are pressed together. Digits and lowercase letters a
 keys of the Spectrum, `E` is Enter, `C` Caps Shift, `S` Symbol Shift and `_` Space.
 `joy:` with joystick directions and buttons joined by `+`, such as `joy:up+fire`, holds
 them on the joystick, and `joyb:` on the second joystick. `nmi` presses the NMI button,
-and `pc:` with a keymap name presses a key of the PC keyboard of a ZX Evolution: `pc:F1`,
-`pc:UP`, `pc:ENT`.
+and `pc:` with a keymap name presses a key of the PC keyboard of a ZX Evolution or a ZX
+Spectrum Next: `pc:F1`, `pc:UP`, `pc:ENT`.
 
 ```
 xpeccy-plus -m zx48 game.tap --bench-keys "500:5,600:_/10" --bench 2000 --bench-shot end.ppm
