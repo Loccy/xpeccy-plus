@@ -90,6 +90,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **Auto play no longer starts and stops the tape every frame** in a game that reads its
+  keys in a loop like a loader's: Overlander's fuel screen with a Kempston joystick.
+  *(reported by Volutar)*
 - **A reset the ZX Spectrum Next makes itself** (a program, or the firmware after a hard
   reset) now returns the CPU to 3.5 MHz and resets the UART and the sound, as its reset
   button does.
