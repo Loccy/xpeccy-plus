@@ -167,6 +167,9 @@ struct Keyboard {
 	unsigned char nxDown[64];	// the codes down now, b8 E0: a host's make twice, or a break of a key up, is no key
 	unsigned short nxW[4];		// the extended keys at the membrane scan's last 4 commits, newest first: row r's columns 6, 5 at bits 2r+1, 2r
 	int nxScan;			// ns to the scan's next commit while they settle, 0 when settled
+	int nxNmiDown;			// F9, the NMI button, is down...
+	long long nxNmiAt;		// ...since this CLK_28 (nx_now)
+	int nxNmiCut;			// a digit was pressed with it: a function key, no NMI
 	// a host key's Spectrum combination, its shift and its key apart (kbd_seq_press)
 	int cbLead;			// ns from the shift going down to its key
 	int cbLag;			// ns from the key going up to its shift, 0: both at once

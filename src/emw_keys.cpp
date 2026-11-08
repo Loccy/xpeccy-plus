@@ -467,7 +467,9 @@ void MainWin::xkey_press(int xkey, bool cmd) {
 				break;
 			case XCUT_NMI:
 				if (comp->rzx.play) break;
+				emu_lock();		// the Next raises it on the CPU at once
 				comp_irq(IRQ_NMI, comp);	// every core is a Z80 now, the Next's Z80N included
+				emu_unlock();
 				break;
 			case XCUT_TAPWIN:
 				emit s_tape_show();

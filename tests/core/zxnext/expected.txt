@@ -30,3 +30,9 @@ dump by area and page: ok
 heat of layer 2 over a BRAM page: ok
 heat of a HALT's fetches: ok
 heat of divMMC memory: ok
+== reset speed
+power: ok
+F4: ok
+NR 02 b0: ok
+Machine > Reset: ok
+NR 02 b1 (hard): ok

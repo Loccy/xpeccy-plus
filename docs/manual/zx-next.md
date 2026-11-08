@@ -27,14 +27,22 @@ The Next sets its own CPU speed, 3.5, 7, 14 or 28 MHz, as programs ask, so
 **Stereo** setting of the PSG is grayed out (see [Sound page](options-sound.md)). The picture always
 shows at least the **full** border (see [View menu](view.md)).
 
-```{index} ZX Spectrum Next; reset, Hard Reset; ZX Spectrum Next, NMI; ZX Spectrum Next
+```{index} ZX Spectrum Next; reset, Hard Reset; ZX Spectrum Next, NMI; ZX Spectrum Next, buttons; ZX Spectrum Next, DRIVE button
 ```
 
-**Machine > Reset** presses the Next's reset button: a soft reset, which keeps the memory
-and the card. In the **Reset** menu, the note **Boots its own firmware** stands in place of
-the other machines' choices. **Hard Reset** switches the Next off and on: the
-firmware starts again and loads everything from the card. **NMI** presses the Next's M1
-button, the Multiface's (see [NMI](machines.md#nmi)).
+The Next has three buttons on its side, RESET, DRIVE and NMI:
+
+- **RESET**: **Machine > Reset** presses it. That is a soft reset, which keeps the memory
+  and the card. In the **Reset** menu, the note **Boots its own firmware** stands in place
+  of the other machines' choices. **Hard Reset** switches the Next off and on: the firmware
+  starts again and loads everything from the card. On the Next itself, holding RESET for a
+  second is a hard reset.
+- **NMI**: **Machine > NMI** presses it. NextZXOS stops the program and shows its NMI menu:
+  snapshots, screenshots, pokes and the like (see [NMI](machines.md#nmi)).
+- **DRIVE**: the divMMC's NMI button. Only esxDOS uses it, when the Next boots a machine
+  with esxDOS in place of NextZXOS; NextZXOS turns it off. Xpeccy+ boots the Next
+  with NextZXOS only, so the menus have no DRIVE command. F10 presses it, as on the Next's
+  own PS/2 keyboard (see [Keyboard and joysticks](#keyboard-and-joysticks)).
 
 The divMMC and the Multiface are built into the Next, so the **divMMC** setting of other
 machines is not shown for it. The Next has no floppy drives, and a tape does not
@@ -182,8 +190,31 @@ Next.
 | `/` `-` `=` | SYMBOL SHIFT with V, J and L |
 
 Some hotkeys of Xpeccy+ use Alt too: change them on the **Hotkeys** page of **Options**
-if they get in the way. The board's function keys, such as F1 for reset or F8 for the speed,
-are not emulated.
+if they get in the way.
+
+```{index} ZX Spectrum Next; function keys
+```
+
+The F-keys work as on the Next's PS/2 keyboard:
+
+| Key | On the Next |
+|---|---|
+| F3 | switches between 50 and 60 Hz |
+| F4 | soft reset: a short press of RESET |
+| F8 | the next CPU speed: 3.5, 7, 14, 28 MHz |
+| F9 | the NMI button, when let go within a second |
+| F10 | the DRIVE button |
+
+As on the Next, a digit pressed while F9 is held down is a function key instead, 1 to 0
+for F1 to F10, and F9 then sends no NMI: F9 with 1 is a hard reset, the firmware starts
+again and the memory is kept. **Machine > NMI** is a press and release at once, so it
+cannot be held with a digit: hold F9 for that.
+
+An F-key that is a hotkey of Xpeccy+ stays a hotkey: F3, F4, F9 and F10 are hotkeys in
+both presets. To give them to the Next, turn on
+[Grab Keyboard](input.md#grab-keyboard). F8 is not a hotkey, so it changes the speed
+even without that. A program can turn F3 and F8 off. The Next's other function keys change
+only its video output or the expansion bus, so they do nothing here.
 
 ```{index} virtual keyboard; ZX Spectrum Next
 ```
@@ -248,7 +279,7 @@ panel is there too; **CMOS**, **FDC** and **FDD** are not.
 
 - the second SD card slot, the Raspberry Pi accelerator and the FPGA flash;
 - devices on the expansion bus;
-- the board's function keys and its DRIVE button;
+- the keys for the Next's video output (scandoubler, scanlines);
 - video timings other than VGA 0 and VGA 1, and the settings of `config.ini` other than
   the ROMs and the timing;
 - **Look ahead** of the adaptive anti-flicker modes (see [View menu](view.md)).

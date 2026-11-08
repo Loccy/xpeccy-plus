@@ -96,9 +96,13 @@ void nx_inp_nr(Computer* comp, int r, int v) {
 
 // == the ps/2 keyboard ==
 
+#define NX_PS2_F9	0x01		// the NMI button's line (ps2_keyb.vhd 119-141)
+#define NX_PS2_F10	0x09		// the DRIVE button's
+#define NX_BUTTON_SHORT	28000000LL	// CLK_28: a button let go within a second (zxnext_top_issue2.vhd 1962)
+
 // One code taken (ps2_keyb.vhd): the typematic repeat of a make is dropped, CAPS
-// and SYM SHIFT are counted, the rest set or clear their place in the matrix.
-// A function key (b7:6 = 11) is the board's (resets, NMI, speed): not modelled.
+// and SYM SHIFT are counted, the rest set or clear their place in the matrix; a
+// function key (b7:6 = 11), F9 and F10 are the board's (nx_board_key).
 // A keyboard makes a key once and breaks it once; the host's input can make one twice
 // (a modifier is read from two places), so a make of a key down or a break of one up
 // is dropped here - counted, a CAPS or SYM SHIFT would stay down for good.
@@ -113,8 +117,33 @@ static void nx_ps2_code(Computer* comp, int code, int ext, int rel) {
 	if (rel ? !(*down & bit) : (*down & bit)) return;
 	if (rel) *down &= ~bit;
 	else *down |= bit;
-	int d = IN.keymap[(ext << 8) | code];
-	if ((d & 0xc0) == 0xc0) return;
+	// DRIVE goes at the press; NMI at the release of a press under a second, and while
+	// it is down a key of the digits' rows (CAPS + 5 too, as the membrane scan sees it)
+	// is a function key instead, 1..0 = F1..F10, with no NMI after (emu_fnkeys.vhd)
+	if (k == NX_PS2_F9) {
+		if (!rel) {
+			kbd->nxNmiDown = 1;
+			kbd->nxNmiAt = nx_now(comp);
+			kbd->nxNmiCut = 0;
+		} else if (kbd->nxNmiDown) {
+			kbd->nxNmiDown = 0;
+			long long t = nx_now(comp) - kbd->nxNmiAt;
+			if (!kbd->nxNmiCut && (t >= 0) && (t < NX_BUTTON_SHORT)) nx_board_key(comp, 8);
+		}
+	}
+	if (!rel && (k == NX_PS2_F10)) nx_board_key(comp, 9);
+	int d = IN.keymap[k];
+	int row = (d >> 3) & 7;
+	if (!rel && kbd->nxNmiDown && (k != NX_PS2_F9) && ((d & 0xc0) != 0xc0) && ((d & 7) < 5) && ((row == 3) || (row == 4))) {
+		nx_board_key(comp, (row == 3) ? (d & 7) : 9 - (d & 7));
+		kbd->nxNmiCut = 1;
+		*down &= ~bit;		// taken: its break is dropped as well
+		return;
+	}
+	if ((d & 0xc0) == 0xc0) {
+		if (!rel) nx_board_key(comp, d & 7);
+		return;
+	}
 	if (d & 0x40) {
 		if (!rel) kbd->nxCaps = (kbd->nxCaps + 1) & 7;
 		else if (kbd->nxCaps) kbd->nxCaps--;
@@ -124,7 +153,6 @@ static void nx_ps2_code(Computer* comp, int code, int ext, int rel) {
 		else if (kbd->nxSym) kbd->nxSym--;
 	}
 	if ((d & 7) != 7) {
-		int row = (d >> 3) & 7;
 		if (rel)
 			kbd->nxKeys[row] &= ~(1 << (d & 7));
 		else

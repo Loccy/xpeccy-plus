@@ -85,12 +85,18 @@ static void nx_dac_play(Computer* comp, long long t) {
 	}
 }
 
-void nx_snd_reset(Computer* comp) {
+// A reset between steps (w < 0) drops the DACs' queue; one inside a step (NR 02 b0, F4)
+// queues their change at edge w, what came before it still played
+void nx_snd_reset(Computer* comp, long long w) {
 	for (int i = 0; i < 32; i++) nxAyTab[i] = nxAyTab16[i >> 1];
 	nx_ay_reset(comp);
 	nx_dac_reset(comp);
-	memcpy(SND.out, SND.dac, 4);
-	SND.qHead = SND.qN = 0;
+	if (w < 0) {
+		memcpy(SND.out, SND.dac, 4);
+		SND.qHead = SND.qN = 0;
+	} else {
+		nx_dac_push(comp, w);
+	}
 	nx_snd_fe(comp, NX.pfe);	// the beeper's levels are the Next's
 }
 

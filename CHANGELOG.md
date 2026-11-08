@@ -11,6 +11,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Added
 
+- **The ZX Spectrum Next's F-keys** work as on its PS/2 keyboard: F3 switches 50 and 60 Hz,
+  F4 resets, F8 steps the CPU speed, F9 and F10 press its NMI and DRIVE buttons. Keys that
+  are hotkeys reach the Next with Grab Keyboard on.
 - **Frame skip** (Options > Video): on a computer too slow for the machine a frame is left
   undrawn now and then, so the machine and its sound keep their speed. When the machine falls
   behind for a few seconds, Xpeccy+ offers to turn it on.
@@ -87,6 +90,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Fixed
 
+- **A reset the ZX Spectrum Next makes itself** (a program, or the firmware after a hard
+  reset) now returns the CPU to 3.5 MHz and resets the UART and the sound, as its reset
+  button does.
 - **A snapshot taken in the 128K menu or BASIC editor opens on a machine with that ROM**: a
   128K one stayed on a +2 or +2A, where the RUN waiting in it was lost or the machine reset.
   A `.sna`, which names no model, goes to a +2, +2A or +3 when the snapshot tells it, and
