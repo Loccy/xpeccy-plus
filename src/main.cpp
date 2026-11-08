@@ -243,6 +243,45 @@ static void menu_qt5_width(QMenu* menu, bool icons) {
 }
 #endif
 
+// Under a style sheet Qt keeps no room for a submenu's arrow: it is drawn in the item's right
+// padding (QMenu::right-arrow, "right: 7px"), over the end of the widest name when that one
+// has a submenu - "Machine" in the toolbar's Buttons menu. The menu is widened so that name
+// keeps a gap before the arrow. What was added is undone before the next measure, or the
+// width would grow at every show (Qt counts the minimum width in its own).
+static void menu_arrow_room(QMenu* menu) {
+	if (menu->property("xarrowSet").isValid() && (menu->minimumWidth() == menu->property("xarrowSet").toInt())) {
+		menu->setMinimumWidth(menu->property("xarrowBase").toInt());
+		menu_relayout(menu);
+	}
+	menu->setProperty("xarrowSet", QVariant());
+	if (qApp->styleSheet().isEmpty()) return;
+	QFontMetrics fm(menu->font());
+	int wide = 0;		// the widest name
+	int sub = -1;		// ...of those with a submenu
+	foreach(QAction* act, menu->actions()) {
+		if (act->isSeparator() || !act->isVisible() || qobject_cast<QWidgetAction*>(act)) continue;
+		QString txt = act->text();
+		int tab = txt.indexOf('	');
+		QFontMetrics afm(act->font().resolve(menu->font()));
+		int wid = afm.boundingRect(QRect(), Qt::TextSingleLine | Qt::TextShowMnemonic, tab < 0 ? txt : txt.left(tab)).width();
+		if (tab >= 0) wid += 12;		// as QStyleSheetStyle adds it
+		wide = qMax(wide, wid);
+		if (act->menu()) sub = qMax(sub, wid);
+	}
+	if (sub < 0) return;
+	// the arrow: (item height - 4) / 2 square, 7 px from the right; then a gap as wide again
+	// as the arrow - all of it past the 14 px of right padding the sheets give
+	int dim = (fm.height() + 8 - 4) / 2;
+	int lack = sub + 7 + 2 * dim - 14 - wide;
+	if (lack <= 0) return;
+	int base = menu->minimumWidth();
+	int want = qMax(base, menu->sizeHint().width() + lack);
+	menu->setProperty("xarrowBase", base);
+	menu->setProperty("xarrowSet", want);
+	menu->setMinimumWidth(want);
+	menu_relayout(menu);
+}
+
 // Under a style sheet Qt starts a menu's text after a column that depends on what
 // the menu holds: icons, only ticks, or neither. The sheets set the padding for
 // each by this property, so the text starts at one place in every menu. The rule
@@ -268,6 +307,7 @@ static void menu_column(QMenu* menu) {
 #if QT_VERSION < QT_VERSION_CHECK(6,0,0)
 	menu_qt5_width(menu, !strcmp(col, "icons"));
 #endif
+	menu_arrow_room(menu);
 }
 
 static MainWin* os_win = NULL;		// the window every open goes through, once there is one
