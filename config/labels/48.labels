@@ -1,13 +1,14 @@
 ; ZX Spectrum 48K BASIC ROM labels for the Xpeccy+ debugger.
 ;
-; Names and addresses from SkoolKit's examples/48.rom.ctl (commit 30de485a,
-; 2015), Copyright 2011-2015 Richard Dymond. Its routine titles are "taken from
-; 'The Complete Spectrum ROM Disassembly' by Dr Ian Logan and Dr Frank O'Hara,
-; published by Melbourne House."
+; Names, addresses and data ranges from SkoolKit's examples/48.rom.ctl (commit
+; 30de485a, 2015), Copyright 2011-2015 Richard Dymond. Its routine titles are
+; "taken from 'The Complete Spectrum ROM Disassembly' by Dr Ian Logan and Dr
+; Frank O'Hara, published by Melbourne House."
 ;
 ; Changed for Xpeccy+ on 2026-11-07: C_ARC_GE1 moved from #2347 to #235A, the
 ; target of the JR NC at #2350; SV_SLICE? renamed SV_SLICE_Q and val renamed
-; val_fn, names that the debugger expressions can take.
+; val_fn, names that the debugger expressions can take. 2026-11-08: the data
+; ranges of its b, t and w blocks and B, T and W sub-blocks added.
 ;
 ; This file is free software: you can redistribute it and/or modify it under
 ; the terms of the GNU General Public License as published by the Free Software
@@ -15,19 +16,21 @@
 ; version. It is distributed WITHOUT ANY WARRANTY. See GPL-3.0.txt beside
 ; README.md in config/labels. Not covered by the MIT license of Xpeccy+.
 ;
-; @rom <MD5 of a 16K bank> <bundled image> [-NAME: not in that bank]
+; @rom <MD5 of a 16K bank> <bundled image> [-NAME / -@ADDR: not in that bank]
+; ADDR NAME: a name; START END VIEW: a data range
+@ns BASIC48
 @rom 4c42a2f075212361c3117015b107ff68 48.rom, alf.rom bank 1, zxevo-fe.rom bank 7
-@rom 6e09e5d3c4aef166601669feaaadc01c 128-1.rom, 128p-1.rom, phoenix.rom bank 3, profi-bios20.rom bank 3, profi-kramis02.rom bank 3, tsconf.rom bank 3 -KEY_INT -PO_T_UDG -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom 643861ad34831b255bf2eb64e8b6ecb8 256s-1.rom, scorpion295.rom bank 1 -ERROR_1 -PRINT_A_1 -KEY_INT -PO_T_UDG -COPY -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom 25e7ad37544091af7b82c4727e0bfc4f atm2.rom bank 0 -KEY_INT -PO_T_UDG -COPY -COPY_1 -COPY_2 -COPY_BUFF -COPY_3 -COPY_END -CLEAR_PRB -PRB_BYTES -COPY_LINE -COPY_L_1 -COPY_L_2 -COPY_L_3 -COPY_L_4 -COPY_L_5 -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom b3db95931cc844efaeb82db9c171b9f3 plus2-1.rom -KEY_INT -CASSETTE -PO_T_UDG -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom a148bcc575e51389e84fdf5d555c3196 plus3-3.rom -PRINT_A_1 -KEY_INT -CASSETTE -PO_T_UDG -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom ef7bf942a1c1f9ed5d583d0a49e26db7 plus3-41.rom bank 3 -KEY_INT -CASSETTE -PO_T_UDG -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom fbca50eff4937afde90dd9e55387d9e6 prof39f.rom bank 1, prof401.rom bank 1 -ERROR_1 -PRINT_A_1 -KEY_INT -PO_T_UDG -COPY -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom 8e376009d0b6712f63fa6da672791574 profi-bios10.rom bank 3, zxevo-fe.rom bank 5 -KEY_INT -PO_T_UDG -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom bdb23a99e1e0525ec4bc0c7dd263ddd4 zxevo-fe.rom bank 8 -START -PRINT_A_1 -FP_CALC -PROGNAME -START_NEW -RAM_CHECK -RAM_FILL -RAM_READ -RAM_DONE -RAM_SET -MAIN_4 -COPYRIGHT -P_PAUSE -S_SCR_STO -PF_SMALL -T_GR_ZERO -T_FIRST -LAST
-@rom fe2b1ca850ea0ffec5d1dac4b79dbfb8 zxevo-fe.rom bank 12 -ERROR_1 -PRINT_A_1 -KEY_INT -RESET -NO_RESET -PO_T_UDG -COPY -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
-@rom afdb7b928f9e1d99476e13d6cac98d20 zxevo-fe.rom bank 28 -ERROR_1 -KEY_INT -PO_T_UDG -COPY -COPY_LINE -REPORT_L -STMT_R_1 -STMT_NEXT -LAST
+@rom 6e09e5d3c4aef166601669feaaadc01c 128-1.rom, 128p-1.rom, phoenix.rom bank 3, profi-bios20.rom bank 3, profi-kramis02.rom bank 3, tsconf.rom bank 3 -KEY_INT -PO_T_UDG -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET
+@rom 643861ad34831b255bf2eb64e8b6ecb8 256s-1.rom, scorpion295.rom bank 1 -ERROR_1 -PRINT_A_1 -KEY_INT -PO_T_UDG -COPY -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@15AF
+@rom 25e7ad37544091af7b82c4727e0bfc4f atm2.rom bank 0 -KEY_INT -PO_T_UDG -COPY -COPY_1 -COPY_2 -COPY_BUFF -COPY_3 -COPY_END -CLEAR_PRB -PRB_BYTES -COPY_LINE -COPY_L_1 -COPY_L_2 -COPY_L_3 -COPY_L_4 -COPY_L_5 -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@0F0B -@15AF
+@rom b3db95931cc844efaeb82db9c171b9f3 plus2-1.rom -KEY_INT -CASSETTE -PO_T_UDG -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@09A1 -@1391
+@rom a148bcc575e51389e84fdf5d555c3196 plus3-3.rom -PRINT_A_1 -KEY_INT -CASSETTE -PO_T_UDG -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@09A1 -@1391
+@rom ef7bf942a1c1f9ed5d583d0a49e26db7 plus3-41.rom bank 3 -KEY_INT -CASSETTE -PO_T_UDG -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@09A1 -@1391
+@rom fbca50eff4937afde90dd9e55387d9e6 prof39f.rom bank 1, prof401.rom bank 1 -ERROR_1 -PRINT_A_1 -KEY_INT -PO_T_UDG -COPY -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@15AF
+@rom 8e376009d0b6712f63fa6da672791574 profi-bios10.rom bank 3, zxevo-fe.rom bank 5 -KEY_INT -PO_T_UDG -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET
+@rom bdb23a99e1e0525ec4bc0c7dd263ddd4 zxevo-fe.rom bank 8 -START -PRINT_A_1 -FP_CALC -PROGNAME -START_NEW -RAM_CHECK -RAM_FILL -RAM_READ -RAM_DONE -RAM_SET -MAIN_4 -COPYRIGHT -P_PAUSE -P_SAVE -P_INK -P_PAPER -P_FLASH -S_SCR_STO -PF_SMALL -T_GR_ZERO -T_FIRST -LAST -CHARSET -@1391 -@1A48 -@2E25
+@rom fe2b1ca850ea0ffec5d1dac4b79dbfb8 zxevo-fe.rom bank 12 -ERROR_1 -PRINT_A_1 -KEY_INT -RESET -NO_RESET -PO_T_UDG -COPY -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@15AF
+@rom afdb7b928f9e1d99476e13d6cac98d20 zxevo-fe.rom bank 28 -ERROR_1 -KEY_INT -PO_T_UDG -COPY -COPY_LINE -P_SAVE -P_INK -P_PAPER -P_FLASH -REPORT_L -STMT_R_1 -STMT_NEXT -LAST -CHARSET -@15AF
 0000 START
 0008 ERROR_1
 0010 PRINT_A_1
@@ -1127,3 +1130,145 @@
 386A ONE
 386C LAST
 3D00 CHARSET
+0095 0204 text
+0205 028D db
+03F9 0406 db
+0439 043A db
+043F 0442 db
+044B 045A db
+046D 04A9 db
+0553 0553 db
+0643 0643 db
+0671 0671 db
+0807 0807 db
+09A1 09F3 text
+0A11 0A22 db
+0C87 0C87 db
+0CF8 0CF8 db
+0CF9 0CFF text
+0D01 0D01 db
+0F0B 0F0B db
+0FA0 0FA8 db
+1391 1554 text
+15AF 15C3 db
+15C5 15D3 db
+15E5 15E5 db
+160F 160F db
+162D 1633 db
+168F 1690 db
+1716 171B db
+1726 1726 db
+1737 1738 db
+1766 1766 db
+177A 1780 db
+1A48 1B16 db
+1B7C 1B7C db
+1BB1 1BB1 db
+1BED 1BED db
+1C01 1C0C db
+1C2F 1C2F db
+1C8B 1C8B db
+1CEB 1CEC db
+1CEF 1CEF db
+1CF7 1CF8 db
+1D14 1D15 db
+1D17 1D1C db
+1D36 1D38 db
+1D85 1D85 db
+1DBE 1DC3 db
+1DD9 1DD9 db
+1DDB 1DE6 db
+1DE9 1DE9 db
+1E09 1E09 db
+1EA0 1EA0 db
+1EDB 1EDB db
+1F39 1F39 db
+21CF 21CF db
+21D5 21D5 db
+2245 2245 db
+232E 2330 db
+2337 2338 db
+233C 233D db
+2341 2343 db
+2349 234C db
+2353 2355 db
+235B 236D db
+2395 239F db
+23A3 23B4 db
+23BB 23BD db
+23C6 23FC db
+2406 2407 db
+240F 2412 db
+241A 241E db
+2426 2438 db
+243B 2440 db
+2448 244F db
+2457 2458 db
+2460 2463 db
+246B 246D db
+2475 2476 db
+247E 2489 db
+249C 24B4 db
+24FA 24FA db
+2596 25AE db
+2605 2616 db
+262D 262E db
+2757 2758 db
+2795 27BC db
+2813 2813 db
+288C 288C db
+2A21 2A21 db
+2B5B 2B5C db
+2CD3 2CD4 db
+2CD6 2CD9 db
+2CE1 2CE7 db
+2D38 2D38 db
+2D3D 2D3E db
+2D45 2D49 db
+2D5D 2D5E db
+2D66 2D6F db
+2D75 2D77 db
+2D7C 2D7D db
+2DA3 2DA3 db
+2DA9 2DAC db
+2DAE 2DAF db
+2DCC 2DD4 db
+2DE4 2DED db
+2DF2 2DF3 db
+2DF8 2DFD db
+2E02 2E0A db
+2E25 2E26 db
+2E3A 2E3F db
+2ECC 2ECE db
+2F31 2F32 db
+31AE 31AE db
+32C5 32D6 db
+32D7 335A da
+344D 3459 db
+3460 3468 db
+34E8 34E8 db
+358A 358B db
+35DD 35DD db
+36A1 36AD db
+36B0 36B5 db
+36B7 36C2 db
+36C5 36F8 db
+3704 3704 db
+370F 3711 db
+3714 3719 db
+371B 371E db
+3726 373A db
+373D 3781 db
+3784 379F db
+37A1 37A8 db
+37AB 37B4 db
+37B6 37D8 db
+37DB 37E0 db
+37EB 37F7 db
+37F9 3831 db
+3834 3841 db
+3844 3848 db
+384B 3850 db
+3852 3859 db
+385D 386C db
+3D00 3FFF db

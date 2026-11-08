@@ -205,8 +205,10 @@ keeps its own terms, like the ROM images.
 
 `config/labels/48.labels` names the 48K BASIC's routines in the Debugger. It comes from
 SkoolKit by Richard Dymond and stays under the GNU GPL v3 or later; it is a data file the
-emulator reads when it starts, not built into it. Sources and terms of every ROM label list:
-[`config/labels/README.md`](config/labels/README.md).
+emulator reads when it starts, not built into it. The names and data ranges of the 128K and
++2A/+3 ROMs are built in, from the ROM annotations of
+[Klive IDE](https://github.com/Dotneteer/kliveide) by Istvan Novak, under the MIT license.
+Sources and terms of every ROM label list: [`config/labels/README.md`](config/labels/README.md).
 
 The debugger's default font, DejaVu Sans Mono 2.37, is built into the binary so it looks the
 same on every platform. It keeps its own terms too - see [`LICENSE_DEJAVU`](LICENSE_DEJAVU).

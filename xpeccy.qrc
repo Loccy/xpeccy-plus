@@ -32,7 +32,21 @@
         <file>res/shaders/widetridot-nocurve-crisp.txt</file>
         <file>res/shaders/widetridot-nocurve-light.txt</file>
         <file>res/shaders/zx-rf-artifact.txt</file>
-        <file>res/labels/plus3dos.labels</file>
+        <file>res/labels/basic128.labels</file>
+        <file>res/labels/basic128-plus2.labels</file>
+        <file>res/labels/basic48-sp128-1.labels</file>
+        <file>res/labels/basic48-spp3-40-3.labels</file>
+        <file>res/labels/basic48-spp3-41-3.labels</file>
+        <file>res/labels/p3dos-40.labels</file>
+        <file>res/labels/p3dos-41.labels</file>
+        <file>res/labels/p3rom0-40.labels</file>
+        <file>res/labels/p3rom0-41.labels</file>
+        <file>res/labels/p3rom1-40.labels</file>
+        <file>res/labels/p3rom1-41.labels</file>
+        <file>res/labels/sysvars-basic128.labels</file>
+        <file>res/labels/sysvars-basic48.labels</file>
+        <file>res/labels/sysvars-p3rom0.labels</file>
+        <file>res/labels/sysvars-trdos.labels</file>
         <file>res/labels/trdos.labels</file>
         <file>res/styles/Dark.pal</file>
         <file>res/styles/Dark.qss</file>
