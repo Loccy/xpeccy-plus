@@ -98,6 +98,13 @@ Written for this project, MIT license.
 pushed). 5.03, 5.04T and the TR-DOS pages of the bundled clone ROMs. Written for this
 project, MIT license.
 
+`trdos-503.labels`: 48 names read from TR-DOS 5.03's own tables - the functions #3D13 calls by
+the number in C (`FN_READ_SECTORS`, `FN_FIND_FILE`..., the table at #288C), named after what
+each does in the code and in the TR-DOS manuals, and the handlers of its BASIC commands
+(`CMD_CAT`, `CMD_FORMAT`..., the tokens at #2FF3 and their addresses at #3008). Also on 5.04T
+and the clones' TR-DOS pages, where the code is the same. Written for this project, MIT
+license.
+
 ## System variables - Xpeccy+
 
 Shown in operands and tips when the system's ROM is in the machine, written for this

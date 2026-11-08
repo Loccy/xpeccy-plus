@@ -1,0 +1,70 @@
+; TR-DOS 5.03 labels for the Xpeccy+ debugger, read from the ROM's own tables: the
+; functions #3D13 calls by the number in C (the table at #288C), named after what
+; each does in the code and in the TR-DOS manuals, and the handlers of the BASIC
+; commands (the 21 tokens at #2FF3 and their addresses at #3008; "*" is DRIVE, "40"
+; and "80" set the drive's tracks). Part of Xpeccy+, MIT license.
+;
+; @rom <MD5 of a 16K bank> <bundled image> [-NAME / -@ADDR: not in that bank]
+; ADDR NAME: a name; START END VIEW: a data range
+@ns TRDOS
+@rom 0da70a5d2a0e733398e005b96b7e4ba6 trdos.rom
+@rom ce0723f9bc02f4948c15d3b3230ae831 256s-3.rom -FN_RESTORE
+@rom 26b2b42ffa5490275090c087b949a987 atm2.rom bank 1 -FN_RESTORE
+@rom 0c42e3b9ab8dd91ea096f1d0c07c55e5 phoenix.rom bank 1, profi-kramis02.rom bank 1 -FN_RESTORE
+@rom 95bd108b61c8bc4862529a8c8b4a7c91 prof39f.rom bank 3 -FN_TABLE -FN_RESTORE -FN_SELECT_DRIVE -FN_SEEK_TRACK -@288C
+@rom f89d6a0c667cdc53aff6068edae7aa75 prof401.rom bank 3 -FN_TABLE -FN_RESTORE -FN_SELECT_DRIVE -FN_SEEK_TRACK -@288C
+@rom b4c9634312b796063015450daef13dfa profi-bios10.rom bank 1, profi-bios20.rom bank 1, trdos504t.rom, tsconf.rom bank 1 -FN_RESTORE
+@rom e522f5c4e2fd9c735f4a2a79f66c7c89 scorpion295.rom bank 3 -FN_RESTORE
+@rom 8479eb48908e7f4dd3ab616594e6ba9b zxevo-fe.rom bank 13 -FN_TABLE -FN_RESTORE -FN_SELECT_DRIVE -FN_SEEK_TRACK -@288C
+@rom 7d8aa7d31bed0380faef83a75bfee7c9 zxevo-fe.rom bank 29 -FN_TABLE -FN_RESTORE -FN_WRITE_SECTORS -@288C
+01D3 FN_RETURN
+031A CMD_DISPATCH
+0405 FN_READ_SYS_SECTOR
+0433 CMD_CAT
+053A CMD_NEW
+0690 CMD_COPY
+0787 CMD_ERASE
+1018 CMD_DRIVE
+11CE CMD_LIST
+165C FN_READ_DESCR
+1664 FN_WRITE_DESCR
+16AB CMD_MOVE
+1810 CMD_VERIFY
+1815 CMD_LOAD
+19A5 CMD_PEEK
+19A9 CMD_POKE
+19B1 CMD_MERGE
+1AD0 CMD_SAVE
+1CF0 FN_FIND_FILE
+1CFB CMD_RETURN
+1D4D CMD_RUN
+1E3D FN_READ_SECTORS
+1E4D FN_WRITE_SECTORS
+1EC2 CMD_FORMAT
+1FEB FN_SIDE_0
+1FF6 FN_SIDE_1
+2182 CMD_OPEN
+2656 CMD_CLOSE
+2739 FN_TEST_TRACK
+283C FN_DISPATCH
+288C FN_TABLE
+28D8 FN_CATALOG
+28E0 FN_DESCR_FROM_HL
+28E3 FN_DESCR_TO_HL
+28F2 FN_SAVE_BASIC
+28FB FN_SAVE_CODE
+290F FN_LOAD_FILE
+2926 FN_DELETE_FILE
+2997 CMD_40
+29AE CMD_80
+2DA1 CMD_GOTO
+2FF3 CMD_TOKENS
+3008 CMD_HANDLERS
+3D98 FN_RESTORE
+3DCB FN_SELECT_DRIVE
+3E63 FN_SEEK_TRACK
+3F02 FN_SET_SECTOR
+3F06 FN_SET_BUFFER
+288C 28D7 db
+2FF3 3007 db
+3008 3031 da
