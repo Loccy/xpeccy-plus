@@ -11,6 +11,7 @@
 #include "xcore.h"
 #include "../libxpeccy/filetypes/filetypes.h"
 
+
 struct chState {
 	int on;
 	int val;
@@ -158,6 +159,27 @@ int cheats_open(const QString& path, bool picked) {
 	return POK_OK;
 }
 
+// Fuse's and Spectaculator's rule, and how every archive with pokes has it:
+// POKES/NAME.POK beside the image, else NAME.pok beside it. Asked for by name, as
+// listing a TOSEC folder takes a third of a second; where case counts, in the
+// spellings collections use, and where it does not, the first one answers.
+static QString pok_beside(const QString& image) {
+	const QFileInfo inf(image);
+	const QString dir = inf.absolutePath();
+	const QString base = inf.completeBaseName();
+	const QString want = base + ".pok";
+	QStringList names;
+	for (const QString& one : {want, base + ".POK", want.toUpper(), want.toLower()})
+		if (!names.contains(one)) names.append(one);
+	for (const QString& sub : {QString("POKES/"), QString("pokes/"), QString("Pokes/"), QString()}) {
+		for (const QString& name : names) {
+			const QString path = dir + "/" + sub + name;
+			if (QFileInfo(path).isFile()) return path;
+		}
+	}
+	return QString();
+}
+
 // The same image again (Reload, Recent, a mount): every cheat off, bytes back (memory is
 // still theirs); the image the command line opened keeps the list it named.
 void cheats_pick(const QString& image) {
@@ -174,25 +196,7 @@ void cheats_pick(const QString& image) {
 		ch_all_back();
 	}
 	if (!keep.isEmpty() && bkm_same(image, keep)) return;
-	// Fuse's and Spectaculator's rule, and how every archive with pokes has it:
-	// POKES/NAME.POK beside the image, else NAME.pok beside it
-	QFileInfo inf(image);
-	QString want = inf.completeBaseName() + ".pok";
-	QDir dir = inf.dir();
-	QString found;
-	foreach(QString sub, dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-		if (sub.compare("pokes", Qt::CaseInsensitive)) continue;
-		foreach(QString name, QDir(dir.filePath(sub)).entryList(QDir::Files)) {
-			if (!name.compare(want, Qt::CaseInsensitive))
-				found = dir.filePath(sub + "/" + name);
-		}
-	}
-	if (found.isEmpty()) {
-		foreach(QString name, dir.entryList(QDir::Files)) {
-			if (!name.compare(want, Qt::CaseInsensitive))
-				found = dir.filePath(name);
-		}
-	}
+	const QString found = pok_beside(image);
 	if (!found.isEmpty() && (cheats_open(found, true) == POK_OK))
 		return;
 	chLock lock;
