@@ -193,6 +193,7 @@ void next_counters(Computer*, int* hc, int* vc, int* cvc);	// hc_ula, vc_ula, cv
 void next_counters_ahead(Computer*, int clk28, int* hc, int* vc, int* cvc);	// ...that many CLK_28 later
 int next_vsync_frame(Computer*, int clk28);	// frames by the VS_n output edge, that many CLK_28 later
 extern int next_reset_open;	// the core's reset outputs lead nowhere (the simulation's testbench)
+extern void (*next_board_reset)(Computer*);	// a reset key of the board (F1, F4, F9 with a digit) reset the machine: the app's part of a user's reset
 extern int next_ear_tied;	// the EAR input held at 0, no board around the core (the same)
 // the Next's UARTs from outside (hardware/zxnext_uart.c): 0 ESP, 1 Pi
 // a byte the guest sends, as it goes: its start bit begins at CLK_28 edge start

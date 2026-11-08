@@ -73,6 +73,17 @@ void x_user_reset(Computer* comp, int res) {
 	compUserReset(comp, res);
 }
 
+// A reset key of the Next's own keyboard (F1, F4, F9 with a digit) is the user resetting
+// too: the machine has reset itself, what the app kept for it goes as above
+static void x_board_reset(Computer*) {
+	xUserResets.fetch_add(1);
+	x_state_replaced();
+}
+
+static struct boardHooks {
+	boardHooks() {next_board_reset = x_board_reset;}
+} boardHooksSet;
+
 // What was kept for the machine as it stood goes when it is reset, switched or
 // loaded over: the fast-loading wind back would bring the old state back,
 // autostart would go on typing into whatever came instead, and the cheats that
