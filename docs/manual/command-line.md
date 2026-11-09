@@ -145,7 +145,7 @@ These are for this run only:
 
 ## Debugging
 
-```{index} command line; debugging, -d, --debug, -l, --labels, -a, --adr, -f, --file, -b, --bank, --pc, --sp, --bp, --brk, --brk-log, --xmap
+```{index} command line; debugging, -d, --debug, -l, --labels, -a, --adr, -f, --file, -b, --bank, --pc, --sp, --bp, --brk, --brk-log, --xmap, --dezog, --dezog-port
 ```
 
 - `-d`, `--debug` - open the Debugger at once.
@@ -166,6 +166,9 @@ These are for this run only:
 - `--brk-log FILE` - where the [breakpoint log](debugger-breakpoints.md#the-breakpoint-log)
   goes; `-` writes it to the standard output.
 - `--xmap FILE` - load a memory map saved by the Debugger (`.xmap`).
+- `--dezog` - let [DeZog](debugger-dezog.md) debug the machine from VS Code, on the port
+  **Options > Application > DeZog port** sets; for this run.
+- `--dezog-port N` - the same, on port N.
 
 ```{index} command line; numbers
 ```
