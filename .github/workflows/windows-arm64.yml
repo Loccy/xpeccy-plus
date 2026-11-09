@@ -1,0 +1,150 @@
+
+name: Xpeccy+ Windows ARM64
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Get source
+        uses: actions/checkout@v4
+
+      - name: Install ARM64 build environment
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          release: false
+          update: true
+          cache: true
+          install: >-
+            mingw-w64-clang-aarch64-toolchain
+            mingw-w64-clang-aarch64-cmake
+            mingw-w64-clang-aarch64-ninja
+            mingw-w64-clang-aarch64-qt6-base
+            mingw-w64-clang-aarch64-qt6-5compat
+            mingw-w64-clang-aarch64-SDL2
+            mingw-w64-clang-aarch64-zlib
+            mingw-w64-clang-aarch64-curl-winssl
+            mingw-w64-clang-aarch64-icu
+            mingw-w64-clang-aarch64-libpng
+            mingw-w64-clang-aarch64-harfbuzz
+
+      - name: Configure and compile
+        env:
+          SDL2DIR: /clangarm64
+        run: |
+          set -euo pipefail
+
+          cmake -S . -B build-arm64 -G Ninja \
+            -DQTVERSION=6 \
+            -DUSEOPENGL=ON \
+            -DUSEQTNETWORK=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHAVE_falign_functions_64:BOOL=OFF \
+            -DHAVE_falign_loops_32:BOOL=OFF
+
+          cmake --build build-arm64 --parallel 4
+
+      - name: Stage application and bundle DLLs
+        env:
+          SDL2DIR: /clangarm64
+        run: |
+          set -euo pipefail
+
+          rm -rf dist
+          cmake --install build-arm64 --prefix "$PWD/dist"
+
+          test -f dist/xpeccy-plus.exe
+
+          shopt -s globstar nullglob
+
+          queue=(dist/*.exe dist/**/*.dll)
+
+          declare -A processed=()
+          declare -A missing=()
+
+          for ((i=0; i<${#queue[@]}; i++)); do
+            binary="${queue[$i]}"
+
+            [[ -f "$binary" ]] || continue
+            [[ -n "${processed[$binary]:-}" ]] && continue
+
+            processed["$binary"]=1
+            echo "Checking: $binary"
+
+            imports="$(llvm-objdump -p "$binary")"
+
+            while IFS= read -r dep; do
+              [[ -z "$dep" ]] && continue
+
+              # Already bundled?
+              if [[ -f "dist/$dep" ]] ||
+                 [[ -f "$(dirname "$binary")/$dep" ]]; then
+                continue
+              fi
+
+              # Standard ARM64 MSYS2 DLL
+              source="/clangarm64/bin/$dep"
+
+              if [[ -f "$source" ]]; then
+                cp "$source" "dist/$dep"
+                queue+=("dist/$dep")
+                echo "  Bundled: $dep"
+                continue
+              fi
+
+              # Compatibility filename for zlib
+              if [[ "${dep,,}" == "libz-1.dll" ]] &&
+                 [[ -f /clangarm64/bin/zlib1.dll ]]; then
+                cp /clangarm64/bin/zlib1.dll dist/libz-1.dll
+                queue+=("dist/libz-1.dll")
+                echo "  Bundled: libz-1.dll (zlib compatibility)"
+                continue
+              fi
+
+              # Windows system DLL
+              lower="${dep,,}"
+
+              if [[ -f "/c/Windows/System32/$dep" ]] ||
+                 [[ "$lower" == api-ms-win-* ]] ||
+                 [[ "$lower" == ext-ms-* ]]; then
+                continue
+              fi
+
+              # Unresolved dependency
+              missing["$dep"]=1
+              echo "UNRESOLVED: $dep required by $binary"
+
+            done < <(
+              printf '%s\n' "$imports" |
+                sed -n 's/^[[:space:]]*DLL Name: //p'
+            )
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            echo "ERROR: Unresolved DLL dependencies:"
+            printf '%s\n' "${!missing[@]}"
+            exit 1
+          fi
+
+          echo "All detected DLL imports resolved."
+          echo "Packaged DLLs:"
+          find dist -iname '*.dll' -print
+
+      - name: Upload ARM64 distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: xpeccy-plus-windows-arm64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
