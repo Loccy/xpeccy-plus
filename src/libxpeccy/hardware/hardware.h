@@ -136,8 +136,7 @@ struct HardWare {
 	// that, which can run on a copy of the devices (sound.cpp's mirror)
 	void (*sndtake)(Computer*, sndMix*);
 	sndPair (*sndmix)(sndMix*, sndVolume*);
-	// The INT sources that are on now, with their bytes, up to INT_VEC_MAX; nothing is
-	// acknowledged (the Debugger asks). NULL: one INT, its byte floating
+	// the INT sources on now and their ack bytes, nothing acked (NULL: one floating #FF)
 	cbHwIntVecs intvecs;
 };
 typedef struct HardWare HardWare;

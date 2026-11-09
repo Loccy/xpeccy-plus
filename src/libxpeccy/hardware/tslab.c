@@ -1039,8 +1039,7 @@ int ts_ack(Computer* comp) {
 	return comp->intVector & 0xff;
 }
 
-// the enabled sources in ts_ack's order, their vectors driven (zint.v, top.v); the one
-// ts_ack would take now, if one waits, first
+// the enabled sources, driven (zint.v), the one ts_ack takes next first
 static int ts_int_vecs(Computer* comp, xIntVec* vec) {
 	static const xIntVec src[3] = {{"frame", 0xff, 1}, {"line", 0xfd, 1}, {"DMA", 0xfb, 1}};
 	int wait = comp->vid->intFRAME ? 0 : comp->flgLINT ? 1 : comp->flgDINT ? 2 : -1;

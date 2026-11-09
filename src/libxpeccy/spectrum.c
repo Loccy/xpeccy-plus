@@ -130,6 +130,10 @@ int comp_peek(Computer* comp, int adr, int access, xAdr* xadr) {
 	return value & 0xff;
 }
 
+int comp_nmi_waiting(Computer* comp) {
+	return !!(comp->cpu->intrq & comp->cpu->inten & Z80_NMI);
+}
+
 int comp_int_vecs(Computer* comp, xIntVec* vec) {
 	if (comp->hw && comp->hw->intvecs) return comp->hw->intvecs(comp, vec);
 	vec[0].name = "INT";
@@ -142,8 +146,7 @@ static int comp_peek_word(Computer* comp, int adr) {
 	return comp_peek(comp, adr & 0xffff, MEM_VIEW_READ, NULL) | (comp_peek(comp, (adr + 1) & 0xffff, MEM_VIEW_READ, NULL) << 8);
 }
 
-// as z80_int() takes it: IM 0 runs the byte (an RST is a call), IM 2 reads the word
-// at I:byte, its high byte past the page for #FF
+// as z80_int(): IM 0 runs the byte, IM 2 reads the word at I:byte (+1 may cross the page)
 int comp_int_target(Computer* comp, int im, int vec, int* cell) {
 	vec &= 0xff;
 	*cell = -1;

@@ -214,35 +214,26 @@ int nx_int_ack(Computer* comp) {
 	return 0xff;
 }
 
-// What the acknowledge would carry, for the Debugger, as nx_int_ack() works it out
-// (zxnext.vhd 1868-1878): in hardware IM 2 with the cpu in IM 2, each enabled device's
-// vector, the one waiting first; a device holding the chain otherwise, NR C0's top bits;
-// else #FF, which the FPGA drives unless the expansion bus is on for IO
+// nx_int_ack()'s byte, not acked (zxnext.vhd 1832-1835, 1868-1878)
+_Static_assert(NX_IRQ_DEVS <= INT_VEC_MAX, "the Next's devices do not fit xIntVec");
 int nx_int_vecs(Computer* comp, xIntVec* vec) {
 	static const char* name[NX_IRQ_DEVS] = {"line", "UART 0 Rx", "UART 1 Rx",
 		"CTC 0", "CTC 1", "CTC 2", "CTC 3", "CTC 4", "CTC 5", "CTC 6", "CTC 7",
 		"ULA", "UART 0 Tx", "UART 1 Tx"};
 	int hw = NX.nr[0xc0] & 1;
-	int held = 0;
-	int wait = -1;		// the device acknowledged next: the one requesting, else the first pending
-	for (int i = 0; hw && (i < NX_IRQ_DEVS); i++) {
-		if (IRQ.st[i] == DEV_0) continue;
-		held = 1;
-		if (IRQ.st[i] == DEV_REQ) wait = i;
-		break;
-	}
-	for (int i = 0; hw && !held && (i < NX_IRQ_DEVS); i++) {
-		if (IRQ.pend & (1 << i)) {
-			wait = i;
-			break;
-		}
-	}
-	if (!hw || !nx_im2(comp)) {
+	if (!hw || !nx_im2(comp)) {		// outside IM 2 a device's request still takes the chain
 		vec[0].name = "INT";
-		vec[0].vec = held ? (NX.nr[0xc0] & 0xe0) : 0xff;
-		vec[0].driven = held || !(NX.expbusEff && !(NX.nr[0x80] & 0x20));
+		vec[0].vec = hw ? (NX.nr[0xc0] & 0xe0) : 0xff;
+		vec[0].driven = hw || !(NX.expbusEff && !(NX.nr[0x80] & 0x20));
 		return 1;
 	}
+	int head = -1;		// the first device not in S_0 holds the chain
+	for (int i = 0; (i < NX_IRQ_DEVS) && (head < 0); i++)
+		if (IRQ.st[i] != DEV_0) head = i;
+	int wait = ((head >= 0) && (IRQ.st[head] == DEV_REQ)) ? head : -1;	// acked next
+	for (int i = 0; (head < 0) && (wait < 0) && (i < NX_IRQ_DEVS); i++)
+		if (IRQ.pend & (1 << i)) wait = i;
+	int last = ((head >= 0) && (IRQ.st[head] == DEV_ISR)) ? head : NX_IRQ_DEVS;	// before RETI only those ahead of it
 	int n = 0;
 	if (wait >= 0) {
 		vec[n].name = name[wait];
@@ -250,7 +241,7 @@ int nx_int_vecs(Computer* comp, xIntVec* vec) {
 		vec[n].driven = 1;
 		n++;
 	}
-	for (int i = 0; i < NX_IRQ_DEVS; i++) {
+	for (int i = 0; i < last; i++) {
 		if (i == wait) continue;
 		int on;
 		switch (i) {
