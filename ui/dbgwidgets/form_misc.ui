@@ -202,12 +202,12 @@
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="labIntGo">
+    <widget class="QLabel" name="labNMI">
      <property name="autoFillBackground">
       <bool>true</bool>
      </property>
      <property name="text">
-      <string notr="true"/>
+      <string>NMI</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>

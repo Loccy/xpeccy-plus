@@ -1321,12 +1321,11 @@ void setSignal(QLabel* lab, int on) {
 	lab->setFont(fnt);
 }
 
-// a line per INT source in IM im; adr/cell/star: the first's handler, its table word, the *
-#define DBG_INT_NONE -2		// adr: no INT can come
+// a line per INT source in IM im; adr/cell/star: the first's handler (-1: none), its table word, the *
 static QString dbg_int_now(Computer* comp, int im, int* adr, int* cell, bool* star) {
 	xIntVec vec[INT_VEC_MAX];
 	int n = comp_int_vecs(comp, vec);
-	*adr = DBG_INT_NONE;
+	*adr = -1;
 	*cell = -1;
 	*star = false;
 	if (n < 1) return "Now: no INT can come";
@@ -1375,28 +1374,19 @@ static QString dbg_int_now(Computer* comp, int im, int* adr, int* cell, bool* st
 	return res;
 }
 
-// the IM tip's "Now" part and the line under INT in the side panel
+// where an INT goes, in the tips of INT and IM
 void DebugWin::fillIntGo() {
 	Computer* comp = conf.zx;
+	ui_misc.labNMI->setToolTip(QString("NMI: the CPU calls %0").arg(dbg_word(0x66)));
 	int im = dbg_get_reg_adr_name(comp->cpu, "IM");
 	if (im < 0) {
-		ui_misc.labIntGo->clear();
-		ui_misc.labIntGo->setToolTip(QString());
+		ui_misc.labINT->setToolTip(QString());
 		return;
 	}
 	int adr, cell;
 	bool star;
 	QString now = dbg_int_now(comp, im, &adr, &cell, &star);
-	QString go(QChar(0x2192));
-	go.append((adr == DBG_INT_NONE) ? QString(" -") : (adr < 0) ? QString(" ?") : dbg_word(adr));
-	if (star) go.append("*");
-	QString tip = "Where an INT goes\n" + now;
-	if (comp_nmi_waiting(comp)) {		// it comes first, as the INT signal says
-		go = "NMI" + QString(QChar(0x2192)) + dbg_word(0x66);
-		tip = QString("An NMI waits: the CPU calls %0\n\n").arg(dbg_word(0x66)) + tip;
-	}
-	ui_misc.labIntGo->setText(go);
-	ui_misc.labIntGo->setToolTip(tip);
+	ui_misc.labINT->setToolTip("Where an INT goes\n" + now);
 	foreach(xLabel* lab, dbgRegLabs) {
 		if (lab->text() == "IM")		// a hidden panel's too: it is not refilled when shown
 			lab->setToolTip(dbg_reg_tip("IM") + "\n\n" + now);
@@ -1427,7 +1417,10 @@ void DebugWin::fillNotCPU() {
 	setSignal(ui_misc.labDOS, comp->flgDOS);
 	setSignal(ui_misc.labROM, comp->flgROM);
 	setSignal(ui_misc.labCPM, comp->flgCPM);
-	setSignal(ui_misc.labINT, cpu_int_ready(comp->cpu));	// the next step takes an interrupt
+	// the next step takes an interrupt: an NMI before an INT
+	int nmi = comp_nmi_waiting(comp);
+	setSignal(ui_misc.labINT, !nmi && cpu_int_ready(comp->cpu));
+	setSignal(ui_misc.labNMI, nmi);
 	fillIntGo();
 
 	ui_misc.labRX->setNum(comp->vid->ray.x);
@@ -2682,7 +2675,7 @@ void DebugWin::setMiscBlocks() {
 	ui_misc.labROM->setVisible(conf.dbg.showsig);
 	ui_misc.labCPM->setVisible(conf.dbg.showsig);
 	ui_misc.labINT->setVisible(conf.dbg.showsig);
-	ui_misc.labIntGo->setVisible(conf.dbg.showsig);
+	ui_misc.labNMI->setVisible(conf.dbg.showsig);
 	ui_misc.labHeadFrame->setVisible(conf.dbg.showfrm);
 	ui_misc.labFrame->setVisible(conf.dbg.showfrm);
 	ui_misc.labHeadRay->setVisible(conf.dbg.showray);
