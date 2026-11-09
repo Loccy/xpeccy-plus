@@ -44,6 +44,19 @@ the machines it touches, and those are blessed once the change is checked agains
 hardware. A change that should alter nothing - a refactor, a speed-up - must leave every
 hash where it was.
 
+## DeZog's protocol
+
+`dzrp/dzrp_test.py` runs the staged build with no window (`--bench` and `--dezog-port`) and
+speaks DeZog's DZRP to it as DeZog does: registers, memory by address and by bank, a
+breakpoint, steps by temporary breakpoints, a watchpoint, a pause, a bank-bound breakpoint, a
+saved state put back, the user's own breakpoint and the Next's commands. Python only, no VS
+Code; the newest dev build, or `--app`:
+
+```
+python tests/dzrp/dzrp_test.py                  # zx48 zx128 zxnext pent1024 zxplus3
+python tests/dzrp/dzrp_test.py zx128
+```
+
 ## System/Next archive reader
 
 The Next's card is unpacked inside the program, so this target tests that reader

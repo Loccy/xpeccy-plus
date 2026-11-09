@@ -1811,6 +1811,12 @@ static void nx_nr_write(Computer* comp, int r, int v) {
 	nr[r] = v;
 }
 
+// A nextreg written for a debugger, at once: no cpu cycle around it, so it lands
+// where the machine stands, as a NEXTREG the stopped cpu made would
+void next_nr_poke(Computer* comp, int r, int v) {
+	nx_nr_write(comp, r & 0xff, v & 0xff);
+}
+
 // == the copper (device/copper.vhd, zxnext.vhd 3942-4000, 4706-4777) ==
 
 // hc_ula and cvc as a copper edge t sees them: those of the dot that ends at or after it

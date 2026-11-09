@@ -12,7 +12,7 @@ static void rs_stop(Computer* comp, int there) {
 	rs_target = -1;
 	fast_hold_release(comp);
 	conf.emu.fast = rs_fast;
-	if (there && rs_pause) conf.emu.pause |= PR_PAUSE;
+	if (there && rs_pause) pause_add(PR_PAUSE);
 }
 
 int rzx_seek_start(Computer* comp, int frame) {
@@ -31,7 +31,7 @@ int rzx_seek_start(Computer* comp, int frame) {
 	}
 	rs_pause = paused;
 	rs_target = frame;
-	conf.emu.pause &= ~PR_PAUSE;
+	pause_del(PR_PAUSE);
 	conf.emu.fast = 1;
 	return at;
 }

@@ -1,4 +1,5 @@
 #include "xcore/xcore.h"
+#include "xcore/dezog.h"
 #include "xcore/sound.h"
 #include "xcore/fastload.h"
 
@@ -347,6 +348,7 @@ void DebugWin::start() {
 	comp->cpu->flgRetBRK = 0;
 
 	brk_clear_tmp(comp);		// clear temp breakpoints
+	dezog_keep_tmp(comp);		// ...but a step of DeZog's under way
 
 	// Once, on the first open: Options re-applies the style on every change, and
 	// doing it per open rebuilds the register grid for nothing. Before show() -
@@ -378,21 +380,19 @@ bool DebugWin::stop() {
 	Computer* comp = conf.zx;
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;	// before compExec to add current opcode T
-	if (comp->flgDBG) {
-		comp_brk_clear(comp);		// what the debugger's own steps left
-		if (comp->flgCOND) comp_brk_newstep(comp);
+	// DeZog holds the machine: closing the window leaves it where DeZog shows it
+	if (comp->flgDBG && !pause_has(PR_DEZOG)) {
 		// one opcode, and the scope has to hear it too or the wave has a notch
 		// in it at every resume
-		snd_scope_step(comp, compExec(comp));
-		int skip = 0;
-		int res = brk_take_hits(comp, &skip);
-		if (comp->flgCOND) comp_brk_newstep(comp);
-		comp_brk_clear(comp);
+		int tm;
+		int res = brk_step_off(comp, &tm);
+		snd_scope_step(comp, tm);
 		// the machine asked to quit: the emulation's thread does that, first thing
 		if (res == BRK_GO_CLOSE) comp_brk(comp, BRK_STOP);
 		if (res == BRK_GO_DBG) {
 			comp->cpu->flgRetBRK = 0;
 			brk_clear_tmp(comp);
+			dezog_keep_tmp(comp);
 			if (!fillAll()) ui_asm.dasmTable->setAdr(cpu_get_pc(comp->cpu));
 			return false;
 		}
@@ -1066,9 +1066,12 @@ void DebugWin::doStep() {
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;
 	// the scope is fed from the emulation thread, which is not running while we
-	// hold the machine: carry it across this step ourselves
+	// hold the machine: carry it across this step ourselves. DeZog's thread may be
+	// at the machine too
+	emu_lock();
 	snd_scope_step(comp, compExec(comp));
 	comp_brk_clear(comp);		// single steps run without breakpoints, by design
+	emu_unlock();
 	if (!fillAll()) {
 		ui_asm.dasmTable->setAdr(cpu_get_pc(comp->cpu));
 		//fillDisasm();

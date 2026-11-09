@@ -842,13 +842,13 @@ void media_autorun_headless(int on) {
 // the command line's.
 static void as_board_refused() {
 	if (as_headless) return;		// the log has the refusal
-	conf.emu.pause |= PR_EXTRA;
+	pause_add(PR_EXTRA);
 	QMessageBox::information(nullptr, "Cannot start the disk",
 		"The floppy drives are off while the divMMC is on: the disk is in its drive, "
 		"but cannot be started.\n\n"
 		"Switch the divMMC off with Media > divMMC, or start a disk image from the "
 		"card in the esxDOS browser (Machine > NMI).");
-	conf.emu.pause &= ~PR_EXTRA;
+	pause_del(PR_EXTRA);
 }
 
 // Media just opened from the gui: mounting is not enough when the user wants it
@@ -2254,7 +2254,7 @@ static quickKept undoKept = {QByteArray(), NULL, std::string(), xGame()};
 // A quick save may be from before what a recording has logged since, so the
 // recording joins there instead of going back with the machine. A breakpoint
 // hit it holds is from then, not for now.
-static int quick_xstate_load(xState* st, Computer* comp) {
+int quick_xstate_load(xState* st, Computer* comp) {
 	rzxRecPos rec = comp->rzx.rec;
 	int res = xstate_load(st, comp);
 	if (res) comp_brk_clear(comp);

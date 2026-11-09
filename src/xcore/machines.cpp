@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 
 #include "xcore.h"
+#include "dezog.h"
 #include "rzxrecord.h"
 #include "../filer.h"
 #include "../xgui/xgui.h"
@@ -1322,12 +1323,13 @@ bool xm_set(std::string id) {
 		return false;
 	}
 	emu_lock();
-	conf.emu.pause |= PR_EXTRA;
+	pause_add(PR_EXTRA);
 	rzxr_stop(conf.zx);		// a recording is of one machine
 	rewind_clear();
 	xreplay_arm(0);			// the debugger arms it again if it is shown on TSConf
 	// the start and a machine put back to its defaults are not a change of machine
 	bool another = !conf.macId.empty() && (conf.macId != id);
+	if (another) dezog_end();		// DeZog's picture of the machine goes with it
 	if (!conf.macId.empty()) {			// what the machine we leave keeps
 		xm_next_card_back();
 		xm_save_nvram();
@@ -1365,7 +1367,7 @@ bool xm_set(std::string id) {
 		msg = " " + mac->name + " ";
 		conf.zx->msg = (char*)msg.c_str();
 	}
-	conf.emu.pause &= ~PR_EXTRA;
+	pause_del(PR_EXTRA);
 	emu_unlock();
 	macLive = true;
 	xlog(XLG_CONF, XLL_INFO, "machine: %s (%s)", conf.macId.c_str(), conf.zx->hw->name);

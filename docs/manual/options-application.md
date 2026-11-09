@@ -1,12 +1,14 @@
 # Application page
 
-```{index} Application page, Listen port, Check for updates, Update channel, Confirm exit, Export settings, Import settings, Reset to defaults, log, log file
+```{index} Application page, Listen port, DeZog port, Check for updates, Update channel, Confirm exit, Export settings, Import settings, Reset to defaults, log, log file
 ```
 
 ![The Application page](images/options-application.png)
 
 - **Machine at start** - see [Machine at start](#machine-at-start).
 - **Listen port** - the network port the program listens on, for tools that control it.
+- **DeZog port** - let [DeZog](debugger-dezog.md) debug the machine from VS Code, on this
+  port. Only programs on this computer can connect.
 - **Check for updates**, **Update channel** - how often to look for a newer version, and
   whether development builds count; see [Updates](getting-started.md#updates).
 - **Confirm exit** - ask before closing. **Pause when inactive** is on the

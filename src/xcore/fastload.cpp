@@ -641,7 +641,7 @@ static int fp_last = 1;			// the frame that just ended was drawn
 
 // a break can stop the machine mid-frame, and the picture up to the ray has to be there
 static int fp_watched(Computer* comp) {
-	return comp_mem_watched(comp) || comp->flgIBRK || comp->flgDBG || brk_cond_n || !conf.brk.list.empty();
+	return comp_mem_watched(comp) || comp->flgIBRK || comp->flgDBG || brk_cond_n || !conf.brk.list.empty() || !brk_ext.empty();
 }
 
 static void fp_release(Computer* comp) {
@@ -743,7 +743,7 @@ void fast_picture_frame(Computer* comp) {
 	if (conf.emu.pauseReq) {
 		fs_release(vid);		// the frame after the pause is drawn
 		if (drawn || !fp_held) {
-			conf.emu.pause |= conf.emu.pauseReq;
+			pause_add(conf.emu.pauseReq);
 			conf.emu.pauseReq = 0;
 			conf.emu.fast = 0;
 			fp_release(comp);

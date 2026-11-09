@@ -155,10 +155,10 @@ void TapeWin::doLoad() {
 void TapeWin::doSave() {
 	Tape* tap = conf.zx->tape;
 	if (tap->blkCount < 1) return;
-	conf.emu.pause |= PR_FILE;
+	pause_add(PR_FILE);
 	save_back(conf.zx, tap->path, FG_TAPE, -1);
 	upd(tap);
-	conf.emu.pause &= ~PR_FILE;
+	pause_del(PR_FILE);
 }
 
 // The wav is a recording and the only thing on it is the signal, so what a
@@ -204,9 +204,9 @@ void TapeWin::doExport() {
 	conf.tape.exp.tail = eui.sbTail->value();
 	QString path = file_ask_save("Export Tape to WAV", "WAV tape recording (*.wav)", ".wav");
 	if (path.isEmpty()) return;
-	conf.emu.pause |= PR_FILE;
+	pause_add(PR_FILE);
 	int err = saveWAVopt(conf.zx, path.toLocal8Bit().data(), &conf.tape.exp);
-	conf.emu.pause &= ~PR_FILE;
+	pause_del(PR_FILE);
 	file_errors(err);
 }
 

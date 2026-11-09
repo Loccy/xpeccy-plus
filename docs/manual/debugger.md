@@ -48,7 +48,8 @@ Open the Debugger in any of these ways:
 - `-d` on the command line opens it as soon as the program starts (see
   [Command line](command-line.md#debugging));
 - a breakpoint opens it by itself when the machine reaches it (see
-  [Breakpoints panel](debugger-breakpoints.md)).
+  [Breakpoints panel](debugger-breakpoints.md)), unless [DeZog](debugger-dezog.md) is
+  connected.
 
 While the Debugger is open, the machine stands still. There is no sound, fast mode is
 switched off, and keys pressed in the main window do not reach the machine. The picture in
@@ -175,6 +176,7 @@ debugger-cmos
 debugger-palette
 debugger-zx-evo
 debugger-zx-next
+debugger-dezog
 ```
 
 ## The buttons over the listing

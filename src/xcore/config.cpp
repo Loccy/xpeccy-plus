@@ -90,6 +90,8 @@ static QString sysNextDir() {
 void conf_init(char* confdir) {
 	conf.scrShot.dir = QDir::toNativeSeparators(QDir::homePath()).toStdString();	// with its drive
 	conf.port = 30000;
+	conf.dezog.on = 0;
+	conf.dezog.port = 14000;		// DeZog's own default for a DZRP remote
 #if defined(__linux) || defined(__APPLE__) || defined(__BSD)
 	if (confdir == NULL) {
 		// own directory, not the one upstream Xpeccy uses (~/.config/samstyle/xpeccy):
@@ -256,6 +258,8 @@ void saveConfig() {
 	fprintf(cfile, "pause.menu = %s\n", YESNO(conf.pauseMenu));
 	fprintf(cfile, "pause.resume = %s\n", YESNO(conf.pauseResume));
 	fprintf(cfile, "port = %i\n", conf.port);
+	fprintf(cfile, "dezog = %s\n", YESNO(conf.dezog.on));
+	fprintf(cfile, "dezog.port = %i\n", conf.dezog.port);
 	// unset: the build's default, which a later build may change
 	if (conf.upd.check != UPC_UNSET) fprintf(cfile, "update.check = %s\n", upd_check_name[conf.upd.check]);
 	if (conf.upd.channel >= 0) fprintf(cfile, "update.channel = %s\n", upd_channel_name[conf.upd.channel]);
@@ -811,16 +815,16 @@ bool reloadConfig() {
 	// gamepads as well as reading the files, and it does it under a machine
 	// that is already running
 	emu_lock();
-	conf.emu.pause |= PR_EXTRA;
+	pause_add(PR_EXTRA);
 	try {
 		loadConfig();
 	} catch (...) {
 		xlog(XLG_CONF, XLL_ERROR, "the configuration could not be read");
-		conf.emu.pause &= ~PR_EXTRA;
+		pause_del(PR_EXTRA);
 		emu_unlock();
 		return false;
 	}
-	conf.emu.pause &= ~PR_EXTRA;
+	pause_del(PR_EXTRA);
 	emu_unlock();
 	return true;
 }
@@ -1450,6 +1454,8 @@ void loadConfig() {
 					if (pnam == "folder.trash") conf.fold.trash = arg.b;
 					if (pnam == "folder.asked") conf.fold.asked = arg.b;
 					if (pnam == "port") conf.port = arg.i & 0xffff;
+					if (pnam == "dezog") conf.dezog.on = arg.b;
+					if ((pnam == "dezog.port") && (arg.i > 0) && (arg.i < 0x10000)) conf.dezog.port = arg.i;
 					if (pnam == "update.check") conf.upd.check = rec_id(upd_check_name, pval, UPC_UNSET);
 					if (pnam == "update.channel") conf.upd.channel = (pval == "nightly") ? UP_DEV : rec_id(upd_channel_name, pval, -1);	// nightly: before 2026.9
 					if (pnam == "update.last") conf.upd.last = strtoll(pval.c_str(), NULL, 10);
