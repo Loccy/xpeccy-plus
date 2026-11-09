@@ -71,7 +71,7 @@ the Next's RAM and for the divMMC's RAM.
 **Pages** lists the pages the program has touched, one strip each: the page's name, its
 cells (one for 4 bytes), and its read, write and exec counts. Tick **Untouched**, beside
 **Collect**, to list every page. Click a strip to open that page. On a machine with megabytes of memory - 4 MB
-on a ZX Evolution, 2 MB on the Next - this shows at once where the program lives.
+on a ZX Evolution, up to 2 MB on the Next - this shows at once where the program lives.
 
 ## The readout
 

@@ -219,9 +219,10 @@ the frame, and a T is a different number of dots at each of its three speeds.
 ## ZX Spectrum Next
 
 A Next file carries machine id `0x80` and `MACH` names `ZXNext` / `zxnext`. The memory is the
-board's 2 MB SRAM in `RAMP` blocks, pages 0 to 127: the ROMs the firmware loaded from the card,
-the divMMC and Multiface memory and the RAM banks, all where the board keeps them. The rest is
-in records of our own, all opaque:
+board's SRAM in `RAMP` blocks, pages 0 to 127 on 2 MB and 0 to 63 on 1 MB: the ROMs the firmware
+loaded from the card, the divMMC and Multiface memory and the RAM banks, all where the board
+keeps them. A file of the other size runs the Next on its own. The rest is in records of our
+own, all opaque:
 
 - `NEXT` - the board, part by part: the nextregs, the memory map and the ports, the copper
   and its program, the palettes, the sprites and their patterns, the layers and the picture

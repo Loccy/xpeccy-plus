@@ -131,8 +131,6 @@ typedef reg16(w,h,l) xreg16;
 #define MEM_1M	(1<<20)
 #define MEM_2M	(1<<21)
 #define MEM_4M	(1<<22)
-#define MEM_8M	(1<<23)
-#define MEM_16M	(1<<24)
 // not a size: a core that can also have three rows of 256K out of four (Profi)
 #define MEM_768K	(1<<25)
 // not a size: the 64K of this core is 48K of RAM, the rest of the address space ROM

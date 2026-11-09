@@ -43,7 +43,7 @@ foreach(BENCH ${BENCHES})
 	add_executable(${BENCH}-bench core/${BENCH}/main.c)
 	target_link_libraries(${BENCH}-bench xpeccycore)
 endforeach()
-target_sources(zxnext-bench PRIVATE core/zxnext/debugger.c)
+target_sources(zxnext-bench PRIVATE core/zxnext/debugger.c core/zxnext/ram.c)
 
 option(XPECCY_QT_TESTS "Build label and expression checks with Qt" OFF)
 if(XPECCY_QT_TESTS)

@@ -209,7 +209,7 @@ int comp_cell_unit(Computer* comp, int area) {
 int comp_cell_pages(Computer* comp, int area) {
 	int next = comp_is_next(comp);
 	switch (area) {
-		case CELL_RAM: return next ? 0xe0 : ((comp->mem->ramMask + 1) >> 14);
+		case CELL_RAM: return next ? next_ram_pages(comp) : ((comp->mem->ramMask + 1) >> 14);
 		case CELL_ROM: return next ? 4 : ((comp->mem->romMask + 1) >> 14);
 		case CELL_ALTROM: return next ? 2 : 0;
 		case CELL_DIV: return next ? 16 : ((comp->div && comp->div->model) ? comp->div->pages : 0);	// as many as the board has
@@ -1473,6 +1473,10 @@ int compSetHardware(Computer* comp, const char* name) {
 		comp->cpu->xnextreg = NULL;
 		if (comp->hw && (comp->hw->id == HW_ZXNEXT)) comp->waitDebt = 0;
 	}
+	// a Next comes in as the stock 2 MB board, whatever the machine before had; its
+	// machine file may then say 1 MB (nx_init keeps either)
+	if ((hw->id == HW_ZXNEXT) && !(comp->hw && (comp->hw->id == HW_ZXNEXT)))
+		memSetSize(comp->mem, MEM_2M, -1);
 	comp->hw = hw;
 	// a host key's combination as the machine's keyboard makes it: the Evo's avr, or
 	// for the rest (none has a pc keyboard of its own) the Next's scan

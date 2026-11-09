@@ -1046,6 +1046,10 @@ static const struct {
 	{NULL, NULL}
 };
 
+// The RAM the machine file gives, which xm_save_over writes: a snapshot may run the
+// machine on another size for the session (a Next's SZX of 1 MB on a 2 MB Next)
+static int macRam = 0;
+
 int xm_set_hardware(std::string nm) {
 	for (int i = 0; hwAliasTab[i].oldName; i++) {
 		if (nm == hwAliasTab[i].oldName) {
@@ -1053,11 +1057,26 @@ int xm_set_hardware(std::string nm) {
 			break;
 		}
 	}
-	return compSetHardware(conf.zx, nm.empty() ? NULL : nm.c_str());
+	int res = compSetHardware(conf.zx, nm.empty() ? NULL : nm.c_str());
+	macRam = conf.zx->mem->ramSize;		// the board as it comes, until a size is set
+	return res;
 }
 
 // the machine's own settings: first its definition, then the user's own block.
 // Both go through here, so what a key means is written once.
+
+int xm_own_ram() {
+	return macRam ? macRam : conf.zx->mem->ramSize;
+}
+
+void xm_set_ram(int size) {
+	Computer* comp = conf.zx;
+	if (comp->hw && (comp->hw->id == HW_ZXNEXT))
+		next_ram_size(comp, size);
+	else
+		memSetSize(comp->mem, size, -1);
+	macRam = comp->mem->ramSize;
+}
 
 static int mac_ram_size(int kb, int mask) {
 	if ((kb == 768) && (mask & MEM_768K)) return MEM_512K + MEM_256K;
@@ -1181,7 +1200,7 @@ static void mac_from_def(const xMachine* mac) {
 	comp->turboCount = mac_turbo_tab(mac->turboSteps, comp->turboTab);
 	comp->turboStep = 1;		// a machine comes up on its base clock...
 	xspeed_set(XSPD_NORMAL);	// ...and at normal speed: neither is a setting
-	memSetSize(comp->mem, mac_ram_size(mac->memory, comp->hw->mask), -1);
+	xm_set_ram(mac_ram_size(mac->memory, comp->hw->mask));
 	mac_cold_ram(comp, mac->ramCold, mac->ramNoise);
 	comp->resbank = mac->resbank;
 	comp->snapModel = mac->snapModel;
@@ -1416,7 +1435,7 @@ static void mac_put_all(QList<xMacLine>& out, const xMachine* mac) {
 	mac_put(out, "cpu", cpu, mac->cpu);
 	mac_put(out, "cpu.frq", int(comp->cpuFrq * 1e6), mac->cpufrq);
 	mac_put(out, "cpu.turbo", mac_turbo_str(comp->turboTab, comp->turboCount), mac->turboSteps);
-	mac_put(out, "memory", mac_ram_kb(comp->mem->ramSize, comp->hw->mask), mac->memory);
+	mac_put(out, "memory", mac_ram_kb(macRam ? macRam : comp->mem->ramSize, comp->hw->mask), mac->memory);
 	mac_put(out, "reset", mac_word_name(resetTab, comp->resbank), mac_word_name(resetTab, mac->resbank));
 	mac_put(out, "issue", mac_word_name(earTab, comp->earback), mac_word_name(earTab, mac->earback));
 	mac_put_yn(out, "ear.rc", comp->earRC, mac->earrc);
@@ -1885,7 +1904,7 @@ static void mac_set_old_key(int sect, const std::string& nam, const std::string&
 				compSetBaseFrq(comp, toLimits(frq, 100000, 28000000) / 1e6);
 			}
 			else if (nam == "frq.mul") {}		// dropped, see mac_set_defer_key
-			else if (nam == "memory") memSetSize(comp->mem, mac_ram_size(arg.i, comp->hw->mask), -1);
+			else if (nam == "memory") xm_set_ram(mac_ram_size(arg.i, comp->hw->mask));
 			else if (nam == "contmem") comp_set_cont(comp, arg.b);
 			else if (nam == "contio") comp->flgCNTI = arg.b;
 			else if (nam == "scrp.wait") comp->flgEM1 = arg.b;

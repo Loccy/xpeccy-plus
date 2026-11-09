@@ -462,6 +462,8 @@ static const szxField fld_next[] = {
 	FLD(xNextState, configMode),
 	FLD(xNextState, vmode),
 	FLD(xNextState, lastSram),
+	FLD(xNextState, lane),
+	FLD(xNextState, laneT),
 	FLD(xNextState, busRomcs),
 	FLD(xNextState, palPhase),
 	FLD(xNextState, pal44),

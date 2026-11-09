@@ -180,7 +180,7 @@ def bench_vfat():
 
 def bench_zxnext():
     res = {}
-    for case in ("switch", "debugger", "reset"):
+    for case in ("switch", "debugger", "reset", "ram"):
         p = subprocess.run([str(BUILD / f"zxnext-bench{EXE}"), f"--{case}"], capture_output=True, text=True, errors="replace", timeout=120)
         sections = read_sections(p.stdout)
         res.update(sections)

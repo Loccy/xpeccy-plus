@@ -447,6 +447,8 @@ typedef struct {
 	unsigned char configMode;	// nr_03_config_mode (the firmware leaves it off)
 	unsigned char vmode;		// the video timing the board runs (NR 11): its CLK_28, 0 = 28 MHz
 	unsigned char lastSram;		// the byte of the last port A SRAM read (unmapped reads give it)
+	unsigned char lane[2];		// what the SRAM data bus halves (A0: even, odd) last carried from a cpu or DMA cycle...
+	long long laneT[2];		// ...and when (tickTotal + cpu->t): a chip that is not fitted reads them
 	unsigned char busRomcs;		// the expansion bus ROMCS pin asks the internal ROM off
 	unsigned char palPhase;		// nr_44 first/second byte
 	unsigned char pal44;		// nr_44's first byte, kept for the second (NR 28 reads it)

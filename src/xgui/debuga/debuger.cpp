@@ -2336,7 +2336,10 @@ void DebugWin::fillMem() {
 				case CELL_MFROM: source = "Multiface ROM"; break;
 				case CELL_MFRAM: source = "Multiface RAM"; break;
 				default:
-					source = (effective.abs >= 0) ? "Layer 2 over bank 5/7" : "nothing (floating bus)";
+					if (effective.abs >= 0) source = "Layer 2 over bank 5/7";
+					else if ((page < 0xe0) && (page >= next_ram_pages(comp))) source = "no chip (1 MB board): what the bus holds";
+					else if ((page >= 0xe0) && (i >= 2)) source = "nothing (the last SRAM byte read)";
+					else source = "nothing (floating bus)";
 					break;
 			}
 			tip.append(QString("\nMMU #%0, CPU sees %1").arg(gethexbyte(page), source));
