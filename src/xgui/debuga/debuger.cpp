@@ -1321,30 +1321,38 @@ void setSignal(QLabel* lab, int on) {
 	lab->setFont(fnt);
 }
 
-// Where an INT goes now: a line per source the machine has on, the handler of the
-// first one (-1: none, or IM 0 runs a byte that is no RST) and whether that one hangs
-// on a byte nothing drives with an uneven IM 2 table (*)
-int dbg_get_reg_adr_name(CPU*, const char*);
-static QString dbg_int_now(Computer* comp, int im, int* adr, bool* star) {
+// Where an INT goes now, in IM im: a line per source the machine has on, the one
+// taken next first. adr: that one's handler (-1: IM 0 runs a byte that is no RST,
+// DBG_INT_NONE: no source is on); cell: the IM 2 table's word read (else the handler);
+// star: the byte floats and the IM 2 table is uneven (*)
+#define DBG_INT_NONE -2
+static QString dbg_int_now(Computer* comp, int im, int* adr, int* cell, bool* star) {
 	xIntVec vec[INT_VEC_MAX];
 	int n = comp_int_vecs(comp, vec);
-	*adr = -1;
+	*adr = DBG_INT_NONE;
+	*cell = -1;
 	*star = false;
 	if (n < 1) return "Now: no interrupt source is on";
 	if (im == 1) {
-		*adr = 0x38;
+		*adr = *cell = 0x38;
 		return QString("Now: IM 1, the CPU calls %0").arg(dbg_word(0x38));
 	}
-	bool even = (im == 2) && comp_int_table_even(comp);
+	bool even = true;		// asked only where it can matter
+	for (int i = 0; (i < n) && (im == 2); i++) {
+		if (!vec[i].driven) {
+			even = comp_int_table_even(comp);
+			break;
+		}
+	}
 	int floating = -1;
 	QString res = QString("Now: IM %0").arg(im);
 	for (int i = 0; i < n; i++) {
-		int cell;
-		int to = comp_int_target(comp, im, vec[i].vec, &cell);
+		int at;
+		int to = comp_int_target(comp, im, vec[i].vec, &at);
 		bool mark = (im == 2) && !vec[i].driven && !even;
 		QString line = QString("%0 (%1): ").arg(vec[i].name, dbg_byte(vec[i].vec));
 		if (im == 2) {
-			line.append(QString("%0 %1 %2").arg(dbg_word(cell), QString(QChar(0x2192)), dbg_word(to)));
+			line.append(QString("%0 %1 %2").arg(dbg_word(at), QString(QChar(0x2192)), dbg_word(to)));
 		} else if (to >= 0) {
 			line.append(QString("RST %0").arg(dbg_byte(to)));
 		} else {
@@ -1352,20 +1360,20 @@ static QString dbg_int_now(Computer* comp, int im, int* adr, bool* star) {
 		}
 		if (mark) {
 			line.append(" *");
-			if (floating < 0) floating = vec[i].vec;
+			if (floating < 0) floating = at;
 		}
 		if (i == 0) {
 			*adr = to;
+			*cell = (at < 0) ? to : at;
 			*star = mark;
 		}
 		res.append("\n").append(line);
 	}
 	if (floating >= 0) {
-		int tab = dbg_get_reg_adr_name(comp->cpu, "IR") & 0xff00;
 		res.append(QString("\n\n* The table at %0 is not one byte repeated\n"
 			"257 times. On a real machine a device can\n"
 			"put another byte than %1 on the bus, and\n"
-			"the CPU jumps elsewhere.").arg(dbg_word(tab), dbg_byte(floating)));
+			"the CPU jumps elsewhere.").arg(dbg_word(floating & 0xff00), dbg_byte(floating & 0xff)));
 	}
 	return res;
 }
@@ -1379,10 +1387,11 @@ void DebugWin::fillIntGo() {
 		ui_misc.labIntGo->setToolTip(QString());
 		return;
 	}
-	int adr;
+	int adr, cell;
 	bool star;
-	QString now = dbg_int_now(comp, im, &adr, &star);
-	QString go = QString(QChar(0x2192)) + ((adr < 0) ? QString(" ?") : dbg_word(adr));
+	QString now = dbg_int_now(comp, im, &adr, &cell, &star);
+	QString go(QChar(0x2192));
+	go.append((adr == DBG_INT_NONE) ? QString(" -") : (adr < 0) ? QString(" ?") : dbg_word(adr));
 	if (star) go.append("*");
 	ui_misc.labIntGo->setText(go);
 	ui_misc.labIntGo->setToolTip("Where an INT goes\n" + now);
@@ -1519,22 +1528,15 @@ void DebugWin::regClick(QMouseEvent* ev) {
 	xRegBunch bunch = cpuGetRegs(comp->cpu);
 	xRegister reg = bunch.regs[id];
 	int adr = reg.value;
-	// IM and IR point at where an INT goes: the handler of the first source on, and
+	// IM and IR point at where an INT goes, as the side panel says: the handler, and
 	// for the DUMP the IM 2 table's word (IM), the table (IR)
 	QString name(reg.name);
 	if ((name == "IM") || (name == "IR")) {
-		int im = (name == "IR") ? 2 : reg.value;
-		int dump = -1;
-		xIntVec vec[INT_VEC_MAX];
-		adr = -1;
-		if (comp_int_vecs(comp, vec) > 0)
-			adr = comp_int_target(comp, im, vec[0].vec, &dump);
-		if (name == "IR") {
-			dump = reg.value & 0xff00;
-		} else if (dump < 0) {
-			dump = adr;
-		}
-		if (ev->button() == Qt::RightButton) adr = dump;
+		int cell;
+		bool star;
+		dbg_int_now(comp, (name == "IR") ? 2 : reg.value, &adr, &cell, &star);
+		if (ev->button() == Qt::RightButton)
+			adr = (name == "IR") ? (reg.value & 0xff00) : cell;
 		if (adr < 0) return;
 	}
 	switch (ev->button()) {
@@ -1864,6 +1866,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		fitPending = 1;
 		QTimer::singleShot(0, this, &DebugWin::fitCpuDock);
 	}
+	fillIntGo();		// IM's tip was set to its plain text above
 }
 
 // The panel is a different shape after a layout change: hand the dock what the
@@ -2267,6 +2270,7 @@ void DebugWin::setCPU() {
 		}
 	}
 	cpuSetRegs(cpu, bunch);
+	fillIntGo();		// I or IM may have changed
 	rzx_rec_touch();
 	fillFlags(NULL);
 	fillStack();
