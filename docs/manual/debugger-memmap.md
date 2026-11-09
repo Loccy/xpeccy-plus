@@ -47,10 +47,11 @@ port is used.
 
 Under **INT** is where an INT goes now, as `→#8282`: in IM 1 `#0038`, in IM 2 the address
 in the table at I * 256 + the byte on the bus, in IM 0 the address of the RST on the bus
-(`→ ?` when that byte is no RST, `→ -` when no interrupt source is on). Rest the mouse on it
-for how it is worked out; on a machine with several interrupt sources (TSConf's frame, line
-and DMA, the Next's in its hardware IM 2) the tip has a line for each source that is on, and
-the panel shows the one taken next.
+(`→ ?` when that byte is no RST, `→ -` when no INT can come). Rest the mouse on it for how
+it is worked out; on a machine with several interrupt sources (TSConf's frame, line and DMA,
+the Next's in its hardware IM 2) the tip has a line for each source that is on, and the panel
+shows the one waiting, or else the first by priority. With an NMI waiting the line reads
+`NMI→#0066`: the CPU takes the NMI first.
 
 A `*` after the address warns that the IM 2 table at I * 256 is not one byte repeated 257
 times. Nothing drives the bus when a ZX Spectrum takes an INT, so it reads #FF - unless an
