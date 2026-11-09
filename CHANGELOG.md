@@ -49,10 +49,10 @@ before that point is upstream's history and is not repeated here.
   that shows the card being read and written, a tip with its image or folder, and a click
   with either button opens the SD Card menu.
 
-- **The Debugger shows where an INT goes**: the handler under INT in the side panel and in
-  the tip of IM, with a `*` when nothing drives the bus and the IM 2 table is not one byte
-  throughout. A click on IM or IR shows the handler in the listing, a right-click the IM 2
-  table in the dump.
+- **The Debugger shows where an INT goes**: the handler in the tips of INT and IM, with a `*`
+  when nothing drives the bus and the IM 2 table is not one byte throughout. A click on IM or
+  IR shows the handler in the listing, a right-click the IM 2 table in the dump. A waiting
+  NMI lights a signal of its own, NMI, beside INT.
 
 ### Changed
 
