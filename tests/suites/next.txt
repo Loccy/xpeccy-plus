@@ -17,3 +17,7 @@ next_f4_reset   zxnext   boot  850   50            sd:next/sysnext-24.11-min key
 # a digit held with F9 is a function key: F9+4 a soft reset, F9+1 a hard one (the firmware again)
 next_f9_4       zxnext   boot  850   50            sd:next/sysnext-24.11-min keys:700:pc:F9/10,702:pc:4
 next_f9_1       zxnext   boot  1150  50            sd:next/sysnext-24.11-min keys:700:pc:F9/10,702:pc:1
+# 1 MB: an issue 2 board without its expansion - NextZXOS shows 768K, and MAXBNK (23401) is 47; 111 on 2 MB
+next_boot_1m    zxnext   boot  850   50            sd:next/sysnext-24.11-min mac:machine.memory=1024
+next_maxbnk_1m  zxnext   boot  1050  50            sd:next/sysnext-24.11-min mac:machine.memory=1024 keys:700:n,760:p,772:r,784:i,796:n,808:t,820:_,832:p,844:e,856:e,868:k,880:_,892:2,904:3,916:4,928:0,940:1,952:E
+next_maxbnk_2m  zxnext   boot  1050  50            sd:next/sysnext-24.11-min keys:700:n,760:p,772:r,784:i,796:n,808:t,820:_,832:p,844:e,856:e,868:k,880:_,892:2,904:3,916:4,928:0,940:1,952:E
