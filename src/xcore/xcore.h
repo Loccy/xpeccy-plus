@@ -448,6 +448,7 @@ void xm_finish_load();
 void xm_sd_mount(const QString& path);	// a card into the slot; a folder read only where there is one
 void xm_next_card(bool force = false);	// a ZX Spectrum Next with no System/Next card gets its own (force: whatever is in)
 void xm_next_put_card(const QString& path);	// the card a snapshot names goes in, the machine not restarted
+bool xm_next_own_in();		// the Next's own card (System/Next) is the one in the slot
 bool xm_next_wants_card();	// once: the Next has no card to start from, the window asks for one
 void xm_save_nvram();
 void xm_power_cycle();		// off and on again: the caller holds emu_lock

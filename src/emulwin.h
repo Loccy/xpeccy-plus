@@ -504,12 +504,12 @@ class MainWin : public QWidget {
 		QLabel* sbDisk[4];	// "A:" and so on
 		QLabel* sbDiskIcon[4];
 		QWidget* sbDiskBox[4] = {nullptr, nullptr, nullptr, nullptr};
-		QLabel* sbCard;		// "SD" and the divMMC's light
+		QLabel* sbCard;		// "SD" and the light of the divMMC's cards or the machine's own
 		QLabel* sbCardIcon;
 		QWidget* sbCardBox = nullptr;
 		int sbCardShown = -1;
 		int cardLight = SB_CARD_IN;
-		int cardLook[2][2] = {{0, 0}, {0, 0}};	// the cards' reads and writes at the last look
+		int cardLook[3][2] = {{0, 0}, {0, 0}, {0, 0}};	// reads and writes at the last look: the divMMC's two cards, the slot's
 		QLabel* sbTapeIcon;
 		QWidget* sbTapeBox = nullptr;
 		QLabel* sbJoyIcon;
