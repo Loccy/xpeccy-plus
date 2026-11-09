@@ -29,17 +29,17 @@ The machine list shows them in this order, in five groups.
 | **ZX Spectrum +2** | 128 KB | - | Amstrad's first model, the gray +2: the 128K with its own ROMs and late ULA timing; AY |
 | **ZX Spectrum +2A** | 128 KB | - | Amstrad's later model: Amstrad gate array, four +3 ROMs; AY |
 | **ZX Spectrum +3** | 128 KB | +3, two drives | the +2A with a 3-inch disk drive; AY |
-| **ZX Spectrum Next** | 1 or 2 MB | - | a group of its own: Z80N up to 28 MHz, three AYs and DACs, divMMC and SD card, Wi-Fi; see [ZX Spectrum Next](zx-next.md) |
+| **ZX Spectrum Next** | 1024 or 2048 KB | - | a group of its own: Z80N up to 28 MHz, three AYs and DACs, divMMC and SD card, Wi-Fi; see [ZX Spectrum Next](zx-next.md) |
 | **Pentagon** | 128 KB | Beta Disk | YM, Covox; Kempston mouse and joystick |
-| **Pentagon 1024 SL** | 1 MB | Beta Disk | as the Pentagon; turbo x2 |
+| **Pentagon 1024 SL** | 1024 KB | Beta Disk | as the Pentagon; turbo x2 |
 | **Scorpion ZS 256** | 256 KB | Beta Disk | AY, Covox; Kempston mouse and joystick |
 | **Scorpion ZS 256 Turbo+** | 256 KB | Beta Disk | the Scorpion with the Turbo+ board: SMUC hard disk, turbo x2 |
-| **ATM Turbo 2+** | 1 MB | Beta Disk | YM, Covox; ATM hard disk, Kempston mouse and joystick, turbo x2 |
+| **ATM Turbo 2+** | 1024 KB | Beta Disk | YM, Covox; ATM hard disk, Kempston mouse and joystick, turbo x2 |
 | **Profi v3** | 512 KB | Beta Disk | version 3 board; AY, Covox; Kempston mouse and joystick, turbo x2 |
-| **Profi v5** | 1 MB | Beta Disk | version 5 board; YM, Covox; Profi hard disk, DD palette, Kempston mouse and joystick, turbo x2 |
-| **ZXM-Phoenix** | 2 MB | Beta Disk | YM, Covox; Kempston mouse and joystick, turbo x2 |
-| **ZX Evolution (BaseConf)** | 4 MB | Beta Disk | the ZX Evolution board running BaseConf: two YM (TurboSound), Covox; NemoIDE hard disk, SD card, PC keyboard, mouse with wheel, turbo x2 and x4 |
-| **ZX Evolution (TSConf)** | 4 MB | Beta Disk | the same board running TSConf; as BaseConf |
+| **Profi v5** | 1024 KB | Beta Disk | version 5 board; YM, Covox; Profi hard disk, DD palette, Kempston mouse and joystick, turbo x2 |
+| **ZXM-Phoenix** | 2048 KB | Beta Disk | YM, Covox; Kempston mouse and joystick, turbo x2 |
+| **ZX Evolution (BaseConf)** | 4096 KB | Beta Disk | the ZX Evolution board running BaseConf: two YM (TurboSound), Covox; NemoIDE hard disk, SD card, PC keyboard, mouse with wheel, turbo x2 and x4 |
+| **ZX Evolution (TSConf)** | 4096 KB | Beta Disk | the same board running TSConf; as BaseConf |
 | **ALF TV Game** | 48 KB | - | a games console built on the 48K: no AY; cartridges, two joysticks |
 | **ALF TV Game 128K** | 128 KB | - | the 128K version of the console; YM |
 
