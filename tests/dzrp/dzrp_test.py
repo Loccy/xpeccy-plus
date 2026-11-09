@@ -23,8 +23,8 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-EXE = "xpeccy-plus.exe" if sys.platform == "win32" else "xpeccy-plus"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from regress import EXE, find_app  # noqa: E402
 
 CMD_INIT, CMD_CLOSE, CMD_GET_REGISTERS, CMD_SET_REGISTER = 1, 2, 3, 4
 CMD_CONTINUE, CMD_PAUSE, CMD_READ_MEM, CMD_WRITE_MEM, CMD_SET_SLOT = 6, 7, 8, 9, 10
@@ -144,6 +144,9 @@ def bank_of(model, slots, adr):
 
 def run_machine(d, machine):
     model, nslots = MACHINES[machine]
+    # before INIT nothing is served but the list of commands
+    check(d.cmd(CMD_GET_REGISTERS) == b"", "registers before INIT")
+    check(d.cmd(CMD_WRITE_STATE, b"\0" * 64) == b"", "a state before INIT")
     r = d.cmd(CMD_INIT, bytes([2, 2, 0]) + b"dzrp_test\0")
     check(r[0] == 0, f"INIT error {r[0]}")
     check(tuple(r[1:4]) == (2, 2, 0), f"DZRP version {tuple(r[1:4])}")
@@ -242,6 +245,10 @@ def run_machine(d, machine):
     state = d.cmd(CMD_READ_STATE)
     check(len(state) > 0x4000, f"state of {len(state)} bytes")
     d.write_mem(0x9000, b"\x55")
+    bad = bytearray(state)
+    bad[-1] ^= 0xFF
+    d.cmd(CMD_WRITE_STATE, bytes(bad))
+    check(d.read_mem(0x9000, 1) == b"\x55", "a state READ_STATE did not give was taken")
     d.cmd(CMD_WRITE_STATE, state)
     check(d.read_mem(0x9000, 1) == b"\x02", "the state put back did not restore memory")
 
@@ -281,13 +288,7 @@ def main():
     ap.add_argument("--app", help="the staged build folder (default: the newest dev build)")
     ap.add_argument("--port", type=int, default=14321)
     a = ap.parse_args()
-    if a.app:
-        app = Path(a.app)
-    else:
-        cands = [d for d in (ROOT / "build" / "dist").glob("*-dev+*") if (d / EXE).exists()]
-        if not cands:
-            sys.exit("no dev build in build/dist; pass --app")
-        app = max(cands, key=lambda d: (d / EXE).stat().st_mtime)
+    app = find_app(a.app)
     bad = 0
     for machine in a.machines:
         if machine not in MACHINES:

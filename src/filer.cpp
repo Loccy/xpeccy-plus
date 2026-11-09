@@ -2254,7 +2254,7 @@ static quickKept undoKept = {QByteArray(), NULL, std::string(), xGame()};
 // A quick save may be from before what a recording has logged since, so the
 // recording joins there instead of going back with the machine. A breakpoint
 // hit it holds is from then, not for now.
-static int quick_xstate_load(xState* st, Computer* comp) {
+int quick_xstate_load(xState* st, Computer* comp) {
 	rzxRecPos rec = comp->rzx.rec;
 	int res = xstate_load(st, comp);
 	if (res) comp_brk_clear(comp);

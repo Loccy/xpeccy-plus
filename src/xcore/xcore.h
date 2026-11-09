@@ -426,6 +426,12 @@ int brk_save_list(const char*);
 // hold the emulation thread while the machine is rebuilt (defined in ethread.cpp)
 void emu_lock();
 void emu_unlock();
+// emu_lock for a scope: the breakpoint lists are edited from the gui and from DeZog's
+// thread, and walked by the emulation's
+struct EmuLock {
+	EmuLock() {emu_lock();}
+	~EmuLock() {emu_unlock();}
+};
 // a key to the machine, and all its keys let go, under that lock
 void x_key(Computer*, keyEntry*, int press);
 void x_kbd_release_all(Keyboard*);
@@ -1270,6 +1276,7 @@ extern xConfig conf;
 // server all change the mask: a bit set by one is not lost to another's write
 static inline void pause_add(int msk) {__atomic_fetch_or(&conf.emu.pause, msk, __ATOMIC_SEQ_CST);}
 static inline void pause_del(int msk) {__atomic_fetch_and(&conf.emu.pause, ~msk, __ATOMIC_SEQ_CST);}
+static inline int pause_has(int msk) {return __atomic_load_n(&conf.emu.pause, __ATOMIC_SEQ_CST) & msk;}
 
 // Flash loading and edge detection are refinements of fast loading, on only with it
 static inline int tape_flash() { return conf.tape.fast && conf.tape.flash; }

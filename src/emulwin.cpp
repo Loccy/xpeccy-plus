@@ -3808,7 +3808,8 @@ void MainWin::addFavorite(const QString& path) {
 void MainWin::renderFrame() {
 	Computer* comp = conf.zx;
 	vid_clear_image();			// whatever is in there was not drawn by this machine
-	if (!comp || comp->flgDBG) return;	// the debugger owns the machine, don't step it
+	// the debugger owns the machine, or DeZog holds it: don't step it
+	if (!comp || comp->flgDBG || pause_has(PR_DEZOG)) return;
 	// a frame is some 20000 opcodes. The count is only here to stop a machine
 	// that never finishes one - a machine still on "Dummy" hardware, say
 	//

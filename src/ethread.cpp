@@ -1195,7 +1195,7 @@ static void bench_keys_step(Computer* comp, int frame) {
 static int bench_held() {
 	while (emuWaiters.load())
 		QThread::yieldCurrentThread();
-	if (!(conf.emu.pause & PR_DEZOG)) return 0;
+	if (!pause_has(PR_DEZOG)) return 0;
 	QThread::msleep(1);
 	return 1;
 }
@@ -1220,7 +1220,7 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 	blockSignals(true);
 	setOutput("NULL");
 	pacingClose();		// the budget is handed out here, not by the timer
-	conf.emu.pause = 0;
+	pause_del(~PR_DEZOG);		// a DeZog that came in early holds the machine already
 	// the bench picks its mode itself: fast loading would switch it under a tape,
 	// and it draws the frames fast mode would leave out
 	fastload_hold(1);

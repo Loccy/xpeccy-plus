@@ -14,12 +14,8 @@
 // with up to two temporary points, one past the instruction and one where it
 // jumps to.
 //
-// DeZog knows four memory models: ZX16K, ZX48K, ZX128K (four 16K slots, ROMs as
-// banks 8 and 9) and the Next (eight 8K slots, ROM 0xFF). The 48K and its clone
-// are ZX48K, the Next is the Next, every other machine ZX128K: what does not fit
-// that is a bank the model has no name for. RAM pages past 7 are banks 10 and up
-// (8 and 9 are the ROMs), a third ROM (TR-DOS) and anything else 0xFE, a bank
-// that reads nothing.
+// The machine goes to DeZog as one of its memory models: the 48K and the ALF as
+// ZX48K, the Next as the Next, any other as ZX128K (dz_slot_bank names the rest).
 
 #include <QtGlobal>
 #include "dezog.h"
@@ -49,6 +45,10 @@ void dezog_cli(int port) {
 #include "../libxpeccy/filetypes/filetypes.h"
 #include "../libxpeccy/input/input.h"
 #include "sound.h"
+#include "../filer.h"
+#include <QCryptographicHash>
+#include <algorithm>
+#include <deque>
 
 enum {
 	CMD_INIT = 1,
@@ -112,19 +112,11 @@ typedef struct {
 	int id;
 } dzWatch;
 static std::vector<dzWatch> dzWat;
-
-// PR_DEZOG goes on and off from three threads: the emulation's, this one, the gui's
-static void dz_hold(int on) {
-	if (on) {
-		pause_add(PR_DEZOG);
-	} else {
-		pause_del(PR_DEZOG);
-	}
-}
-
-static int dz_held() {
-	return (__atomic_load_n(&conf.emu.pause, __ATOMIC_SEQ_CST) & PR_DEZOG) ? 1 : 0;
-}
+// The states READ_STATE handed out, by their hash: WRITE_STATE takes back only one of
+// those, as its bytes go over the machine's whole state, pointers and all
+static std::deque<QByteArray> dzStates;
+#define DZ_STATES	16
+#define DZ_READ_MAX	0x40000		// a reply of memory blocks reads no more than this
 
 static int dz_model_of(Computer* comp) {
 	switch (comp->hw->id) {
@@ -217,11 +209,11 @@ static int dz_bank_peek(Computer* comp, int bank, int ofs) {
 	if (!dz_same(comp)) return -1;
 	switch (dzModel) {
 		case DZ_NEXT:
-			if (bank == 0xff) return comp_cell_peek(comp, CELL_ROM, next_rom(comp), ofs & 0x3fff);
-			if (bank >= 0xe0) return -1;
+			if (bank == 0xff) return (ofs < 0x4000) ? comp_cell_peek(comp, CELL_ROM, next_rom(comp), ofs) : -1;
+			if ((bank >= 0xe0) || (ofs >= 0x2000)) return -1;
 			return comp_cell_peek(comp, CELL_RAM, bank, ofs);
 		case DZ_ZX128K:
-			if (bank >= 0xfe) return -1;
+			if ((bank >= 0xfe) || (ofs >= 0x4000)) return -1;
 			if ((bank == 8) || (bank == 9)) return comp_cell_peek(comp, CELL_ROM, bank - 8, ofs);
 			return comp_cell_peek(comp, CELL_RAM, dz_bank_ram(bank), ofs);
 	}
@@ -234,10 +226,10 @@ static void dz_bank_poke(Computer* comp, int bank, int ofs, int val) {
 	if (!dz_same(comp)) return;
 	switch (dzModel) {
 		case DZ_NEXT:
-			if (bank < 0xe0) comp_cell_poke(comp, CELL_RAM, bank, ofs, val, 0);
+			if ((bank < 0xe0) && (ofs < 0x2000)) comp_cell_poke(comp, CELL_RAM, bank, ofs, val, 0);
 			return;
 		case DZ_ZX128K:
-			if ((bank != 8) && (bank != 9) && (bank < 0xfe))
+			if ((bank != 8) && (bank != 9) && (bank < 0xfe) && (ofs < 0x4000))
 				comp_cell_poke(comp, CELL_RAM, dz_bank_ram(bank), ofs, val, 0);
 			return;
 	}
@@ -334,8 +326,14 @@ static void dz_detach() {
 		dz_tmp_clear(comp);
 		brkInstallAll();
 	}
-	if (on) dz_hold(0);
+	if (on) pause_del(PR_DEZOG);
 	emu_unlock();
+}
+
+// a span of the cpu's memory into a reply
+static void dz_peek_into(QByteArray& r, Computer* comp, int adr, int len) {
+	for (int i = 0; i < len; i++)
+		r.append((char)comp_peek(comp, (adr + i) & 0xffff, MEM_VIEW_READ, NULL));
 }
 
 // ------------------------------------------------------------------ messages
@@ -467,9 +465,8 @@ static int dz_reg(Computer* comp, const char* name) {
 }
 
 static void dz_registers(Computer* comp, QByteArray& r) {
-	static const char* order[] = {"PC", "SP", "AF", "BC", "DE", "HL", "IX", "IY", "AF'", "BC'", "DE'", "HL'", NULL};
-	for (int i = 0; order[i]; i++)
-		dz_put16(r, dz_reg(comp, order[i]));
+	for (int i = 0; i < 12; i++)		// PC .. HL', in DZRP's order
+		dz_put16(r, dz_reg(comp, dzRegName[i]));
 	r.append((char)dz_reg(comp, "R"));
 	r.append((char)dz_reg(comp, "I"));
 	r.append((char)dz_reg(comp, "IM"));
@@ -497,13 +494,15 @@ static int dz_set_slot(Computer* comp, int slot, int bank) {
 		slot = 3;
 		bank >>= 1;
 	}
+	// the +2A/+3's all-RAM paging has no slot DeZog could set
+	if (((comp->hw->id == HW_PLUS2A) || (comp->hw->id == HW_PLUS3)) && (comp->p1FFD & 1)) return 1;
 	int p = comp->p7FFD;
 	if ((slot == 3) && (bank < 8)) {
-		p = (p & ~7) | bank;
+		p = (p & ~0xc7) | bank;		// b6-7: more page bits on the Pentagons with more RAM
 	} else if ((slot == 0) && ((bank == 8) || (bank == 9))) {
 		p = (p & ~0x10) | ((bank - 8) << 4);
 	} else {
-		return 0;
+		return 1;		// a fixed slot, or a bank 7FFD alone does not page
 	}
 	if (p == comp->p7FFD) return 0;
 	if (comp->p7FFD & 0x20) return 1;	// paging locked
@@ -521,6 +520,10 @@ static int dz_supported(int cmd) {
 	return 0;
 }
 
+static QByteArray dz_state_hash(const QByteArray& blob) {
+	return QCryptographicHash::hash(blob, QCryptographicHash::Sha256);
+}
+
 static QByteArray dz_state_save(Computer* comp) {
 	QByteArray res;
 	xState* st = xstate_create();
@@ -533,6 +536,10 @@ static QByteArray dz_state_save(Computer* comp) {
 		res.append((const char*)data, (int)sz);
 	}
 	if (st) xstate_destroy(st);
+	if (!res.isEmpty()) {
+		dzStates.push_back(dz_state_hash(res));
+		if (dzStates.size() > DZ_STATES) dzStates.pop_front();
+	}
 	return res;
 }
 
@@ -540,6 +547,11 @@ static QByteArray dz_state_save(Computer* comp) {
 static void dz_state_load(Computer* comp, const QByteArray& blob) {
 	size_t msz = xstate_meta_size();
 	if ((size_t)blob.size() < msz) return;
+	QByteArray h = dz_state_hash(blob);
+	if (std::find(dzStates.begin(), dzStates.end(), h) == dzStates.end()) {
+		xlog(XLG_NET, XLL_WARN, "DeZog: a state READ_STATE did not give, not loaded");
+		return;
+	}
 	xState* now = xstate_create();
 	xState* st = xstate_create();
 	if (now && st && xstate_save(now, comp)) {
@@ -550,8 +562,7 @@ static void dz_state_load(Computer* comp, const QByteArray& blob) {
 			unsigned char* room = xstate_put_begin(st, blob.constData());
 			if (room) {
 				memcpy(room, blob.constData() + msz, sz);
-				xstate_load(st, comp);
-				dz_touched();
+				if (quick_xstate_load(st, comp)) x_input_bump();
 			}
 		} else {
 			xlog(XLG_NET, XLL_WARN, "DeZog: a state of another machine, not loaded");
@@ -566,6 +577,10 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 	QByteArray ntf;		// a stop to tell of, after the reply
 	r.append((char)seq);
 	xlog(XLG_NET, XLL_TRACE, "DeZog: command %i, %i bytes", cmd, (int)in.size());
+	if (!dzOn && (cmd != CMD_INIT) && (cmd != CMD_GET_SUPPORTED)) {
+		dz_send(dz_frame(r));		// an empty reply: nothing before INIT
+		return;
+	}
 	emu_lock();
 	Computer* comp = conf.zx;
 	if (dzOn && (cmd != CMD_INIT) && !dz_same(comp)) {
@@ -582,7 +597,7 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 			dzModel = dz_model_of(comp);
 			dzLoading = 1;
 			dzOn = 1;
-			dz_hold(1);		// DeZog starts from a machine that stands
+			pause_add(PR_DEZOG);		// DeZog starts from a machine that stands
 			r.append((char)0);
 			r.append((char)2);
 			r.append((char)2);
@@ -614,10 +629,10 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 			if (dz_get8(in, 3)) dz_tmp_set(comp, 1, dz_get16(in, 4));
 			if (conf.emu.pause & PR_DEBUG) {
 				// the Debugger window has the machine: it runs nothing behind its back
-				dz_hold(1);
+				pause_add(PR_DEZOG);
 				dz_tmp_clear(comp);
 				ntf = dz_pause_ntf(comp, 0, "The Xpeccy+ Debugger is open: close it to run");
-			} else if (dz_held()) {
+			} else if (pause_has(PR_DEZOG)) {
 				// the instruction it stands on runs first, its fetch not looked at; the
 				// scope hears it, as the Debugger's resume makes it
 				int tm;
@@ -628,15 +643,15 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 					dz_tmp_clear(comp);
 				} else {
 					if (res == BRK_GO_CLOSE) comp_brk(comp, BRK_STOP);
-					dz_hold(0);
+					pause_del(PR_DEZOG);
 				}
 				x_input_bump();
 			}
 			break;
 		}
 		case CMD_PAUSE:
-			if (!dz_held()) {
-				dz_hold(1);
+			if (!pause_has(PR_DEZOG)) {
+				pause_add(PR_DEZOG);
 				dz_tmp_clear(comp);
 				ntf = dz_pause_ntf(comp, 1);
 			}
@@ -648,20 +663,12 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 			dz_touched();
 			break;
 		}
-		case CMD_READ_MEM: {
-			int adr = dz_get16(in, 1);
-			int len = dz_get16(in, 3);
-			for (int i = 0; i < len; i++)
-				r.append((char)comp_peek(comp, (adr + i) & 0xffff, MEM_VIEW_READ, NULL));
+		case CMD_READ_MEM:
+			dz_peek_into(r, comp, dz_get16(in, 1), dz_get16(in, 3));
 			break;
-		}
 		case CMD_READ_MEM_BLOCKS:
-			for (int i = 4; i + 3 < in.size(); i += 4) {
-				int adr = dz_get16(in, i);
-				int len = dz_get16(in, i + 2);
-				for (int k = 0; k < len; k++)
-					r.append((char)comp_peek(comp, (adr + k) & 0xffff, MEM_VIEW_READ, NULL));
-			}
+			for (int i = 4; (i + 3 < in.size()) && (r.size() < DZ_READ_MAX); i += 4)
+				dz_peek_into(r, comp, dz_get16(in, i), dz_get16(in, i + 2));
 			break;
 		case CMD_SET_SLOT:
 			r.append((char)dz_set_slot(comp, dz_get8(in, 0), dz_get8(in, 1)));
@@ -759,7 +766,7 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 		}
 		case CMD_GET_SPRITE_PATTERNS: {
 			int idx = dz_get16(in, 0);
-			int cnt = dz_get16(in, 2);
+			int cnt = std::min(dz_get16(in, 2), 64);		// all the pattern memory
 			for (int i = 0; i < cnt * 256; i++)
 				r.append((char)(next ? comp->next->spr.pat[(idx * 256 + i) & 0x3fff] : 0));
 			break;
@@ -934,17 +941,25 @@ void dezog_apply() {
 	QMetaObject::invokeMethod(dzCtx, [port]() { dz_listen(port); }, Qt::BlockingQueuedConnection);
 }
 
-int dezog_port() {
-	return dzPort;
+// A machine switch under a session: DeZog's points and hold go now, before the
+// new machine runs, and the client is let go - its picture of the machine is gone
+void dezog_end() {
+	if (!dzOn.load()) return;
+	dz_detach();
+	xlog(XLG_NET, XLL_WARN, "DeZog: another machine, the session ends");
+	QMetaObject::invokeMethod(dzCtx, [] {if (dzCli) dzCli->abort();}, Qt::QueuedConnection);
 }
 
-bool dezog_attached() {
-	return dzOn.load() != 0;
+// the Debugger cleared every temp point: a step of DeZog's under way keeps its own
+void dezog_keep_tmp(Computer* comp) {
+	EmuLock lock;
+	for (int i = 0; i < 2; i++)
+		if (dzTmp[i] >= 0) dz_tmp_set(comp, i, dzTmp[i]);
 }
 
 int dezog_stop(Computer* comp) {
 	if (!dzOn.load()) return 0;
-	dz_hold(1);
+	pause_add(PR_DEZOG);
 	QByteArray ntf = dz_pause_ntf(comp, 0);
 	dz_tmp_clear(comp);
 	QMetaObject::invokeMethod(dzCtx, [ntf]() { dz_send(ntf); }, Qt::QueuedConnection);
@@ -956,8 +971,8 @@ int dezog_stop(Computer* comp) {
 // no network in this build: never on
 void dezog_apply() {}
 void dezog_close() {}
-int dezog_port() {return 0;}
-bool dezog_attached() {return false;}
+void dezog_end() {}
+void dezog_keep_tmp(Computer*) {}
 int dezog_stop(Computer*) {return 0;}
 
 #endif

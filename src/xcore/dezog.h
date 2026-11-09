@@ -12,10 +12,10 @@ void dezog_apply();
 void dezog_cli(int port);
 // stop listening and let the client go (at exit)
 void dezog_close();
-// the port it listens on, 0: off
-int dezog_port();
-// a client is attached: the machine's stops are its own
-bool dezog_attached();
+// another machine: a session ends (xm_set)
+void dezog_end();
+// the Debugger cleared the temp points: DeZog's step under way gets its back
+void dezog_keep_tmp(Computer*);
 // The emulation's thread, under emu_lock: a breakpoint stopped the machine. 1 when
 // DeZog takes the stop (the machine waits for it, no debugger window)
 int dezog_stop(Computer*);

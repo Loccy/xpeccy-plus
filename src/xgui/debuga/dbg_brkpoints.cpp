@@ -146,6 +146,7 @@ bool xbsName(const xBrkPoint bpa, const xBrkPoint bpb) {
 bool xbsCond(const xBrkPoint bpa, const xBrkPoint bpb) {return (bpa.cond < bpb.cond);}
 
 void xBreakListModel::sort(int col, Qt::SortOrder ord) {
+	EmuLock lock;		// the emulation's and DeZog's threads walk the list
 		switch(col) {
 		case 0: std::sort(conf.brk.list.begin(), conf.brk.list.end(), xbsOff); break;
 		case 1: std::sort(conf.brk.list.begin(), conf.brk.list.end(), xbsFe); break;

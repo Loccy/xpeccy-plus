@@ -1,4 +1,5 @@
 #include "xcore/xcore.h"
+#include "xcore/dezog.h"
 #include "xcore/sound.h"
 #include "xcore/fastload.h"
 
@@ -347,6 +348,7 @@ void DebugWin::start() {
 	comp->cpu->flgRetBRK = 0;
 
 	brk_clear_tmp(comp);		// clear temp breakpoints
+	dezog_keep_tmp(comp);		// ...but a step of DeZog's under way
 
 	// Once, on the first open: Options re-applies the style on every change, and
 	// doing it per open rebuilds the register grid for nothing. Before show() -
@@ -379,7 +381,7 @@ bool DebugWin::stop() {
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;	// before compExec to add current opcode T
 	// DeZog holds the machine: closing the window leaves it where DeZog shows it
-	if (comp->flgDBG && !(conf.emu.pause & PR_DEZOG)) {
+	if (comp->flgDBG && !pause_has(PR_DEZOG)) {
 		// one opcode, and the scope has to hear it too or the wave has a notch
 		// in it at every resume
 		int tm;
@@ -390,6 +392,7 @@ bool DebugWin::stop() {
 		if (res == BRK_GO_DBG) {
 			comp->cpu->flgRetBRK = 0;
 			brk_clear_tmp(comp);
+			dezog_keep_tmp(comp);
 			if (!fillAll()) ui_asm.dasmTable->setAdr(cpu_get_pc(comp->cpu));
 			return false;
 		}

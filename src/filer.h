@@ -181,6 +181,9 @@ int quick_load_held(Computer*);
 std::string quick_undo_machine();
 void quick_undo_prepare(Computer*);
 int quick_undo(Computer*);
+// a state of the machine taken in this process put back: the hits it left dropped, a
+// recording being made goes on (a join)
+int quick_xstate_load(struct xState*, Computer*);
 
 // a changed disk or tape asked about: ERR_OK when it is safe to lose
 int saveChangedDisk(Computer*,int);

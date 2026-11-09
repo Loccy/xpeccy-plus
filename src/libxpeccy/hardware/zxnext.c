@@ -1496,14 +1496,6 @@ int next_l2ram(Computer* comp, int pg, int ofs) {
 	return next_ram(comp, pg, ofs);
 }
 
-static void nx_nr_write(Computer* comp, int r, int v);
-
-// A nextreg written for a debugger, at once: no cpu cycle around it, so it lands
-// where the machine stands, as a NEXTREG the stopped cpu made would
-void next_nr_poke(Computer* comp, int r, int v) {
-	nx_nr_write(comp, r & 0xff, v & 0xff);
-}
-
 // the ROM slots 0 and 1 show with MMU FF
 int next_rom(Computer* comp) {
 	int alt;
@@ -1817,6 +1809,12 @@ static void nx_nr_write(Computer* comp, int r, int v) {
 			return;
 	}
 	nr[r] = v;
+}
+
+// A nextreg written for a debugger, at once: no cpu cycle around it, so it lands
+// where the machine stands, as a NEXTREG the stopped cpu made would
+void next_nr_poke(Computer* comp, int r, int v) {
+	nx_nr_write(comp, r & 0xff, v & 0xff);
 }
 
 // == the copper (device/copper.vhd, zxnext.vhd 3942-4000, 4706-4777) ==

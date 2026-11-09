@@ -1,3 +1,4 @@
+#include <atomic>
 #include <algorithm>
 
 #include <QDateTime>
@@ -147,7 +148,7 @@ void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out) {
 // mask		address mask for BRK_IOADR
 //		end address for BRK_MEMCELL/BRK_CPUADR (-1 if single address)
 // what tells a point apart while the list is sorted and grown under it
-static int brkSerial = 0;
+static std::atomic<int> brkSerial(0);
 
 int brk_new_id() {
 	return ++brkSerial;
@@ -323,6 +324,7 @@ static bool brk_compare(const xBrkPoint& bp1, const xBrkPoint& bp2) {
 void brkSort() {std::stable_sort(conf.brk.list.begin(), conf.brk.list.end(), brk_compare);}
 
 void brkAdd(xBrkPoint brk) {
+	EmuLock lock;
 	xBrkPoint* bp = brkFind(&brk).ptr;
 	if (bp) {
 		bp->off = brk.off;		// the one confirmed now is on
@@ -350,6 +352,7 @@ void brkSet(int type, int flag, int adr, int mask) {
 }
 
 void brkXor(int type, int flag, int adr, int mask, int del) {
+	EmuLock lock;
 	xBrkPoint brk = brkCreate(type, flag, adr, mask);
 	xbpIndex idx = brkFind(&brk);
 	if (!idx.ptr && brk_is_ranged(brk.type)) {
@@ -389,6 +392,7 @@ static xBrkPoint* brk_by_id(int id) {
 // the point itself, by its id: the editor's new point has an id the list does
 // not hold and deletes nothing. One without an id goes by its place
 void brkDelete(xBrkPoint dbrk) {
+	EmuLock lock;
 	int idx = -1;
 	if (dbrk.id) {
 		xBrkPoint* bp = brk_by_id(dbrk.id);
@@ -1298,6 +1302,7 @@ int brk_load_list(const char* fpath, int* bad, bool add) {
 	bool b0,b1;
 	if (bad) *bad = 0;
 	if (!file.open(QFile::ReadOnly)) return 0;
+	EmuLock lock;
 	if (!add) conf.brk.list.clear();
 	while(!file.atEnd()) {
 		line = QString(file.readLine());
