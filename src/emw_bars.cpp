@@ -1,6 +1,7 @@
 // The toolbar and the status bar of the main window
 
 #include <QApplication>
+#include <QActionGroup>
 #include <QToolBar>
 #include <QToolButton>
 #include <QStatusBar>
