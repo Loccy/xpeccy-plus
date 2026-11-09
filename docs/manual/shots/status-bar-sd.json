@@ -1,0 +1,7 @@
+{
+  "args": ["-m", "evo-tsconf", "--sdcard", "{media}"],
+  "steps": [["wait", 4000]],
+  "crop": {"widget": "QStatusBar", "pad": 0},
+  "zoom": 1,
+  "frames": []
+}

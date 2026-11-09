@@ -50,6 +50,14 @@ opens a menu of its cards. The board itself is switched off from the **Media** m
 drives are out of the machine then:
 their lights are dim and struck through.
 
+![The status bar of a ZX Evolution with a card in](images/status-bar-sd.png)
+
+The two ZX Evolution machines and the ZX Spectrum Next have an
+[SD card slot](sd-hdd.md#sd-card) of their own, and the {icon}`sdcard` **SD** light is the
+light of that card, lit the same way. Hold the mouse over it to see the image or folder in
+the slot, and whether it is write protected; on the Next, whether it is the Next's own
+card. Either button on it opens the menu of **Media > SD Card**.
+
 ### Frames per second
 
 ```{index} FPS, frames per second
