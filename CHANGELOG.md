@@ -45,6 +45,9 @@ before that point is upstream's history and is not repeated here.
 - **A local label's global part is paler in the Debugger**: `draw` of `draw.loop`.
 - **Delete breakpoint in the right-click menu of the Breakpoints list**, and Del in the list
   does the same. *(requested by Volutar)*
+- **The SD card in the status bar** on the ZX Evolution and the ZX Spectrum Next: a light
+  that shows the card being read and written, a tip with its image or folder, and a click
+  with either button opens the SD Card menu.
 
 ### Changed
 
