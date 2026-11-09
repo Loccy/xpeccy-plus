@@ -120,12 +120,18 @@ static bool brk_takes(Computer* comp, xBrkPoint* brk, int t, int adr, int kind) 
 	return (adr >= start) && (adr <= start + brk->eadr - brk->adr);
 }
 
+// DeZog's points (xcore/dezog.cpp): apart from the list, so the Debugger neither
+// shows nor saves them, and DeZog's thread edits them under emu_lock
+std::vector<xBrkPoint> brk_ext;
+
 // Every point a hit goes to, in list order: the maps only say that something
 // watches the byte, the list says who. Overlapping points each get it, and a
 // disabled one takes nothing. Pointers into the list: good until it changes
 void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out) {
 	out.clear();
 	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++)
+		if (brk_takes(conf.zx, &(*it), t, adr, kind)) out.push_back(&(*it));
+	for (auto it = brk_ext.begin(); it != brk_ext.end(); it++)
 		if (brk_takes(conf.zx, &(*it), t, adr, kind)) out.push_back(&(*it));
 }
 
@@ -204,6 +210,7 @@ xBrkPoint brkCreate(int type, int flag, int adr, int mask, int act) {
 	brk.onchg = 0;
 	brk.log = 0;
 	brk.span = BRK_SPAN_NONE;
+	brk.ext = 0;
 	brk_reset_stats(&brk);
 	return brk;
 }
@@ -480,7 +487,11 @@ void brkInstallAll() {
 	Computer* comp = conf.zx;
 	int conds = 0;
 	int logs = 0;
+	// DeZog's thread puts its points in too: one at a time
+	emu_lock();
 	brk_cond_n = 0;
+	for (auto it = brk_ext.begin(); it != brk_ext.end(); it++)
+		it->script = xexpr_compile(it->cond.c_str());
 	for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++) {
 		it->script = xexpr_compile(it->cond.c_str());	// cpu/labels may have changed
 		brk_compile_logx(&(*it));
@@ -506,6 +517,8 @@ void brkInstallAll() {
 	comp->flgIBRK = 0;
 	comp->flgBRKIO = 0;
 	brkInstallList(&conf.brk.list);
+	brkInstallList(&brk_ext);
+	emu_unlock();
 }
 
 // ------------------------------------------------------------------ logging
@@ -996,6 +1009,19 @@ static int brk_act(xBrkPoint* brk, Computer* comp) {
 	return 1;
 }
 
+std::vector<xBrkStop> brk_stops;
+
+static void brk_stop_add(int why, const xBrkPoint* ptr, const xBrkHit* h) {
+	xBrkStop st;
+	st.why = why;
+	st.id = ptr ? ptr->id : 0;
+	st.ext = ptr ? ptr->ext : 0;
+	st.type = ptr ? ptr->type : -1;
+	st.kind = h ? h->kind : 0;
+	st.adr = h ? h->adr : -1;
+	brk_stops.push_back(st);
+}
+
 // The step's hits and the global conditions, handled. Every access the step
 // made goes to every point it is for, a point taking one hit a step whatever
 // number of its bytes or ports were touched (its line names the first); a temp
@@ -1011,10 +1037,12 @@ int brk_take_hits(Computer* comp, int* skip, bool conds) {
 	static std::vector<int> seen;
 	int res = BRK_GO;
 	seen.clear();
+	brk_stops.clear();
 	for (int i = 0; comp->flgBRK && (i < comp->brkn); i++) {
 		const xBrkHit* h = &comp->brkhit[i];
 		if (h->t == BRK_TEMP) {
 			if (res == BRK_GO) res = BRK_GO_DBG;
+			brk_stop_add(BRK_WHY_TEMP, NULL, h);
 			continue;
 		}
 		if (h->t == BRK_STOP) {
@@ -1026,8 +1054,10 @@ int brk_take_hits(Computer* comp, int* skip, bool conds) {
 			if (std::find(seen.begin(), seen.end(), ptr->id) != seen.end()) continue;
 			seen.push_back(ptr->id);
 			logHit = h;
-			if (brk_hit(ptr, comp) && brk_act(ptr, comp) && (res == BRK_GO))
-				res = BRK_GO_DBG;
+			if (brk_hit(ptr, comp) && brk_act(ptr, comp)) {
+				if (res == BRK_GO) res = BRK_GO_DBG;
+				brk_stop_add(BRK_WHY_POINT, ptr, h);
+			}
 		}
 	}
 	logHit = NULL;
@@ -1035,12 +1065,34 @@ int brk_take_hits(Computer* comp, int* skip, bool conds) {
 		for (auto it = conf.brk.list.begin(); it != conf.brk.list.end(); it++) {
 			if (!it->fired) continue;
 			it->count++;
-			if (brk_act(&(*it), comp) && (res == BRK_GO)) res = BRK_GO_DBG;
+			if (brk_act(&(*it), comp)) {
+				if (res == BRK_GO) res = BRK_GO_DBG;
+				brk_stop_add(BRK_WHY_COND, &(*it), NULL);
+			}
 		}
 	}
 	if (!res && comp->flgBRKPRE) *skip = 1;
 	comp->brkn = 0;
 	comp->flgBRK = res ? 1 : 0;
+	return res;
+}
+
+// A resume's first step, the debugger's and DeZog's: the instruction the machine
+// stopped in front of is run with the maps held off for its fetch (flgDBG), and
+// the breakpoints see its accesses - one that stops leaves the machine where the
+// instruction did. The hits the stop itself left are dropped first.
+int brk_step_off(Computer* comp, int* tm) {
+	int dbg = comp->flgDBG;
+	comp_brk_clear(comp);
+	if (comp->flgCOND) comp_brk_newstep(comp);
+	comp->flgDBG = 1;
+	int t = compExec(comp);
+	comp->flgDBG = dbg;
+	if (tm) *tm = t;
+	int skip = 0;
+	int res = brk_take_hits(comp, &skip);
+	if (comp->flgCOND) comp_brk_newstep(comp);
+	comp_brk_clear(comp);
 	return res;
 }
 

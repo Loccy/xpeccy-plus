@@ -25,6 +25,7 @@
 #include "libxpeccy/xreplay.h"
 #include "libxpeccy/filetypes/szx.h"
 #include "version.h"
+#include "xcore/dezog.h"
 
 #if USEMUTEX
 QMutex emutex;
@@ -445,10 +446,12 @@ void xThread::tap_catch_save(Computer* comp) {
 }
 
 // The step's breakpoint hits handled (brk_take_hits), and what a stop asks of
-// the gui. 1 = the machine stops here
+// the gui. 1 = the machine stops here. While DeZog is attached the stop is its
+// own: no debugger window
 int xThread::takeHits(Computer* comp, int* brkskip, bool conds) {
 	switch (brk_take_hits(comp, brkskip, conds)) {
 		case BRK_GO_DBG:
+			if (dezog_stop(comp)) return 1;
 			conf.emu.pause |= PR_DEBUG;
 			emit dbgRequest();
 			return 1;
@@ -1187,6 +1190,16 @@ static void bench_keys_step(Computer* comp, int frame) {
 	}
 }
 
+// Between the bench's cycles: whoever waits for the machine (DeZog's server) gets
+// it, and while DeZog holds it stopped the bench waits, out of the lock. 1 = held
+static int bench_held() {
+	while (emuWaiters.load())
+		QThread::yieldCurrentThread();
+	if (!(conf.emu.pause & PR_DEZOG)) return 0;
+	QThread::msleep(1);
+	return 1;
+}
+
 // --bench-apply: Options' Ok, once, at its frame; the rewind the page sets is put
 // back to the bench's own
 void xThread::benchApplyStep(int frame) {
@@ -1327,7 +1340,8 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 	int fk = f0;			// --bench-keys counts from here
 	bench_keys_parse(benchKeys);
 	benchStop = f0 + skip;		// and on a frame, so both builds start measuring on the same one
-	while ((conf.vid.fcount - f0 < skip) && !conf.emu.pause) {
+	while ((conf.vid.fcount - f0 < skip) && !(conf.emu.pause & ~PR_DEZOG)) {
+		if (bench_held()) continue;
 		conf.snd.need = full ? 256 : 0;
 		emu_lock();
 		emuCycle(comp);
@@ -1388,7 +1402,8 @@ int xThread::bench(int frames, int skip, int full, int hash, const char* prof, c
 	if (benchDrawEvery > 1)
 		vid_set_nodraw_next(comp->vid, 1 % every != 0);
 	benchStop = f0 + frames;	// the last cycle ends on the frame, whatever the budget
-	while ((conf.vid.fcount - f0 < frames) && !conf.emu.pause) {
+	while ((conf.vid.fcount - f0 < frames) && !(conf.emu.pause & ~PR_DEZOG)) {
+		if (bench_held()) continue;
 		conf.snd.need = full ? 256 : 0;
 		emu_lock();
 		emuCycle(comp);

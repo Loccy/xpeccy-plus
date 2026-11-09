@@ -563,6 +563,8 @@ SetupWin::SetupWin(QWidget* par):QDialog(par) {
 	// the rewind's own settings mean nothing while it is off
 	for (QWidget* w : {(QWidget*)ui.sbRewStep, (QWidget*)ui.labRewStep, (QWidget*)ui.sbRewSecs, (QWidget*)ui.labRewSecs})
 		connect(ui.cbRewind, &QCheckBox::toggled, w, &QWidget::setEnabled);
+	// the port means nothing while DeZog's server is off
+	connect(ui.cbDezog, &QCheckBox::toggled, ui.sbDezogPort, &QWidget::setEnabled);
 // sound
 	i = 0;
 	while (sndTab[i].name) {
@@ -1247,6 +1249,9 @@ void SetupWin::fillPages() {
 	showDevRows();
 // tools
 	ui.sbPort->setValue(conf.port);
+	ui.cbDezog->setChecked(conf.dezog.on);
+	ui.sbDezogPort->setValue(conf.dezog.port);
+	ui.sbDezogPort->setEnabled(conf.dezog.on);
 	ui.cbUpdCheck->setCurrentIndex(upd_period());
 	ui.cbUpdChannel->setCurrentIndex(upd_channel());
 	ui.cbConfexit->setChecked(conf.confexit);
@@ -1657,6 +1662,8 @@ void SetupWin::applyGlobal() {
 	tape_apply_options(comp->tape);
 // tools
 	conf.port = ui.sbPort->value() & 0xffff;
+	conf.dezog.on = ui.cbDezog->isChecked() ? 1 : 0;
+	conf.dezog.port = ui.sbDezogPort->value() & 0xffff;
 	// a build's default stays unset until changed, so a later build may change it
 	if (ui.cbUpdCheck->currentIndex() != upd_period()) conf.upd.check = ui.cbUpdCheck->currentIndex();
 	if (ui.cbUpdChannel->currentIndex() != upd_channel()) conf.upd.channel = ui.cbUpdChannel->currentIndex();

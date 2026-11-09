@@ -379,15 +379,11 @@ bool DebugWin::stop() {
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;	// before compExec to add current opcode T
 	if (comp->flgDBG) {
-		comp_brk_clear(comp);		// what the debugger's own steps left
-		if (comp->flgCOND) comp_brk_newstep(comp);
 		// one opcode, and the scope has to hear it too or the wave has a notch
 		// in it at every resume
-		snd_scope_step(comp, compExec(comp));
-		int skip = 0;
-		int res = brk_take_hits(comp, &skip);
-		if (comp->flgCOND) comp_brk_newstep(comp);
-		comp_brk_clear(comp);
+		int tm;
+		int res = brk_step_off(comp, &tm);
+		snd_scope_step(comp, tm);
 		// the machine asked to quit: the emulation's thread does that, first thing
 		if (res == BRK_GO_CLOSE) comp_brk(comp, BRK_STOP);
 		if (res == BRK_GO_DBG) {

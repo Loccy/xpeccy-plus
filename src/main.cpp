@@ -19,6 +19,7 @@
 #include "xcore/log.h"
 #include "xcore/sound.h"
 #include "xcore/pacing.h"
+#include "xcore/dezog.h"
 #include "xgui/dispsync.h"
 #include "xcore/autostart.h"
 #include "xcore/fastload.h"
@@ -84,6 +85,8 @@ void help() {
 	printf("--brk FILE\t\tload breakpoints list (*.xbrk), addresses may be labels (see -l key)\n");
 	printf("--brk-log FILE\t\twhere the hits of logging breakpoints go, - for stdout;\n");
 	printf("\t\t\tby default a file beside the log, in logs/<date>/\n");
+	printf("--dezog\t\t\tlet DeZog (VS Code) debug the machine, on the port Options set; this run only\n");
+	printf("--dezog-port N\t\tthe same, on port N\n");
 	printf("--disk X\t\tselect drive to loading file (0..3 | a..d | A..D)\n");
 	printf("--sdcard PATH\t\tset SD card image, or a folder served as one\n");
 	printf("--uart-esp PORT\t\tZX Next: the ESP UART to a serial port of the host (COM3,\n");
@@ -991,6 +994,8 @@ int main(int ac,char** av) {
 			i++;
 		} else if (!strcmp(parg,"--panic")) {
 			compflags |= CFLG_PANIC;
+		} else if (!strcmp(parg,"--dezog")) {
+			dezog_cli(0);
 		} else if (!strcmp(parg,"--autostart") || !strcmp(parg,"--no-autostart")
 				|| !strcmp(parg,"--no-gl") || !strcmp(parg,"--no-update-check")) {
 			// read in the early walk
@@ -1081,6 +1086,13 @@ int main(int ac,char** av) {
 				cliPokes.append(QString::fromLocal8Bit(av[i++]));
 			} else if (!strcmp(parg,"--brk-log")) {
 				brk_trace_to(QString::fromLocal8Bit(av[i++]));
+			} else if (!strcmp(parg,"--dezog-port")) {
+				tmpi = atoi(av[i++]);
+				if ((tmpi > 0) && (tmpi < 0x10000)) {
+					dezog_cli(tmpi);
+				} else {
+					cli_warn("--dezog-port needs a port, 1..65535");
+				}
 			} else if (!strcmp(parg,"-l") || !strcmp(parg,"--labels")) {
 				lab = loadLabels(av[i]);
 				i++;
@@ -1202,6 +1214,7 @@ int main(int ac,char** av) {
 
 	dbgw.move(conf.dbg.pos);
 	dbgw.resize(conf.dbg.siz);
+	if (!hlp) dezog_apply();
 #ifdef __APPLE__
 	if (!style) {
 		app.setStyle(QStyleFactory::create("Fusion"));
@@ -1219,6 +1232,7 @@ int main(int ac,char** av) {
 			}
 			if ((bnFrames > 0) || (bnSkip > 0) || (bnSteps > 0) || (ethread.benchRzx > 0) || ethread.benchRec)
 				ethread.bench(bnFrames, bnSkip, bnFull, bnHash, bnProf, bnShot, bnNodraw, bnHeat, bnRewind, bnSteps, bnSplit);
+			dezog_close();
 			if (bnWav) snd_wav_close();
 			ret = (conf.emu.pause & PR_DEBUG) ? XEXIT_BRK : XEXIT_OK;
 			if (bnSave)
@@ -1287,6 +1301,7 @@ int main(int ac,char** av) {
 //		mwin.blockSignals(false);
 		app.exec();
 		optw.stopProbe();
+		dezog_close();		// a machine DeZog holds is let go, or the thread never stops
 		ethread.stop();
 		ethread.wait();
 		dsync_stop();

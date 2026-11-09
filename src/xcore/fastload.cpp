@@ -641,7 +641,7 @@ static int fp_last = 1;			// the frame that just ended was drawn
 
 // a break can stop the machine mid-frame, and the picture up to the ray has to be there
 static int fp_watched(Computer* comp) {
-	return comp_mem_watched(comp) || comp->flgIBRK || comp->flgDBG || brk_cond_n || !conf.brk.list.empty();
+	return comp_mem_watched(comp) || comp->flgIBRK || comp->flgDBG || brk_cond_n || !conf.brk.list.empty() || !brk_ext.empty();
 }
 
 static void fp_release(Computer* comp) {

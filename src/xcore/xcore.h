@@ -246,6 +246,7 @@ enum {
 #define	PR_MENU		(1<<10)		// a menu of the main window is open
 #define	PR_SAVES	(1<<11)		// Save History is open: a menu of saves, held as menus are
 #define	PR_TAPE		(1<<12)		// the machine waits for the gui to put in the next tape of a set
+#define	PR_DEZOG	(1<<13)		// stopped for DeZog, which runs it on (xcore/dezog.cpp)
 
 // labels
 
@@ -337,6 +338,7 @@ typedef struct {
 	unsigned onchg:1;	// BRK_COND: fire when it becomes true, not while it is
 	unsigned log:1;		// write a line to the breakpoint log on every hit
 	unsigned span:2;	// BRK_SPAN_*
+	unsigned ext:1;		// DeZog's (brk_ext)
 	int id;			// for good: the list is sorted and grown under it
 	int type;
 	int adr;	// start adr (mem), port(io)
@@ -368,6 +370,7 @@ void brkAdd(xBrkPoint);
 // void brkInstall(xBrkPoint*, int);
 void brkDelete(xBrkPoint);
 void brkInstallAll();
+extern std::vector<xBrkPoint> brk_ext;		// DeZog's points, not in the list
 void brk_clear_tmp(Computer*);
 void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out);
 void brk_set_cond(xBrkPoint*, const char*);
@@ -378,6 +381,21 @@ void brk_log_hit(xBrkPoint*, Computer*);
 enum {BRK_GO = 0, BRK_GO_DBG, BRK_GO_CLOSE};
 // the step's hits and, conds asked, the global conditions; BRK_GO_*
 int brk_take_hits(Computer*, int* skip, bool conds = true);
+// what stopped the machine in the last brk_take_hits that stopped it: every hit
+// that asked for the debugger, in the order taken
+enum {BRK_WHY_TEMP = 0, BRK_WHY_POINT, BRK_WHY_COND};
+typedef struct {
+	int why;	// BRK_WHY_*
+	int id;		// the point's, 0 for a temp point
+	int ext;	// the point is DeZog's
+	int kind;	// MEM_BRK_FETCH / RD / WR; 0 for an IRQ, a port point's is RD / WR too
+	int type;	// the point's BRK_* type
+	int adr;	// cpu address or port of the access, -1: none
+} xBrkStop;
+extern std::vector<xBrkStop> brk_stops;
+// one instruction from where the machine stands, past a stop: its fetch not looked
+// at, its accesses are; BRK_GO_*. tm gets its T
+int brk_step_off(Computer*, int* tm);
 void brk_set_logx(xBrkPoint*, const char*);
 void brk_reset_stats(xBrkPoint*);
 QString brk_label(int type, int adr);	// the label at it, empty when none
@@ -953,6 +971,10 @@ struct xConfig {
 	QString labpath;
 	std::string style;
 	unsigned short port;		// port to listen
+	struct {
+		unsigned on:1;		// DeZog's server listens (xcore/dezog.cpp), loopback only
+		unsigned short port;
+	} dezog;
 	struct {
 		int check;		// UPC_*: how often to ask GitHub for a newer build
 		int channel;		// UP_RELEASES, UP_DEV (xcore/update.h); -1: the build's default
