@@ -47,7 +47,7 @@ The Next has three buttons on its side, RESET, DRIVE and NMI:
 ```{index} ZX Spectrum Next; memory, ZX Spectrum Next; 1 MB
 ```
 
-**Memory**, on the **Machine** page of **Options**, is **2 MB** or **1024 KB**. The base
+**Memory**, on the **Machine** page of **Options**, is **2 MB** or **1 MB**. The base
 model of the first Nexts had 1 MB and room for 1 MB more; later boards all have 2 MB. A program meant
 for every Next should run on 1 MB: NextZXOS then has 768 KB for programs, banks 0 to 47,
 and the Pentagon 1024 mode reaches 768 KB. A change of **Memory** switches the Next off
