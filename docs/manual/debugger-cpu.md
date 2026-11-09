@@ -20,7 +20,7 @@ lights up on its own; with **Split pairs** off it is one number, `  511`. PC and
 wide as a pair, and IM as one byte of it; every number stands at the right of its field.
 
 Rest the mouse on **IM**, **IFF1** or **IFF2** for what it is. The tip of **IM** also says
-where an INT goes now, as the line under **INT** in the side panel does (see
+where an INT goes now, as the tip of **INT** in the side panel does (see
 [MEMMAP panel](debugger-memmap.md)).
 
 ## Changing registers

@@ -34,26 +34,25 @@ port is used.
 ```{index} SIGNALS
 ```
 
-**SIGNALS** are four words that are bold while the signal is on:
+**SIGNALS** are five words that are bold while the signal is on:
 
 - **DOS** - the TR-DOS ROM is switched in;
 - **ROM** - the ROM bit of port `7FFD` is set; on a 128K that is the 48K BASIC ROM;
 - **CPM** - the machine is in its CP/M mode;
-- **INT** - the CPU takes an interrupt on its next step: an NMI, or an INT while
-  interrupts are enabled and not held off by EI.
+- **INT** - the CPU takes an INT on its next step: interrupts are enabled and not held off
+  by EI;
+- **NMI** - the CPU takes an NMI on its next step, and calls `#0066`. An NMI comes before
+  an INT.
 
 ```{index} interrupt; where it goes, IM 2 table
 ```
 
-Under **INT** is where an INT goes now, as `→#8282`: in IM 1 `#0038`, in IM 2 the address
-in the table at I * 256 + the byte on the bus, in IM 0 the address of the RST on the bus
-(`→ ?` when that byte is no RST, `→ -` when no INT can come). Rest the mouse on it for how
-it is worked out; on a machine with several interrupt sources (TSConf's frame, line and DMA,
-the Next's in its hardware IM 2) the tip has a line for each source that is on, and the panel
-shows the one waiting, or else the first by priority. With an NMI waiting the line reads
-`NMI→#0066`: the CPU takes the NMI first.
+Rest the mouse on **INT** to see where an INT goes now: in IM 1 `#0038`, in IM 2 the address
+in the table at I * 256 + the byte on the bus, in IM 0 the RST on the bus. On a machine with
+several interrupt sources (TSConf's frame, line and DMA, the Next's in its hardware IM 2) the
+tip has a line for each source that is on, the one waiting first.
 
-A `*` after the address warns that the IM 2 table at I * 256 is not one byte repeated 257
+A `*` after an address warns that the IM 2 table at I * 256 is not one byte repeated 257
 times. Nothing drives the bus when a ZX Spectrum takes an INT, so it reads #FF - unless an
 interface puts another byte there, and then the CPU jumps elsewhere. The ZX Evolution puts
 the byte on the bus itself, and so does the Next unless its expansion bus is on, so the `*`
