@@ -173,7 +173,8 @@ palettes, sprites, layers, DMA, the clock chip and the ESP-01. **Quick Save**, t
 **Resume Last Session** and RZX recording work on it as on other machines (see
 [Quick saves](files.md#quick-saves) and [RZX](capture.md#rzx)). Other programs cannot open
 these files: the SZX format has no ZX Spectrum Next. A snapshot taken on 1 MB runs a 2 MB
-Next on 1 MB, and the other way round, until the next start of Xpeccy+. **Memory** in
+Next on 1 MB, and the other way round, until another machine is chosen or the program
+is closed. **Memory** in
 **Options** still shows the machine's own size; picking the other one there makes it the
 machine's.
 
