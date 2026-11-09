@@ -1090,14 +1090,19 @@ bool MainWin::eventFilter(QObject* obj, QEvent* ev) {
 		setFocus();
 		return true;
 	}
-	// the divMMC's light: either button, its cards. The status bar changes what is
-	// in the machine, not what the machine is, so the board's switch is not here.
+	// the SD light: either button, the cards - the divMMC's, or the slot's menu as Media >
+	// SD Card has it. The status bar changes what is in the machine, not what the machine
+	// is, so the divMMC's switch is not here.
 	if (obj == sbCardBox) {
 		bool left = (ev->type() == QEvent::MouseButtonPress) && (static_cast<QMouseEvent*>(ev)->button() == Qt::LeftButton);
 		if (!left && (ev->type() != QEvent::ContextMenu))
 			return QObject::eventFilter(obj, ev);
 		QMenu menu(this);
-		addDivCards(&menu);
+		if (hw_has_sd(conf.zx->hw)) {
+			fillCardMenu(&menu, -1);
+		} else {
+			addDivCards(&menu);
+		}
 		// the left button's over the light, as from a bar at the bottom; the right one at the pointer
 		QPoint pos = left ? sbCardBox->mapToGlobal(QPoint(0, 0)) - QPoint(0, menu.sizeHint().height())
 			: static_cast<QContextMenuEvent*>(ev)->globalPos();

@@ -1245,7 +1245,7 @@ static std::string nextAside;		// the card the Next's own stands in for ("" none
 static std::string nextIn;		// the Next's own card, while it is in the slot
 static bool nextWants = false;		// nothing to start from: the window asks for a card
 
-static bool xm_next_own_in() {
+bool xm_next_own_in() {
 	Computer* comp = conf.zx;
 	return !nextIn.empty() && comp->sdc->image && (nextIn == comp->sdc->image);
 }

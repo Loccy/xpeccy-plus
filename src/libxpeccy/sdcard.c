@@ -127,8 +127,9 @@ int sdc_protected(SDCard* sdc) {
 
 // file operation
 
+// a block the machine reads, by either engine; each block of a CMD18 run counts
 void sdcRdSector(SDCard* sdc) {
-//	printf("SDC read sector %i\n",sdc->addr);
+	sdc->reads++;
 	if ((sdc->addr < sdc->maxlba) && sdc->vfat) {
 		vfat_read(sdc->vfat, sdc->addr, sdc->buf.data + 1);
 	} else if ((sdc->addr < sdc->maxlba) && sdc->file) {
@@ -644,7 +645,6 @@ static void sds_exec(SDCard* sdc) {
 			}
 			sdc->addr = lba;
 			sdc->cont = (cmd == CMD18);
-			sdc->reads++;
 			sdc->state = SDC_READ;		// no command heard until the block is out
 			sds_answer(sdc, sds_r1(sdc, 0));
 			sds_read_block(sdc);

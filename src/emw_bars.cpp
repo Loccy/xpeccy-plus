@@ -560,7 +560,8 @@ void MainWin::initBars() {
 	sbTapeBar->setTextVisible(false);
 	sbTapeBar->setFixedSize(36, 8);
 	sbTapeBox->layout()->addWidget(sbTapeBar);
-	// the divMMC, while it is on: its cards at work
+	// the SD cards at work: the divMMC's while it is on, or the slot's on a machine with one
+	// (never both: a divMMC fits none of them)
 	sbCard = new QLabel("SD");
 	sbCardIcon = new QLabel;
 	sbCardBox = pair(sbCard, sbCardIcon);
@@ -942,16 +943,21 @@ void MainWin::lightLook() {
 			diskLight[i] = (seen & 2) ? SB_DISK_WR : SB_DISK_RD;
 		}
 	}
-	// the divMMC's cards: lit for a look after a block went either way
+	// the SD light: the divMMC's cards, or the slot's on a machine with one; lit for a look
+	// after a block went either way
 	int card = 0;
 	bool any = false;
-	for (int i = 0; i < 2; i++) {
-		SDCard* sdc = comp->div->card[i];
-		if (sdc->reads != cardLook[i][0]) card |= 1;
-		if (sdc->writes != cardLook[i][1]) card |= 2;
+	bool slot = hw_has_sd(comp->hw);
+	SDCard* cards[3] = {comp->div->card[0], comp->div->card[1], comp->sdc};
+	for (int i = 0; i < 3; i++) {
+		SDCard* sdc = cards[i];
+		if ((i == 2) == slot) {
+			if (sdc->reads != cardLook[i][0]) card |= 1;
+			if (sdc->writes != cardLook[i][1]) card |= 2;
+			if (sdc->image) any = true;
+		}
 		cardLook[i][0] = sdc->reads;
 		cardLook[i][1] = sdc->writes;
-		if (sdc->image) any = true;
 	}
 	cardLight = (card & 2) ? SB_CARD_WR : (card & 1) ? SB_CARD_RD : any ? SB_CARD_IN : SB_CARD_EMPTY;
 }
@@ -1002,18 +1008,27 @@ void MainWin::updateStatus() {
 			: flp->insert ? QString::fromLocal8Bit(flp->path ? flp->path : "") : QString("empty");
 		if (sbDiskBox[i]->toolTip() != tip) sbDiskBox[i]->setToolTip(tip);
 	}
-	sbCardBox->setVisible(comp->div->model);
-	if (comp->div->model) {
+	bool slot = hw_has_sd(comp->hw);
+	sbCardBox->setVisible(slot || comp->div->model);
+	if (slot || comp->div->model) {
 		if (cardLight != sbCardShown) {
 			sbCardIcon->setPixmap(sbPix[cardLight]);
 			sbCardShown = cardLight;
 		}
-		QStringList cards;
-		for (int i = 0; i < 2; i++) {
-			const char* img = comp->div->card[i]->image;
-			cards << QString("Card %0: %1").arg(i + 1).arg(img ? QFileInfo(QString::fromLocal8Bit(img)).fileName() : QString("(no card)"));
+		QString tip;
+		if (slot) {
+			SDCard* sdc = comp->sdc;
+			tip = "SD card\n" + (sdc->image ? QDir::toNativeSeparators(QString::fromLocal8Bit(sdc->image)) : QString("(no card)"));
+			if (sdc->image && xm_next_own_in()) tip += "\nthe Next's own card (System/Next)";
+			if (sdc->image && sdc_protected(sdc)) tip += "\nwrite protected";
+		} else {
+			QStringList cards;
+			for (int i = 0; i < 2; i++) {
+				const char* img = comp->div->card[i]->image;
+				cards << QString("Card %0: %1").arg(i + 1).arg(img ? QFileInfo(QString::fromLocal8Bit(img)).fileName() : QString("(no card)"));
+			}
+			tip = "divMMC\n" + cards.join("\n");
 		}
-		QString tip = "divMMC\n" + cards.join("\n");
 		if (sbCardBox->toolTip() != tip) sbCardBox->setToolTip(tip);
 	}
 	// lit if the machine read it since the last look
