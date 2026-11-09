@@ -240,6 +240,7 @@ class DebugWin : public QMainWindow {
 
 		bool fillAll();
 		void fillNotCPU();
+		void fillIntGo();
 		void doStep();
 
 		void saveDasm();

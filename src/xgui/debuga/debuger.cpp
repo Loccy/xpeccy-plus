@@ -1321,6 +1321,77 @@ void setSignal(QLabel* lab, int on) {
 	lab->setFont(fnt);
 }
 
+// Where an INT goes now: a line per source the machine has on, the handler of the
+// first one (-1: none, or IM 0 runs a byte that is no RST) and whether that one hangs
+// on a byte nothing drives with an uneven IM 2 table (*)
+int dbg_get_reg_adr_name(CPU*, const char*);
+static QString dbg_int_now(Computer* comp, int im, int* adr, bool* star) {
+	xIntVec vec[INT_VEC_MAX];
+	int n = comp_int_vecs(comp, vec);
+	*adr = -1;
+	*star = false;
+	if (n < 1) return "Now: no interrupt source is on";
+	if (im == 1) {
+		*adr = 0x38;
+		return QString("Now: IM 1, the CPU calls %0").arg(dbg_word(0x38));
+	}
+	bool even = (im == 2) && comp_int_table_even(comp);
+	int floating = -1;
+	QString res = QString("Now: IM %0").arg(im);
+	for (int i = 0; i < n; i++) {
+		int cell;
+		int to = comp_int_target(comp, im, vec[i].vec, &cell);
+		bool mark = (im == 2) && !vec[i].driven && !even;
+		QString line = QString("%0 (%1): ").arg(vec[i].name, dbg_byte(vec[i].vec));
+		if (im == 2) {
+			line.append(QString("%0 %1 %2").arg(dbg_word(cell), QString(QChar(0x2192)), dbg_word(to)));
+		} else if (to >= 0) {
+			line.append(QString("RST %0").arg(dbg_byte(to)));
+		} else {
+			line.append("run as an instruction");
+		}
+		if (mark) {
+			line.append(" *");
+			if (floating < 0) floating = vec[i].vec;
+		}
+		if (i == 0) {
+			*adr = to;
+			*star = mark;
+		}
+		res.append("\n").append(line);
+	}
+	if (floating >= 0) {
+		int tab = dbg_get_reg_adr_name(comp->cpu, "IR") & 0xff00;
+		res.append(QString("\n\n* The table at %0 is not one byte repeated\n"
+			"257 times. On a real machine a device can\n"
+			"put another byte than %1 on the bus, and\n"
+			"the CPU jumps elsewhere.").arg(dbg_word(tab), dbg_byte(floating)));
+	}
+	return res;
+}
+
+// the IM tip's "Now" part and the line under INT in the side panel
+void DebugWin::fillIntGo() {
+	Computer* comp = conf.zx;
+	int im = dbg_get_reg_adr_name(comp->cpu, "IM");
+	if (im < 0) {
+		ui_misc.labIntGo->clear();
+		ui_misc.labIntGo->setToolTip(QString());
+		return;
+	}
+	int adr;
+	bool star;
+	QString now = dbg_int_now(comp, im, &adr, &star);
+	QString go = QString(QChar(0x2192)) + ((adr < 0) ? QString(" ?") : dbg_word(adr));
+	if (star) go.append("*");
+	ui_misc.labIntGo->setText(go);
+	ui_misc.labIntGo->setToolTip("Where an INT goes\n" + now);
+	foreach(xLabel* lab, dbgRegLabs) {
+		if (lab->isVisible() && (lab->text() == "IM"))
+			lab->setToolTip(dbg_reg_tip("IM") + "\n\n" + now);
+	}
+}
+
 /*
 void DebugWin::fillTabs() {
 }
@@ -1346,6 +1417,7 @@ void DebugWin::fillNotCPU() {
 	setSignal(ui_misc.labROM, comp->flgROM);
 	setSignal(ui_misc.labCPM, comp->flgCPM);
 	setSignal(ui_misc.labINT, cpu_int_ready(comp->cpu));	// the next step takes an interrupt
+	fillIntGo();
 
 	ui_misc.labRX->setNum(comp->vid->ray.x);
 	setSignal(ui_misc.labRX, comp->vid->hblank);
@@ -1447,7 +1519,24 @@ void DebugWin::regClick(QMouseEvent* ev) {
 	xRegBunch bunch = cpuGetRegs(comp->cpu);
 	xRegister reg = bunch.regs[id];
 	int adr = reg.value;
-	//qDebug() << adr;
+	// IM and IR point at where an INT goes: the handler of the first source on, and
+	// for the DUMP the IM 2 table's word (IM), the table (IR)
+	QString name(reg.name);
+	if ((name == "IM") || (name == "IR")) {
+		int im = (name == "IR") ? 2 : reg.value;
+		int dump = -1;
+		xIntVec vec[INT_VEC_MAX];
+		adr = -1;
+		if (comp_int_vecs(comp, vec) > 0)
+			adr = comp_int_target(comp, im, vec[0].vec, &dump);
+		if (name == "IR") {
+			dump = reg.value & 0xff00;
+		} else if (dump < 0) {
+			dump = adr;
+		}
+		if (ev->button() == Qt::RightButton) adr = dump;
+		if (adr < 0) return;
+	}
 	switch (ev->button()) {
 		case Qt::RightButton:
 			//ui.dumpTable->setAdr(adr);
@@ -2588,6 +2677,7 @@ void DebugWin::setMiscBlocks() {
 	ui_misc.labROM->setVisible(conf.dbg.showsig);
 	ui_misc.labCPM->setVisible(conf.dbg.showsig);
 	ui_misc.labINT->setVisible(conf.dbg.showsig);
+	ui_misc.labIntGo->setVisible(conf.dbg.showsig);
 	ui_misc.labHeadFrame->setVisible(conf.dbg.showfrm);
 	ui_misc.labFrame->setVisible(conf.dbg.showfrm);
 	ui_misc.labHeadRay->setVisible(conf.dbg.showray);
