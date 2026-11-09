@@ -847,6 +847,14 @@ static int evo_ack(Computer* comp) {
 	return zx_ack(comp);
 }
 
+// the FPGA puts #FF on the bus itself on the acknowledge (zbus.v: drive_ff)
+static int evo_int_vecs(Computer* comp, xIntVec* vec) {
+	vec[0].name = "INT";
+	vec[0].vec = 0xff;
+	vec[0].driven = 1;
+	return 1;
+}
+
 void evo_get_regs(Computer* comp, evoRegs* r) {
 	r->p7ffd = comp->p7FFD;
 	r->peff7 = comp->pEFF7;
@@ -885,4 +893,4 @@ static const hwQuiet evo_quiet = {HWQ_ACK_ZX, NULL, NULL, zx_devs_sync, evo_fetc
 
 HardWare evo_hw_core = {HW_PENTEVO,"Baseconf","ZX Evolution (BaseConf)",MEM_4M,1.0,NULL,evo_port_tab,
 			zx_init,evoMapMem,evoOut,evoIn,evoMRd,evoMWr,evo_irq,evo_ack,evoReset,zx_sync,evo_keyp,evo_keyr,zx_vol,
-			evo_snap_map,NULL,&evo_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix};
+			evo_snap_map,NULL,&evo_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix, .intvecs = evo_int_vecs};

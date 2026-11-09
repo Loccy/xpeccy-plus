@@ -1039,6 +1039,15 @@ int ts_ack(Computer* comp) {
 	return comp->intVector & 0xff;
 }
 
+// the enabled sources in ts_ack's order, their vectors driven (zint.v, top.v)
+static int ts_int_vecs(Computer* comp, xIntVec* vec) {
+	static const xIntVec src[3] = {{"frame", 0xff, 1}, {"line", 0xfd, 1}, {"DMA", 0xfb, 1}};
+	int n = 0;
+	for (int i = 0; i < 3; i++)
+		if (comp->vid->inten & (1 << i)) vec[n++] = src[i];
+	return n;
+}
+
 // keys
 
 void xt_press(Keyboard*, keyEntry*);
@@ -1065,4 +1074,4 @@ xPortDsc zx_port_tab_ts[] = {
 
 HardWare tsl_hw_core = {HW_TSLAB,"TSConf","ZX Evolution (TSConf)",MEM_4M,1.0,NULL,zx_port_tab_ts,
 			zx_init,tslMapMem,tslOut,tslIn,tslMRd,tslMWr,ts_irq,ts_ack,tslReset,ts_sync,ts_keyp,ts_keyr,zx_vol,
-			NULL,NULL,&ts_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix};
+			NULL,NULL,&ts_quiet, .sndtake = zx_snd_take, .sndmix = zx_mix, .intvecs = ts_int_vecs};

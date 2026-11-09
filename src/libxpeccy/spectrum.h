@@ -801,6 +801,15 @@ typedef struct {
 	int unit;	// the page size
 } xCell;
 
+// An INT source and the byte its acknowledge puts on the bus. driven: the machine
+// puts it there; 0: nothing does, the bus floats (#FF through the pull-ups)
+#define INT_VEC_MAX 16
+typedef struct {
+	const char* name;
+	int vec;
+	int driven;
+} xIntVec;
+
 #include "hardware/hardware.h"
 
 Computer* compCreate();
@@ -810,6 +819,13 @@ void compReset(Computer*,int);
 void compUserReset(Computer*,int);
 int compExec(Computer*);
 int comp_peek(Computer*, int, int, xAdr*);
+// Where an INT goes now, for the Debugger, changing nothing: the sources that are on and
+// their bytes; the address a byte takes the CPU to in IM im (-1: IM 0 executes a byte
+// that is no RST), cell the IM 2 table's word (-1: none); the 257 bytes from I * 256 are
+// one byte, so any byte on the bus goes to the same place
+int comp_int_vecs(Computer*, xIntVec*);
+int comp_int_target(Computer*, int im, int vec, int* cell);
+int comp_int_table_even(Computer*);
 void comp_poke(Computer*, int, int, int);
 xAdr comp_get_xadr(Computer*, int, int);
 int comp_find_xadr(Computer*, int, int, int);
