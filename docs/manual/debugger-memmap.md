@@ -47,14 +47,16 @@ port is used.
 
 Under **INT** is where an INT goes now, as `→#8282`: in IM 1 `#0038`, in IM 2 the address
 in the table at I * 256 + the byte on the bus, in IM 0 the address of the RST on the bus
-(`→ ?` when that byte is no RST). Rest the mouse on it for how it is worked out; on a
-machine with several interrupt sources (TSConf's frame, line and DMA, the Next's in its
-hardware IM 2) the tip has a line for each source that is on, and the panel shows the first.
+(`→ ?` when that byte is no RST, `→ -` when no interrupt source is on). Rest the mouse on it
+for how it is worked out; on a machine with several interrupt sources (TSConf's frame, line
+and DMA, the Next's in its hardware IM 2) the tip has a line for each source that is on, and
+the panel shows the one taken next.
 
 A `*` after the address warns that the IM 2 table at I * 256 is not one byte repeated 257
 times. Nothing drives the bus when a ZX Spectrum takes an INT, so it reads #FF - unless an
-interface puts another byte there, and then the CPU jumps elsewhere. The ZX Evolution and
-the Next put the byte on the bus themselves, so the `*` never shows there.
+interface puts another byte there, and then the CPU jumps elsewhere. The ZX Evolution puts
+the byte on the bus itself, and so does the Next unless its expansion bus is on, so the `*`
+does not show there.
 
 ```{index} FRAME, frame counter, Reset counter
 ```
