@@ -452,7 +452,7 @@ int xThread::takeHits(Computer* comp, int* brkskip, bool conds) {
 	switch (brk_take_hits(comp, brkskip, conds)) {
 		case BRK_GO_DBG:
 			if (dezog_stop(comp)) return 1;
-			conf.emu.pause |= PR_DEBUG;
+			pause_add(PR_DEBUG);
 			emit dbgRequest();
 			return 1;
 		case BRK_GO_CLOSE:
@@ -954,7 +954,7 @@ void xThread::emuCycle(Computer* comp) {
 			// gui to put it in, at any speed, so a loader hears a frame of the run-out
 			// tape at most
 			if (comp->tape->wantNext && !(conf.emu.pause & PR_TAPE)) {
-				conf.emu.pause |= PR_TAPE;
+				pause_add(PR_TAPE);
 				emit s_tape_next();
 			}
 			// a machine slower than real time never pays its sound debt off: let

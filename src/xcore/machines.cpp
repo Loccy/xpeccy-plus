@@ -1322,7 +1322,7 @@ bool xm_set(std::string id) {
 		return false;
 	}
 	emu_lock();
-	conf.emu.pause |= PR_EXTRA;
+	pause_add(PR_EXTRA);
 	rzxr_stop(conf.zx);		// a recording is of one machine
 	rewind_clear();
 	xreplay_arm(0);			// the debugger arms it again if it is shown on TSConf
@@ -1365,7 +1365,7 @@ bool xm_set(std::string id) {
 		msg = " " + mac->name + " ";
 		conf.zx->msg = (char*)msg.c_str();
 	}
-	conf.emu.pause &= ~PR_EXTRA;
+	pause_del(PR_EXTRA);
 	emu_unlock();
 	macLive = true;
 	xlog(XLG_CONF, XLL_INFO, "machine: %s (%s)", conf.macId.c_str(), conf.zx->hw->name);

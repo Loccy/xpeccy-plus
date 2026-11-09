@@ -17,8 +17,9 @@
 // DeZog knows four memory models: ZX16K, ZX48K, ZX128K (four 16K slots, ROMs as
 // banks 8 and 9) and the Next (eight 8K slots, ROM 0xFF). The 48K and its clone
 // are ZX48K, the Next is the Next, every other machine ZX128K: what does not fit
-// that (more RAM, the +3's all-RAM paging, a third ROM) is named by its own
-// number, which DeZog shows as an unknown bank.
+// that is a bank the model has no name for. RAM pages past 7 are banks 10 and up
+// (8 and 9 are the ROMs), a third ROM (TR-DOS) and anything else 0xFE, a bank
+// that reads nothing.
 
 #include <QtGlobal>
 #include "dezog.h"
@@ -47,6 +48,7 @@ void dezog_cli(int port) {
 #include "../libxpeccy/xstate.h"
 #include "../libxpeccy/filetypes/filetypes.h"
 #include "../libxpeccy/input/input.h"
+#include "sound.h"
 
 enum {
 	CMD_INIT = 1,
@@ -95,11 +97,13 @@ static const int dzNext[] = {CMD_GET_NEXTREG, CMD_GET_SPRITES_PALETTE, CMD_GET_S
 static QThread* dzThread = NULL;
 static QObject* dzCtx = NULL;		// lives on dzThread; the server and the client are its children
 static QTcpServer* dzSrv = NULL;
+static QTcpServer* dzSrv6 = NULL;	// the same on ::1, for a client to whom localhost is that
 static QTcpSocket* dzCli = NULL;
 static QByteArray dzIn;
 static std::atomic<int> dzPort(0);	// listening on it, 0: not
 static std::atomic<int> dzOn(0);	// a client said INIT: the stops are its own
 static int dzModel = DZ_ZX48K;
+static int dzLoading = 0;		// INIT up to the first CONTINUE: DeZog may be loading a file
 static int dzTmp[2] = {-1, -1};		// CONTINUE's temp points, cpu addresses
 static std::map<int, int> dzBrk;	// DZRP id -> point id
 static int dzBrkNext = 1;
@@ -112,9 +116,9 @@ static std::vector<dzWatch> dzWat;
 // PR_DEZOG goes on and off from three threads: the emulation's, this one, the gui's
 static void dz_hold(int on) {
 	if (on) {
-		__atomic_fetch_or(&conf.emu.pause, PR_DEZOG, __ATOMIC_SEQ_CST);
+		pause_add(PR_DEZOG);
 	} else {
-		__atomic_fetch_and(&conf.emu.pause, ~PR_DEZOG, __ATOMIC_SEQ_CST);
+		pause_del(PR_DEZOG);
 	}
 }
 
@@ -128,6 +132,21 @@ static int dz_model_of(Computer* comp) {
 		case HW_ZXNEXT: return DZ_NEXT;
 	}
 	return DZ_ZX128K;
+}
+
+// the machine is still of the model INIT gave DeZog (a profile switch makes another)
+static int dz_same(Computer* comp) {
+	return comp && (dz_model_of(comp) == dzModel);
+}
+
+// a 128K's RAM page as a bank: 8 and 9 are the ROMs, so the pages past 7 move up two
+static int dz_ram_bank(int page) {
+	if (page < 8) return page;
+	return (page + 2 < 0xfe) ? page + 2 : 0xfe;
+}
+
+static int dz_bank_ram(int bank) {
+	return (bank < 8) ? bank : bank - 2;
 }
 
 static int dz_slot_count() {
@@ -151,12 +170,13 @@ static int dz_slot_of(int adr) {
 // the two of the 128K and anything that is neither RAM nor ROM (an interface's
 // own memory) are 0xFE, a bank no model has
 static int dz_slot_bank(Computer* comp, int slot) {
+	if (!dz_same(comp)) return 0xfe;
 	switch (dzModel) {
 		case DZ_NEXT:
 			return next_mmu_get(comp, slot) & 0xff;
 		case DZ_ZX128K: {
 			xAdr xa = comp_get_xadr(comp, slot << 14, MEM_VIEW_READ);
-			if (xa.type == MEM_RAM) return (xa.abs & comp->mem->ramMask) >> 14;
+			if (xa.type == MEM_RAM) return dz_ram_bank((xa.abs & comp->mem->ramMask) >> 14);
 			if ((xa.type == MEM_ROM) && (((xa.abs & comp->mem->romMask) >> 14) < 2))
 				return 8 + ((xa.abs & comp->mem->romMask) >> 14);
 			return 0xfe;
@@ -168,6 +188,7 @@ static int dz_slot_bank(Computer* comp, int slot) {
 // a bank of the model as a cell: its area, page and the offset of adr in it. 0: none
 // (the 48K's banks, the Next's ROM: they go by the cpu address)
 static int dz_cell(Computer* comp, int bank, int adr, int* area, int* page, int* ofs) {
+	if (!dz_same(comp)) return 0;
 	switch (dzModel) {
 		case DZ_NEXT:
 			if (bank >= 0xe0) return 0;
@@ -176,12 +197,13 @@ static int dz_cell(Computer* comp, int bank, int adr, int* area, int* page, int*
 			*ofs = adr & 0x1fff;
 			return 1;
 		case DZ_ZX128K:
+			if (bank >= 0xfe) return 0;
 			if ((bank == 8) || (bank == 9)) {
 				*area = CELL_ROM;
 				*page = bank - 8;
 			} else {
 				*area = CELL_RAM;
-				*page = bank;
+				*page = dz_bank_ram(bank);
 			}
 			*ofs = adr & 0x3fff;
 			return (*page < comp_cell_pages(comp, *area)) ? 1 : 0;
@@ -192,14 +214,16 @@ static int dz_cell(Computer* comp, int bank, int adr, int* area, int* page, int*
 // A byte of a bank by the model's numbers, -1: none. The 48K's two banks are what
 // the cpu reads there; the Next's ROM (0xFF) is the 16K ROM its slots 0 and 1 show
 static int dz_bank_peek(Computer* comp, int bank, int ofs) {
+	if (!dz_same(comp)) return -1;
 	switch (dzModel) {
 		case DZ_NEXT:
 			if (bank == 0xff) return comp_cell_peek(comp, CELL_ROM, next_rom(comp), ofs & 0x3fff);
 			if (bank >= 0xe0) return -1;
 			return comp_cell_peek(comp, CELL_RAM, bank, ofs);
 		case DZ_ZX128K:
+			if (bank >= 0xfe) return -1;
 			if ((bank == 8) || (bank == 9)) return comp_cell_peek(comp, CELL_ROM, bank - 8, ofs);
-			return comp_cell_peek(comp, CELL_RAM, bank, ofs);
+			return comp_cell_peek(comp, CELL_RAM, dz_bank_ram(bank), ofs);
 	}
 	if (bank == 0) return (ofs < 0x4000) ? comp_peek(comp, ofs, MEM_VIEW_READ, NULL) : -1;
 	if (bank == 1) return (ofs < 0xc000) ? comp_peek(comp, 0x4000 + ofs, MEM_VIEW_READ, NULL) : -1;
@@ -207,12 +231,14 @@ static int dz_bank_peek(Computer* comp, int bank, int ofs) {
 }
 
 static void dz_bank_poke(Computer* comp, int bank, int ofs, int val) {
+	if (!dz_same(comp)) return;
 	switch (dzModel) {
 		case DZ_NEXT:
 			if (bank < 0xe0) comp_cell_poke(comp, CELL_RAM, bank, ofs, val, 0);
 			return;
 		case DZ_ZX128K:
-			if ((bank != 8) && (bank != 9)) comp_cell_poke(comp, CELL_RAM, bank, ofs, val, 0);
+			if ((bank != 8) && (bank != 9) && (bank < 0xfe))
+				comp_cell_poke(comp, CELL_RAM, dz_bank_ram(bank), ofs, val, 0);
 			return;
 	}
 	if ((bank == 1) && (ofs < 0xc000)) comp_poke(comp, 0x4000 + ofs, val, 0);
@@ -221,6 +247,7 @@ static void dz_bank_poke(Computer* comp, int bank, int ofs, int val) {
 // An 8K bank by the Next's numbers, which DeZog's loading of .sna and .z80 sends
 // whatever the model (two halves of a 16K bank), and so does DZRP 2.0's WRITE_BANK
 static void dz_bank8_poke(Computer* comp, int bank8, int ofs, int val) {
+	if (!dz_same(comp)) return;
 	if (dzModel == DZ_NEXT) {
 		if (bank8 < 0xe0) comp_cell_poke(comp, CELL_RAM, bank8, ofs, val, 0);
 	} else {
@@ -271,7 +298,7 @@ static int dz_point_add(Computer* comp, int adr, int bank, int len, int flag) {
 	}
 	brk.ext = 1;
 	brk_ext.push_back(brk);
-	brkInstallAll();
+	brkInstall(&brk_ext.back(), 0);
 	return brk.id;
 }
 
@@ -456,6 +483,7 @@ static void dz_registers(Computer* comp, QByteArray& r) {
 // SET_SLOT: the model's slot, or one of the Next's 8K ones, which DeZog's loading
 // sends whatever the model. 0: done or nothing to do
 static int dz_set_slot(Computer* comp, int slot, int bank) {
+	if (!dz_same(comp)) return 1;
 	if (dzModel == DZ_NEXT) {
 		if (slot > 7) return 1;
 		if ((bank == 0xfe) && (slot < 2)) bank = 0xff;		// DeZog 3.7 and older name the ROM so
@@ -540,11 +568,19 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 	xlog(XLG_NET, XLL_TRACE, "DeZog: command %i, %i bytes", cmd, (int)in.size());
 	emu_lock();
 	Computer* comp = conf.zx;
+	if (dzOn && (cmd != CMD_INIT) && !dz_same(comp)) {
+		// the machine changed under the session: DeZog's picture of it is gone
+		emu_unlock();
+		xlog(XLG_NET, XLL_WARN, "DeZog: another machine now, the session ends");
+		dzCli->abort();
+		return;
+	}
 	int next = comp && (comp->hw->id == HW_ZXNEXT) && comp->next;
 	switch (cmd) {
 		case CMD_INIT: {
 			dz_detach();		// a session before it leaves nothing
 			dzModel = dz_model_of(comp);
+			dzLoading = 1;
 			dzOn = 1;
 			dz_hold(1);		// DeZog starts from a machine that stands
 			r.append((char)0);
@@ -572,6 +608,7 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 			break;
 		}
 		case CMD_CONTINUE: {
+			dzLoading = 0;
 			dz_tmp_clear(comp);
 			if (dz_get8(in, 0)) dz_tmp_set(comp, 0, dz_get16(in, 1));
 			if (dz_get8(in, 3)) dz_tmp_set(comp, 1, dz_get16(in, 4));
@@ -581,8 +618,11 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 				dz_tmp_clear(comp);
 				ntf = dz_pause_ntf(comp, 0, "The Xpeccy+ Debugger is open: close it to run");
 			} else if (dz_held()) {
-				// the instruction it stands on runs first, its fetch not looked at
-				int res = brk_step_off(comp, NULL);
+				// the instruction it stands on runs first, its fetch not looked at; the
+				// scope hears it, as the Debugger's resume makes it
+				int tm;
+				int res = brk_step_off(comp, &tm);
+				snd_scope_step(comp, tm);
 				if (res == BRK_GO_DBG) {
 					ntf = dz_pause_ntf(comp, 0);
 					dz_tmp_clear(comp);
@@ -641,9 +681,9 @@ static void dz_command(int seq, int cmd, const QByteArray& in) {
 			int bank = dz_get8(in, 0);
 			int ofs = dz_get16(in, 1);
 			int len = in.size() - 3;
-			// a whole 8K bank from the start: DeZog loading a .sna or a .z80, the
-			// Next's numbers whatever the model
-			int whole = (dzModel != DZ_NEXT) && (ofs == 0) && (len == 0x2000);
+			// a whole 8K bank from the start before the first CONTINUE: DeZog loading
+			// a .sna or a .z80, the Next's numbers whatever the model
+			int whole = dzLoading && (dzModel != DZ_NEXT) && (ofs == 0) && (len == 0x2000);
 			for (int i = 0; i < len; i++) {
 				if (whole) {
 					dz_bank8_poke(comp, bank, i, dz_get8(in, i + 3));
@@ -818,9 +858,9 @@ static void dz_gone() {
 	xlog(XLG_NET, XLL_INFO, "DeZog: the client went");
 }
 
-static void dz_accept() {
-	while (dzSrv->hasPendingConnections()) {
-		QTcpSocket* sock = dzSrv->nextPendingConnection();
+static void dz_accept(QTcpServer* srv) {
+	while (srv->hasPendingConnections()) {
+		QTcpSocket* sock = srv->nextPendingConnection();
 		if (dzCli) {
 			xlog(XLG_NET, XLL_WARN, "DeZog: a second client refused");
 			sock->abort();
@@ -845,7 +885,15 @@ static void dz_listen(int port) {
 		dzSrv = NULL;
 		return;
 	}
-	QObject::connect(dzSrv, &QTcpServer::newConnection, dzCtx, dz_accept);
+	QObject::connect(dzSrv, &QTcpServer::newConnection, dzCtx, [] {dz_accept(dzSrv);});
+	// a host where localhost is ::1 first: the same port there, if it has IPv6
+	dzSrv6 = new QTcpServer(dzCtx);
+	if (dzSrv6->listen(QHostAddress::LocalHostIPv6, port & 0xffff)) {
+		QObject::connect(dzSrv6, &QTcpServer::newConnection, dzCtx, [] {dz_accept(dzSrv6);});
+	} else {
+		delete dzSrv6;
+		dzSrv6 = NULL;
+	}
 	dzPort = port;
 	xlog(XLG_NET, XLL_INFO, "DeZog: listening on port %i", port);
 }
@@ -859,6 +907,7 @@ void dezog_close() {
 		}
 		dz_detach();
 		if (dzSrv) dzSrv->close();
+		if (dzSrv6) dzSrv6->close();
 	}, Qt::BlockingQueuedConnection);
 	dzThread->quit();
 	dzThread->wait();
@@ -867,6 +916,7 @@ void dezog_close() {
 	dzCtx = NULL;
 	dzThread = NULL;
 	dzSrv = NULL;
+	dzSrv6 = NULL;
 	dzCli = NULL;
 	dzPort = 0;
 }

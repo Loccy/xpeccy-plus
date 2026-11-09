@@ -842,13 +842,13 @@ void media_autorun_headless(int on) {
 // the command line's.
 static void as_board_refused() {
 	if (as_headless) return;		// the log has the refusal
-	conf.emu.pause |= PR_EXTRA;
+	pause_add(PR_EXTRA);
 	QMessageBox::information(nullptr, "Cannot start the disk",
 		"The floppy drives are off while the divMMC is on: the disk is in its drive, "
 		"but cannot be started.\n\n"
 		"Switch the divMMC off with Media > divMMC, or start a disk image from the "
 		"card in the esxDOS browser (Machine > NMI).");
-	conf.emu.pause &= ~PR_EXTRA;
+	pause_del(PR_EXTRA);
 }
 
 // Media just opened from the gui: mounting is not enough when the user wants it

@@ -30,7 +30,7 @@ CMD_INIT, CMD_CLOSE, CMD_GET_REGISTERS, CMD_SET_REGISTER = 1, 2, 3, 4
 CMD_CONTINUE, CMD_PAUSE, CMD_READ_MEM, CMD_WRITE_MEM, CMD_SET_SLOT = 6, 7, 8, 9, 10
 CMD_GET_NEXTREG = 11
 CMD_GET_SPRITES_PALETTE, CMD_GET_SPRITES_CLIP, CMD_GET_SPRITES, CMD_GET_SPRITE_PATTERNS = 16, 17, 18, 19
-CMD_INTERRUPT_ON_OFF, CMD_GET_SUPPORTED = 23, 24
+CMD_WRITE_PORT, CMD_INTERRUPT_ON_OFF, CMD_GET_SUPPORTED = 21, 23, 24
 CMD_READ_BANK_MEM, CMD_WRITE_BANK_MEM, CMD_SET_NEXTREGS, CMD_READ_MEM_BLOCKS = 25, 26, 27, 28
 CMD_ADD_BREAKPOINT, CMD_REMOVE_BREAKPOINT, CMD_ADD_WATCHPOINT, CMD_REMOVE_WATCHPOINT = 40, 41, 42, 43
 CMD_READ_STATE, CMD_WRITE_STATE = 50, 51
@@ -244,6 +244,14 @@ def run_machine(d, machine):
     d.write_mem(0x9000, b"\x55")
     d.cmd(CMD_WRITE_STATE, state)
     check(d.read_mem(0x9000, 1) == b"\x02", "the state put back did not restore memory")
+
+    if machine == "pent1024":
+        # RAM page 8 (7FFD b6) is bank 10: 8 and 9 are the 128K's ROMs
+        d.cmd(CMD_WRITE_BANK_MEM, struct.pack("<BH", 10, 0x100) + b"\xA5\x5A")
+        d.cmd(CMD_WRITE_PORT, struct.pack("<HB", 0x7FFD, 0x40))
+        check(d.regs()["slots"][3] == 10, f"page 8 at C000 as bank {d.regs()['slots'][3]}")
+        check(d.read_mem(0xC100, 2) == b"\xA5\x5A", "bank 10 is not what the cpu reads at C000")
+        d.cmd(CMD_WRITE_PORT, struct.pack("<HB", 0x7FFD, 0x00))
 
     if model == 4:
         check(len(d.cmd(CMD_GET_NEXTREG, b"\x00")) == 1, "GET_NEXTREG")

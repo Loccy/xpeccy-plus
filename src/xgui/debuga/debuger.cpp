@@ -378,7 +378,8 @@ bool DebugWin::stop() {
 	Computer* comp = conf.zx;
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;	// before compExec to add current opcode T
-	if (comp->flgDBG) {
+	// DeZog holds the machine: closing the window leaves it where DeZog shows it
+	if (comp->flgDBG && !(conf.emu.pause & PR_DEZOG)) {
 		// one opcode, and the scope has to hear it too or the wave has a notch
 		// in it at every resume
 		int tm;
@@ -1062,9 +1063,12 @@ void DebugWin::doStep() {
 	if (!ui_asm.cbAccT->isChecked())
 		tCount = comp->tickCount;
 	// the scope is fed from the emulation thread, which is not running while we
-	// hold the machine: carry it across this step ourselves
+	// hold the machine: carry it across this step ourselves. DeZog's thread may be
+	// at the machine too
+	emu_lock();
 	snd_scope_step(comp, compExec(comp));
 	comp_brk_clear(comp);		// single steps run without breakpoints, by design
+	emu_unlock();
 	if (!fillAll()) {
 		ui_asm.dasmTable->setAdr(cpu_get_pc(comp->cpu));
 		//fillDisasm();

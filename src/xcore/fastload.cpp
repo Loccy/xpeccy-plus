@@ -743,7 +743,7 @@ void fast_picture_frame(Computer* comp) {
 	if (conf.emu.pauseReq) {
 		fs_release(vid);		// the frame after the pause is drawn
 		if (drawn || !fp_held) {
-			conf.emu.pause |= conf.emu.pauseReq;
+			pause_add(conf.emu.pauseReq);
 			conf.emu.pauseReq = 0;
 			conf.emu.fast = 0;
 			fp_release(comp);

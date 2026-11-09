@@ -367,9 +367,9 @@ int brk_new_id();
 void brkSet(int, int, int, int);
 void brkXor(int, int, int, int, int);
 void brkAdd(xBrkPoint);
-// void brkInstall(xBrkPoint*, int);
 void brkDelete(xBrkPoint);
 void brkInstallAll();
+void brkInstall(xBrkPoint*, int del);		// one point more into the maps (del: deleted instead)
 extern std::vector<xBrkPoint> brk_ext;		// DeZog's points, not in the list
 void brk_clear_tmp(Computer*);
 void brk_find_all(int t, int adr, int kind, std::vector<xBrkPoint*>& out);
@@ -1265,6 +1265,11 @@ enum {
 #define XSCR_PAGE_SHADOW	7
 
 extern xConfig conf;
+
+// A pause reason (PR_*) on or off. The gui, the emulation's thread and DeZog's
+// server all change the mask: a bit set by one is not lost to another's write
+static inline void pause_add(int msk) {__atomic_fetch_or(&conf.emu.pause, msk, __ATOMIC_SEQ_CST);}
+static inline void pause_del(int msk) {__atomic_fetch_and(&conf.emu.pause, ~msk, __ATOMIC_SEQ_CST);}
 
 // Flash loading and edge detection are refinements of fast loading, on only with it
 static inline int tape_flash() { return conf.tape.fast && conf.tape.flash; }

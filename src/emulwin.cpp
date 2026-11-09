@@ -346,9 +346,9 @@ void MainWin::pause(bool p, int msk) {
 		conf.emu.fast = 0;
 	}
 	if (p) {
-		conf.emu.pause |= msk;
+		pause_add(msk);
 	} else {
-		conf.emu.pause &= ~msk;
+		pause_del(msk);
 		conf.emu.pauseReq &= ~msk;
 	}
 	int paused = conf.emu.pause || conf.emu.pauseReq;
@@ -4224,7 +4224,7 @@ void MainWin::tapeNext() {
 			tapRewind(tap, 0);
 		}
 	}
-	conf.emu.pause &= ~PR_TAPE;
+	pause_del(PR_TAPE);
 	emu_unlock();
 	if (put) media_mount_note(spare.get());
 	if (spare) {

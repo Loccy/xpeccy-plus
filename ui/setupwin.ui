@@ -4167,7 +4167,7 @@ Right click: back to the style color</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="0">
+                  <item row="3" column="0">
                    <widget class="QLabel" name="labUpdCheck">
                     <property name="toolTip">
                      <string>How often to look for a newer version</string>
@@ -4177,7 +4177,7 @@ Right click: back to the style color</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="2" column="1">
+                  <item row="3" column="1">
                    <widget class="QComboBox" name="cbUpdCheck">
                     <property name="toolTip">
                      <string>How often to look for a newer version</string>
@@ -4199,7 +4199,7 @@ Right click: back to the style color</string>
                     </item>
                    </widget>
                   </item>
-                  <item row="3" column="0">
+                  <item row="4" column="0">
                    <widget class="QLabel" name="labUpdChannel">
                     <property name="toolTip">
                      <string>Releases only, or development builds too</string>
@@ -4209,7 +4209,7 @@ Right click: back to the style color</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="1">
+                  <item row="4" column="1">
                    <widget class="QComboBox" name="cbUpdChannel">
                     <property name="toolTip">
                      <string>Releases only, or development builds too</string>
@@ -4226,7 +4226,7 @@ Right click: back to the style color</string>
                     </item>
                    </widget>
                   </item>
-                  <item row="4" column="0" colspan="2">
+                  <item row="5" column="0" colspan="2">
                    <widget class="QCheckBox" name="cbConfexit">
                     <property name="toolTip">
                      <string>Ask before closing the emulator</string>
@@ -4236,7 +4236,7 @@ Right click: back to the style color</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="0">
+                  <item row="2" column="0">
                    <widget class="QCheckBox" name="cbDezog">
                     <property name="toolTip">
                      <string>Lets DeZog in VS Code debug the machine,
@@ -4247,7 +4247,7 @@ from this computer only</string>
                     </property>
                    </widget>
                   </item>
-                  <item row="5" column="1">
+                  <item row="2" column="1">
                    <widget class="QSpinBox" name="sbDezogPort">
                     <property name="toolTip">
                      <string>Lets DeZog in VS Code debug the machine,

@@ -1082,6 +1082,7 @@ int brk_take_hits(Computer* comp, int* skip, bool conds) {
 // the breakpoints see its accesses - one that stops leaves the machine where the
 // instruction did. The hits the stop itself left are dropped first.
 int brk_step_off(Computer* comp, int* tm) {
+	emu_lock();
 	int dbg = comp->flgDBG;
 	comp_brk_clear(comp);
 	if (comp->flgCOND) comp_brk_newstep(comp);
@@ -1093,6 +1094,7 @@ int brk_step_off(Computer* comp, int* tm) {
 	int res = brk_take_hits(comp, &skip);
 	if (comp->flgCOND) comp_brk_newstep(comp);
 	comp_brk_clear(comp);
+	emu_unlock();
 	return res;
 }
 

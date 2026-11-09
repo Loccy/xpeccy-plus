@@ -815,16 +815,16 @@ bool reloadConfig() {
 	// gamepads as well as reading the files, and it does it under a machine
 	// that is already running
 	emu_lock();
-	conf.emu.pause |= PR_EXTRA;
+	pause_add(PR_EXTRA);
 	try {
 		loadConfig();
 	} catch (...) {
 		xlog(XLG_CONF, XLL_ERROR, "the configuration could not be read");
-		conf.emu.pause &= ~PR_EXTRA;
+		pause_del(PR_EXTRA);
 		emu_unlock();
 		return false;
 	}
-	conf.emu.pause &= ~PR_EXTRA;
+	pause_del(PR_EXTRA);
 	emu_unlock();
 	return true;
 }
