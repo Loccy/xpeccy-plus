@@ -1321,18 +1321,15 @@ void setSignal(QLabel* lab, int on) {
 	lab->setFont(fnt);
 }
 
-// Where an INT goes now, in IM im: a line per source the machine has on, the one
-// taken next first. adr: that one's handler (-1: IM 0 runs a byte that is no RST,
-// DBG_INT_NONE: no source is on); cell: the IM 2 table's word read (else the handler);
-// star: the byte floats and the IM 2 table is uneven (*)
-#define DBG_INT_NONE -2
+// a line per INT source in IM im; adr/cell/star: the first's handler, its table word, the *
+#define DBG_INT_NONE -2		// adr: no INT can come
 static QString dbg_int_now(Computer* comp, int im, int* adr, int* cell, bool* star) {
 	xIntVec vec[INT_VEC_MAX];
 	int n = comp_int_vecs(comp, vec);
 	*adr = DBG_INT_NONE;
 	*cell = -1;
 	*star = false;
-	if (n < 1) return "Now: no interrupt source is on";
+	if (n < 1) return "Now: no INT can come";
 	if (im == 1) {
 		*adr = *cell = 0x38;
 		return QString("Now: IM 1, the CPU calls %0").arg(dbg_word(0x38));
@@ -1393,10 +1390,15 @@ void DebugWin::fillIntGo() {
 	QString go(QChar(0x2192));
 	go.append((adr == DBG_INT_NONE) ? QString(" -") : (adr < 0) ? QString(" ?") : dbg_word(adr));
 	if (star) go.append("*");
+	QString tip = "Where an INT goes\n" + now;
+	if (comp_nmi_waiting(comp)) {		// it comes first, as the INT signal says
+		go = "NMI" + QString(QChar(0x2192)) + dbg_word(0x66);
+		tip = QString("An NMI waits: the CPU calls %0\n\n").arg(dbg_word(0x66)) + tip;
+	}
 	ui_misc.labIntGo->setText(go);
-	ui_misc.labIntGo->setToolTip("Where an INT goes\n" + now);
+	ui_misc.labIntGo->setToolTip(tip);
 	foreach(xLabel* lab, dbgRegLabs) {
-		if (lab->isVisible() && (lab->text() == "IM"))
+		if (lab->text() == "IM")		// a hidden panel's too: it is not refilled when shown
 			lab->setToolTip(dbg_reg_tip("IM") + "\n\n" + now);
 	}
 }
@@ -1528,8 +1530,7 @@ void DebugWin::regClick(QMouseEvent* ev) {
 	xRegBunch bunch = cpuGetRegs(comp->cpu);
 	xRegister reg = bunch.regs[id];
 	int adr = reg.value;
-	// IM and IR point at where an INT goes, as the side panel says: the handler, and
-	// for the DUMP the IM 2 table's word (IM), the table (IR)
+	// IM, IR: the INT handler; in the DUMP the table's word (IM), the table (IR)
 	QString name(reg.name);
 	if ((name == "IM") || (name == "IR")) {
 		int cell;
