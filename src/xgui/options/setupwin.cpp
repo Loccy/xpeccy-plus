@@ -2902,7 +2902,7 @@ static xMemName memNameTab[] = {
 	{MEM_256K, MEM_256K, "256 KB"},
 	{MEM_512K, MEM_512K, "512 KB"},
 	{MEM_768K, MEM_512K + MEM_256K, "768 KB"},
-	{MEM_1M, MEM_1M, "1024 KB"},
+	{MEM_1M, MEM_1M, "1 MB"},
 	{MEM_2M, MEM_2M, "2 MB"},
 	{MEM_4M, MEM_4M, "4 MB"},
 	{MEM_8M, MEM_8M, "8 MB"},
