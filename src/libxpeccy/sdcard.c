@@ -127,9 +127,10 @@ int sdc_protected(SDCard* sdc) {
 
 // file operation
 
-// a block the machine reads, by either engine; each block of a CMD18 run counts
+// a block the machine reads, by either engine; each block of a CMD18 run counts, not
+// in a frame that is going to be rolled back
 void sdcRdSector(SDCard* sdc) {
-	sdc->reads++;
+	if (!x_runahead) sdc->reads++;
 	if ((sdc->addr < sdc->maxlba) && sdc->vfat) {
 		vfat_read(sdc->vfat, sdc->addr, sdc->buf.data + 1);
 	} else if ((sdc->addr < sdc->maxlba) && sdc->file) {

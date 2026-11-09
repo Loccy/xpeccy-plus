@@ -951,10 +951,11 @@ void MainWin::lightLook() {
 	SDCard* cards[3] = {comp->div->card[0], comp->div->card[1], comp->sdc};
 	for (int i = 0; i < 3; i++) {
 		SDCard* sdc = cards[i];
-		if ((i == 2) == slot) {
+		bool shown = slot ? (i == 2) : (i < 2);		// the others' looks are kept up all the same
+		if (shown) {
 			if (sdc->reads != cardLook[i][0]) card |= 1;
 			if (sdc->writes != cardLook[i][1]) card |= 2;
-			if (sdc->image) any = true;
+			if (sdc->image && !sdc_unread(sdc)) any = true;		// one not read yet is no card to the machine
 		}
 		cardLook[i][0] = sdc->reads;
 		cardLook[i][1] = sdc->writes;
