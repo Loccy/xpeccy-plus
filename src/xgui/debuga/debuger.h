@@ -240,6 +240,7 @@ class DebugWin : public QMainWindow {
 
 		bool fillAll();
 		void fillNotCPU();
+		void fillIntGo();
 		void doStep();
 
 		void saveDasm();
@@ -307,3 +308,4 @@ class DebugWin : public QMainWindow {
 };
 
 int loadDUMP(Computer*, const char*, int);
+int dbg_get_reg_adr_name(CPU*, const char*);	// a register's value by name, -1: no such one

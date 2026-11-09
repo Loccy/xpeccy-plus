@@ -19,7 +19,9 @@ The values are hex or decimal, as the Debugger's other numbers (see
 lights up on its own; with **Split pairs** off it is one number, `  511`. PC and SP are as
 wide as a pair, and IM as one byte of it; every number stands at the right of its field.
 
-Rest the mouse on **IM**, **IFF1** or **IFF2** for what it is.
+Rest the mouse on **IM**, **IFF1** or **IFF2** for what it is. The tip of **IM** also says
+where an INT goes now, as the tip of **INT** in the side panel does (see
+[MEMMAP panel](debugger-memmap.md)).
 
 ## Changing registers
 
@@ -38,6 +40,14 @@ IFF1 and IFF2 are check boxes. Tick or untick a flag to change it in F.
 Click the name of a register to see, in the listing, the code at the address the register
 holds.
 Right-click the name to see that address in the **DUMP** panel.
+
+**IM** and **IR** are no addresses, so they point at where an INT goes instead:
+
+- click **IM** or **IR** - the listing shows the interrupt handler: in IM 1 `#0038`, in
+  IM 2 (and for **IR** always) the address from the table at I * 256;
+- right-click **IM** - **DUMP** shows the word of the table the CPU reads in IM 2, the
+  handler in IM 0 and IM 1;
+- right-click **IR** - **DUMP** shows the table itself, from I * 256.
 
 ## Layouts
 

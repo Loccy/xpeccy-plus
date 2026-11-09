@@ -130,6 +130,43 @@ int comp_peek(Computer* comp, int adr, int access, xAdr* xadr) {
 	return value & 0xff;
 }
 
+int comp_nmi_waiting(Computer* comp) {
+	return !!(comp->cpu->intrq & comp->cpu->inten & Z80_NMI);
+}
+
+int comp_int_vecs(Computer* comp, xIntVec* vec) {
+	if (comp->hw && comp->hw->intvecs) return comp->hw->intvecs(comp, vec);
+	vec[0].name = "INT";
+	vec[0].vec = 0xff;
+	vec[0].driven = 0;
+	return 1;
+}
+
+static int comp_peek_word(Computer* comp, int adr) {
+	return comp_peek(comp, adr & 0xffff, MEM_VIEW_READ, NULL) | (comp_peek(comp, (adr + 1) & 0xffff, MEM_VIEW_READ, NULL) << 8);
+}
+
+// as z80_int(): IM 0 runs the byte, IM 2 reads the word at I:byte (+1 may cross the page)
+int comp_int_target(Computer* comp, int im, int vec, int* cell) {
+	vec &= 0xff;
+	*cell = -1;
+	switch (im) {
+		case 1: return 0x38;
+		case 2:
+			*cell = (comp->cpu->regI << 8) | vec;
+			return comp_peek_word(comp, *cell);
+		default: return ((vec & 0xc7) == 0xc7) ? (vec & 0x38) : -1;
+	}
+}
+
+int comp_int_table_even(Computer* comp) {
+	int adr = comp->cpu->regI << 8;
+	int b = comp_peek(comp, adr, MEM_VIEW_READ, NULL);
+	for (int i = 1; i < 257; i++)
+		if (comp_peek(comp, (adr + i) & 0xffff, MEM_VIEW_READ, NULL) != b) return 0;
+	return 1;
+}
+
 void comp_poke(Computer* comp, int adr, int value, int romWrite) {
 	int mode = MEM_VIEW_WRITE | (romWrite ? MEM_VIEW_ROM_WRITE : 0);
 	comp_mem_view(comp, adr, mode, &value, NULL);

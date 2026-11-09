@@ -58,6 +58,8 @@ typedef sndPair(*cbHwVol)(Computer*, sndVolume*);
 typedef void(*cbHwMemView)(Computer*, int, int, int*, xAdr*);
 typedef xMnem(*cbHwDisasm)(Computer*, int, char*, unsigned char*, int, int fmt);
 
+typedef int(*cbHwIntVecs)(Computer*, xIntVec*);
+
 // a port the machine keeps by itself: where in Computer, or a function when
 // it is not a field there (offset 0 then)
 typedef struct {
@@ -134,6 +136,8 @@ struct HardWare {
 	// that, which can run on a copy of the devices (sound.cpp's mirror)
 	void (*sndtake)(Computer*, sndMix*);
 	sndPair (*sndmix)(sndMix*, sndVolume*);
+	// the INT sources on now and their ack bytes, nothing acked (NULL: one floating #FF)
+	cbHwIntVecs intvecs;
 };
 typedef struct HardWare HardWare;
 

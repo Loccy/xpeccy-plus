@@ -801,6 +801,14 @@ typedef struct {
 	int unit;	// the page size
 } xCell;
 
+// an INT source and its ack byte; driven 0: nothing drives the bus, it reads #FF
+#define INT_VEC_MAX 16
+typedef struct {
+	const char* name;
+	int vec;
+	int driven;
+} xIntVec;
+
 #include "hardware/hardware.h"
 
 Computer* compCreate();
@@ -810,6 +818,11 @@ void compReset(Computer*,int);
 void compUserReset(Computer*,int);
 int compExec(Computer*);
 int comp_peek(Computer*, int, int, xAdr*);
+// where an INT goes, changing nothing: sources, handler in IM im (-1: not an RST), even IM 2 table
+int comp_nmi_waiting(Computer*);
+int comp_int_vecs(Computer*, xIntVec*);
+int comp_int_target(Computer*, int im, int vec, int* cell);
+int comp_int_table_even(Computer*);
 void comp_poke(Computer*, int, int, int);
 xAdr comp_get_xadr(Computer*, int, int);
 int comp_find_xadr(Computer*, int, int, int);

@@ -100,6 +100,7 @@ void nx_int_event(Computer*, int, long long, int, int);
 void nx_int_m1(Computer*, long long, int);
 int nx_int_level(Computer*, long long, long long);
 int nx_int_ack(Computer*);
+int nx_int_vecs(Computer*, xIntVec*);
 void nx_int_mode(Computer*);
 int nx_int_status(Computer*);
 int nx_int_busy(Computer*);

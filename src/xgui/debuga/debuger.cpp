@@ -1321,6 +1321,78 @@ void setSignal(QLabel* lab, int on) {
 	lab->setFont(fnt);
 }
 
+// a line per INT source in IM im; adr/cell/star: the first's handler (-1: none), its table word, the *
+static QString dbg_int_now(Computer* comp, int im, int* adr, int* cell, bool* star) {
+	xIntVec vec[INT_VEC_MAX];
+	int n = comp_int_vecs(comp, vec);
+	*adr = -1;
+	*cell = -1;
+	*star = false;
+	if (n < 1) return "Now: no INT can come";
+	if (im == 1) {
+		*adr = *cell = 0x38;
+		return QString("Now: IM 1, the CPU calls %0").arg(dbg_word(0x38));
+	}
+	bool even = true;		// asked only where it can matter
+	for (int i = 0; (i < n) && (im == 2); i++) {
+		if (!vec[i].driven) {
+			even = comp_int_table_even(comp);
+			break;
+		}
+	}
+	int floating = -1;
+	QString res = QString("Now: IM %0").arg(im);
+	for (int i = 0; i < n; i++) {
+		int at;
+		int to = comp_int_target(comp, im, vec[i].vec, &at);
+		bool mark = (im == 2) && !vec[i].driven && !even;
+		QString line = QString("%0 (%1): ").arg(vec[i].name, dbg_byte(vec[i].vec));
+		if (im == 2) {
+			line.append(QString("%0 %1 %2").arg(dbg_word(at), QString(QChar(0x2192)), dbg_word(to)));
+		} else if (to >= 0) {
+			line.append(QString("RST %0").arg(dbg_byte(to)));
+		} else {
+			line.append("run as an instruction");
+		}
+		if (mark) {
+			line.append(" *");
+			if (floating < 0) floating = at;
+		}
+		if (i == 0) {
+			*adr = to;
+			*cell = (at < 0) ? to : at;
+			*star = mark;
+		}
+		res.append("\n").append(line);
+	}
+	if (floating >= 0) {
+		res.append(QString("\n\n* The table at %0 is not one byte repeated\n"
+			"257 times. On a real machine a device can\n"
+			"put another byte than %1 on the bus, and\n"
+			"the CPU jumps elsewhere.").arg(dbg_word(floating & 0xff00), dbg_byte(floating & 0xff)));
+	}
+	return res;
+}
+
+// where an INT goes, in the tips of INT and IM
+void DebugWin::fillIntGo() {
+	Computer* comp = conf.zx;
+	ui_misc.labNMI->setToolTip(QString("NMI: the CPU calls %0").arg(dbg_word(0x66)));
+	int im = dbg_get_reg_adr_name(comp->cpu, "IM");
+	if (im < 0) {
+		ui_misc.labINT->setToolTip(QString());
+		return;
+	}
+	int adr, cell;
+	bool star;
+	QString now = dbg_int_now(comp, im, &adr, &cell, &star);
+	ui_misc.labINT->setToolTip("Where an INT goes\n" + now);
+	foreach(xLabel* lab, dbgRegLabs) {
+		if (lab->text() == "IM")		// a hidden panel's too: it is not refilled when shown
+			lab->setToolTip(dbg_reg_tip("IM") + "\n\n" + now);
+	}
+}
+
 /*
 void DebugWin::fillTabs() {
 }
@@ -1345,7 +1417,11 @@ void DebugWin::fillNotCPU() {
 	setSignal(ui_misc.labDOS, comp->flgDOS);
 	setSignal(ui_misc.labROM, comp->flgROM);
 	setSignal(ui_misc.labCPM, comp->flgCPM);
-	setSignal(ui_misc.labINT, cpu_int_ready(comp->cpu));	// the next step takes an interrupt
+	// the next step takes an interrupt: an NMI before an INT
+	int nmi = comp_nmi_waiting(comp);
+	setSignal(ui_misc.labINT, !nmi && cpu_int_ready(comp->cpu));
+	setSignal(ui_misc.labNMI, nmi);
+	fillIntGo();
 
 	ui_misc.labRX->setNum(comp->vid->ray.x);
 	setSignal(ui_misc.labRX, comp->vid->hblank);
@@ -1447,7 +1523,16 @@ void DebugWin::regClick(QMouseEvent* ev) {
 	xRegBunch bunch = cpuGetRegs(comp->cpu);
 	xRegister reg = bunch.regs[id];
 	int adr = reg.value;
-	//qDebug() << adr;
+	// IM, IR: the INT handler; in the DUMP the table's word (IM), the table (IR)
+	QString name(reg.name);
+	if ((name == "IM") || (name == "IR")) {
+		int cell;
+		bool star;
+		dbg_int_now(comp, (name == "IR") ? 2 : reg.value, &adr, &cell, &star);
+		if (ev->button() == Qt::RightButton)
+			adr = (name == "IR") ? (reg.value & 0xff00) : cell;
+		if (adr < 0) return;
+	}
 	switch (ev->button()) {
 		case Qt::RightButton:
 			//ui.dumpTable->setAdr(adr);
@@ -1775,6 +1860,7 @@ void DebugWin::reFormCPU(xRegBunch* b) {
 		fitPending = 1;
 		QTimer::singleShot(0, this, &DebugWin::fitCpuDock);
 	}
+	fillIntGo();		// IM's tip was set to its plain text above
 }
 
 // The panel is a different shape after a layout change: hand the dock what the
@@ -2178,6 +2264,7 @@ void DebugWin::setCPU() {
 		}
 	}
 	cpuSetRegs(cpu, bunch);
+	fillIntGo();		// I or IM may have changed
 	rzx_rec_touch();
 	fillFlags(NULL);
 	fillStack();
@@ -2588,6 +2675,7 @@ void DebugWin::setMiscBlocks() {
 	ui_misc.labROM->setVisible(conf.dbg.showsig);
 	ui_misc.labCPM->setVisible(conf.dbg.showsig);
 	ui_misc.labINT->setVisible(conf.dbg.showsig);
+	ui_misc.labNMI->setVisible(conf.dbg.showsig);
 	ui_misc.labHeadFrame->setVisible(conf.dbg.showfrm);
 	ui_misc.labFrame->setVisible(conf.dbg.showfrm);
 	ui_misc.labHeadRay->setVisible(conf.dbg.showray);

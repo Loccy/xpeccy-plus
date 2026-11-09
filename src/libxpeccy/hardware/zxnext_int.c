@@ -214,6 +214,54 @@ int nx_int_ack(Computer* comp) {
 	return 0xff;
 }
 
+// nx_int_ack()'s byte, not acked (zxnext.vhd 1832-1835, 1868-1878)
+_Static_assert(NX_IRQ_DEVS <= INT_VEC_MAX, "the Next's devices do not fit xIntVec");
+int nx_int_vecs(Computer* comp, xIntVec* vec) {
+	static const char* name[NX_IRQ_DEVS] = {"line", "UART 0 Rx", "UART 1 Rx",
+		"CTC 0", "CTC 1", "CTC 2", "CTC 3", "CTC 4", "CTC 5", "CTC 6", "CTC 7",
+		"ULA", "UART 0 Tx", "UART 1 Tx"};
+	int hw = NX.nr[0xc0] & 1;
+	if (!hw || !nx_im2(comp)) {		// outside IM 2 a device's request still takes the chain
+		vec[0].name = "INT";
+		vec[0].vec = hw ? (NX.nr[0xc0] & 0xe0) : 0xff;
+		vec[0].driven = hw || !(NX.expbusEff && !(NX.nr[0x80] & 0x20));
+		return 1;
+	}
+	int head = -1;		// the first device not in S_0 holds the chain
+	for (int i = 0; (i < NX_IRQ_DEVS) && (head < 0); i++)
+		if (IRQ.st[i] != DEV_0) head = i;
+	int wait = ((head >= 0) && (IRQ.st[head] == DEV_REQ)) ? head : -1;	// acked next
+	for (int i = 0; (head < 0) && (wait < 0) && (i < NX_IRQ_DEVS); i++)
+		if (IRQ.pend & (1 << i)) wait = i;
+	int last = ((head >= 0) && (IRQ.st[head] == DEV_ISR)) ? head : NX_IRQ_DEVS;	// before RETI only those ahead of it
+	int n = 0;
+	if (wait >= 0) {
+		vec[n].name = name[wait];
+		vec[n].vec = (NX.nr[0xc0] & 0xe0) | (wait << 1);
+		vec[n].driven = 1;
+		n++;
+	}
+	for (int i = 0; i < last; i++) {
+		if (i == wait) continue;
+		int on;
+		switch (i) {
+			case 0: on = NX.nr[0xc4] & 2; break;
+			case 1: on = NX.nr[0xc6] & 3; break;
+			case 2: on = (NX.nr[0xc6] >> 4) & 3; break;
+			case 11: on = !(NX.pff & 0x40); break;
+			case 12: on = NX.nr[0xc6] & 4; break;
+			case 13: on = NX.nr[0xc6] & 0x40; break;
+			default: on = (i < 7) && ((CTC.ch[i - 3].cr >> 4) & 1); break;	// CTC 4-7 are not built
+		}
+		if (!on) continue;
+		vec[n].name = name[i];
+		vec[n].vec = (NX.nr[0xc0] & 0xe0) | (i << 1);
+		vec[n].driven = 1;
+		n++;
+	}
+	return n;
+}
+
 // RETI: the innermost device in service (the first one past those in S_0 and the
 // requesting ones, which pass IEI while RETI is decoded) goes back to S_0, and its
 // request with it
