@@ -11,6 +11,9 @@ before that point is upstream's history and is not repeated here.
 
 ### Added
 
+- **Debugging from VS Code with DeZog**: set breakpoints on the lines of your source, step,
+  and see the registers, memory and banks in VS Code while the program runs in Xpeccy+. Turn
+  it on with DeZog port in Options > Application, or `--dezog`.
 - **The ZX Spectrum Next's F-keys** work as on its PS/2 keyboard: F3 switches 50 and 60 Hz,
   F4 resets, F8 steps the CPU speed, F9 and F10 press its NMI and DRIVE buttons. Keys that
   are hotkeys reach the Next with Grab Keyboard on.
