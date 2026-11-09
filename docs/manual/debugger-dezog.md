@@ -83,12 +83,13 @@ machine is running.
 - Registers, memory, the call stack and the memory banks. A breakpoint on a line in a paged
   bank stops only when that bank is paged in.
 - Watchpoints (`WPMEM` in the source), and saving and restoring the machine state
-  (`-state save` and `-state restore` in DeZog's debug console): DeZog 3.8 and later.
+  (`-state save` and `-state restore` in DeZog's debug console): DeZog 3.8 and later. A
+  state is put back in the run of Xpeccy+ that saved it, not in another.
 - On the ZX Spectrum Next: the sprites, their patterns and palettes, and the Next registers.
 
 Not available: DeZog's code coverage, its count of T-states, and stepping back through
-everything the program did. DeZog asks those only of its own simulator and of ZEsarUX.
-Its **Step Back** goes back over the steps you took.
+everything the program did; DeZog asks those only of its own simulator. Its **Step Back**
+goes back over the steps you took.
 
 ## Machines
 
@@ -96,13 +97,13 @@ Its **Step Back** goes back over the steps you took.
 ```
 
 DeZog knows the memory of the ZX Spectrum 48K, 128K and Next. Xpeccy+ shows the 48K (and
-ALF TV Game) as a 48K, the Next as a Next, and every other machine as a 128K. What a 128K
-does not have is shown by its own number, which DeZog marks as an unknown bank: RAM banks
-past 7 (Pentagon 1024, Scorpion, ZX Evolution), the +2A/+3's all-RAM paging, and a ROM
-other than the two of the 128K (TR-DOS). Breakpoints on an address and stepping work on
-every machine.
+ALF TV Game) as a 48K, the Next as a Next, and every other machine as a 128K. DeZog marks
+what a 128K does not have as an unknown bank: RAM banks past 7 (Pentagon 1024, Scorpion,
+ZX Evolution) and a ROM other than the two of the 128K (TR-DOS). In the +2A/+3's all-RAM
+paging it shows the RAM banks where a 128K has its ROM or a fixed bank. Breakpoints on an
+address and stepping work on every machine.
 
-After switching to another machine, start the debug session again.
+Switching to another machine ends the debug session; start it again.
 
 ## DeZog and the Debugger
 
