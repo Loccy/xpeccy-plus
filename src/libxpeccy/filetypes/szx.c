@@ -684,18 +684,22 @@ int szxGetHardware(const char* name) {
 	return szx_hardware_of(buf, n);
 }
 
-// the RAM a file holds: its highest RAMP page and the ones below, 16K each
+// the RAM a file holds: its highest RAMP page and the ones below, 16K each; 0 for a
+// file with no cpu state, which does not load
 static int szx_ram_held(const unsigned char* buf, size_t len) {
 	int pages = 0;
+	int cpu = 0;
 	size_t pos = 8;
 	while (pos + 8 <= len) {
 		size_t n = rd_dword(buf + pos + 4);
 		if (n > len - pos - 8) break;
-		if ((rd_dword(buf + pos) == BID('R','A','M','P')) && (n >= 3) && (buf[pos + 10] >= pages))
+		unsigned id = rd_dword(buf + pos);
+		if (id == BID('Z','8','0','R')) cpu = 1;
+		if ((id == BID('R','A','M','P')) && (n >= 3) && (buf[pos + 10] >= pages))
 			pages = buf[pos + 10] + 1;
 		pos += 8 + n;
 	}
-	return pages * MEM_16K;
+	return cpu ? pages * MEM_16K : 0;
 }
 
 int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
@@ -732,7 +736,7 @@ int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
 
 	// a Next of the other size runs on the file's for the session (the machine file
 	// keeps its own), before the reset maps the memory
-	if ((mid == SZM_XPECCY) && (comp->hw->id == HW_ZXNEXT)) {
+	if ((comp->hw->id == HW_ZXNEXT) && (SNAP_HW_OF(snap) == SNAP_HW_CORE + HW_ZXNEXT)) {
 		int held = szx_ram_held(buf, len);
 		if (((held == MEM_1M) || (held == MEM_2M)) && (held != comp->mem->ramSize)) {
 			xlog(XLG_FILE, XLL_INFO, "szx: taken on a %i MB Next, this one runs on that", held >> 20);

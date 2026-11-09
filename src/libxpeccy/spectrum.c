@@ -1473,6 +1473,10 @@ int compSetHardware(Computer* comp, const char* name) {
 		comp->cpu->xnextreg = NULL;
 		if (comp->hw && (comp->hw->id == HW_ZXNEXT)) comp->waitDebt = 0;
 	}
+	// a Next comes in as the stock 2 MB board, whatever the machine before had; its
+	// machine file may then say 1 MB (nx_init keeps either)
+	if ((hw->id == HW_ZXNEXT) && !(comp->hw && (comp->hw->id == HW_ZXNEXT)))
+		memSetSize(comp->mem, MEM_2M, -1);
 	comp->hw = hw;
 	// a host key's combination as the machine's keyboard makes it: the Evo's avr, or
 	// for the rest (none has a pc keyboard of its own) the Next's scan

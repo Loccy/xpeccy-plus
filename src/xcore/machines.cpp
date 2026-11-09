@@ -1046,6 +1046,10 @@ static const struct {
 	{NULL, NULL}
 };
 
+// The RAM the machine file gives, which xm_save_over writes: a snapshot may run the
+// machine on another size for the session (a Next's SZX of 1 MB on a 2 MB Next)
+static int macRam = 0;
+
 int xm_set_hardware(std::string nm) {
 	for (int i = 0; hwAliasTab[i].oldName; i++) {
 		if (nm == hwAliasTab[i].oldName) {
@@ -1053,15 +1057,13 @@ int xm_set_hardware(std::string nm) {
 			break;
 		}
 	}
-	return compSetHardware(conf.zx, nm.empty() ? NULL : nm.c_str());
+	int res = compSetHardware(conf.zx, nm.empty() ? NULL : nm.c_str());
+	macRam = conf.zx->mem->ramSize;		// the board as it comes, until a size is set
+	return res;
 }
 
 // the machine's own settings: first its definition, then the user's own block.
 // Both go through here, so what a key means is written once.
-
-// The RAM the machine file gives, which xm_save_over writes: a snapshot may run the
-// machine on another size for the session (a Next's SZX of 1 MB on a 2 MB Next)
-static int macRam = 0;
 
 void xm_set_ram(int size) {
 	Computer* comp = conf.zx;

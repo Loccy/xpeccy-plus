@@ -436,15 +436,30 @@ static int nx_absent_rd(Computer* comp, int adr) {
 	return NX.lane[l];
 }
 
-// a cpu or DMA cycle that puts v on the bus: a read on its half, a write on both
-static inline void nx_lane_rd(Computer* comp, int adr, int v) {
+// an access that makes an SRAM cycle (a read: ROM and the BRAM pages' SRAM copy too, a
+// chip or not behind it): it waits a clock at 28 MHz, and it moves the data bus
+static inline int nx_sram_cycle(int kind) {
+	return (kind == NXM_SRAM) || (kind == NXM_ROM) || (kind == NXM_SHADOW) || (kind == NXM_ABSENT);
+}
+
+// a cpu or DMA cycle that puts v on the bus at T t: a read on its half, a write on both
+static inline void nx_lane_rd(Computer* comp, int adr, int v, long long t) {
 	NX.lane[adr & 1] = v;
-	NX.laneT[adr & 1] = comp->tickTotal + comp->cpu->t;
+	NX.laneT[adr & 1] = t;
 }
 
 static inline void nx_lane_wr(Computer* comp, int v) {
 	NX.lane[0] = NX.lane[1] = v;
 	NX.laneT[0] = NX.laneT[1] = comp->tickTotal + comp->cpu->t;
+}
+
+// the cpu clock goes to speed sp at T ts: the times on the lanes kept as the CLK_28
+// edges they lie back from it, which nx_absent_rd counts at the new speed
+static void nx_lane_rebase(Computer* comp, long long ts, int sp) {
+	for (int l = 0; l < 2; l++) {
+		long long e = (ts - NX.laneT[l]) * (8 >> NX.speed);
+		NX.laneT[l] = ts - e / (8 >> sp);
+	}
 }
 
 // p3_floating_bus_dat: the byte of the last cpu memory cycle whose slot's MMU page is
@@ -560,12 +575,12 @@ static int nx_mrd_in(Computer* comp, int adr) {
 		case NXM_ROM:
 			v = ram[a.adr];
 			NX.lastSram = v;
-			nx_lane_rd(comp, adr, v);
+			nx_lane_rd(comp, adr, v, comp->tickTotal + comp->cpu->t);
 			break;
 		case NXM_SHADOW:
 			v = NX.shadow[a.adr];
 			NX.lastSram = v;
-			nx_lane_rd(comp, adr, v);
+			nx_lane_rd(comp, adr, v, comp->tickTotal + comp->cpu->t);
 			break;
 		case NXM_ABSENT:		// the lines keep what they hold: no lane moves
 			v = nx_absent_rd(comp, adr);
@@ -598,8 +613,9 @@ static long long nx_wr_time(Computer* comp) {
 // a memory write landing on CLK_28 edge w
 static void nx_mem_wr(Computer* comp, int adr, int val, long long w) {
 	nxAccess a = nx_decode(comp, adr, 1);
-	// an SRAM write cycle, a chip behind it or not: the FPGA drives the whole bus
-	if ((a.kind == NXM_SRAM) || (a.kind == NXM_SHADOW) || (a.kind == NXM_ABSENT))
+	// an SRAM write cycle, a chip behind it or not: the FPGA drives the whole bus (a
+	// write decodes to no ROM: that is NXM_RO, no cycle)
+	if (nx_sram_cycle(a.kind))
 		nx_lane_wr(comp, val);
 	switch (a.kind) {
 		// a byte written as it was changes nothing a read could see: not logged
@@ -728,7 +744,7 @@ static void nx_mem_view(Computer* comp, int adr, int mode, int* value, xAdr* xad
 		case NXM_ABSENT: *value = nx_absent_rd(comp, adr); break;
 		default: *value = NX.lastSram; break;
 	}
-	if ((mode & NX_VIEW_STEP) && ((a.kind == NXM_SRAM) || (a.kind == NXM_ROM) || (a.kind == NXM_SHADOW) || (a.kind == NXM_ABSENT)))
+	if ((mode & NX_VIEW_STEP) && nx_sram_cycle(a.kind))
 		NX.lastSram = *value;
 }
 
@@ -1068,8 +1084,7 @@ void next_nmi_m1(Computer* comp, int adr) {
 	nx_nmi_ack(comp);
 	if (NX.speed == 3) {
 		nxAccess a = nx_decode(comp, adr, 0);
-		if ((a.kind == NXM_SRAM) || (a.kind == NXM_ROM) || (a.kind == NXM_SHADOW) || (a.kind == NXM_ABSENT)
-				|| ((a.kind == NXM_BRAM) && (a.pg != 0x0e)))
+		if (nx_sram_cycle(a.kind) || ((a.kind == NXM_BRAM) && (a.pg != 0x0e)))
 			comp->waitDebt++;
 	}
 }
@@ -1223,6 +1238,7 @@ static void nx_speed_apply(Computer* comp) {
 	NX.refT = ts;
 	NX.refC = s;
 	nx_pulse_rebase(comp, s);
+	nx_lane_rebase(comp, ts, sp);
 	NX.speed = sp;
 	compSetHwTurbo(comp, (double)(1 << sp));
 	// The T-state that starts here runs to the next edge of the new clock: short
@@ -2432,11 +2448,8 @@ static int nx_dma_waits_mem(Computer* comp, int adr, int rd, int len) {
 	nxAccess a = nx_decode(comp, adr, !rd);
 	if (NX.speed == 3) {
 		if (!rd || (len != 2)) return 0;
-		switch (a.kind) {
-			case NXM_SRAM: case NXM_ROM: case NXM_SHADOW: case NXM_ABSENT: return 1;
-			case NXM_BRAM: return a.pg != 0x0e;
-		}
-		return 0;
+		if (nx_sram_cycle(a.kind)) return 1;
+		return (a.kind == NXM_BRAM) && (a.pg != 0x0e);
 	}
 	if (!nx_cont_on(comp) || (NX.timing != NXT_P3)) return 0;
 	if (!nx_page_contended(comp, NX.mmu[(adr >> 13) & 7])) return 0;
@@ -3035,8 +3048,8 @@ static void nx_halt_done(Computer* comp, int adr, long long t0, long long n, int
 		nx_int_m1(comp, t0 + k * t, len);
 	if (nxHaltV >= 0) {
 		NX.lastSram = nxHaltV;
-		NX.lane[adr & 1] = nxHaltV;		// the last fetch's half of the bus
-		NX.laneT[adr & 1] = t0 + (n - 1) * t;
+		// the last fetch's half of the bus, read 2 T into its M1 as a stepped one is
+		nx_lane_rd(comp, adr, nxHaltV, t0 + (n - 1) * t + 2);
 	}
 	nx_p3_byte(comp, adr, nxHaltP3);
 	nx_int_halt_done(comp, nxHaltP3, n);		// the byte read, whatever answered

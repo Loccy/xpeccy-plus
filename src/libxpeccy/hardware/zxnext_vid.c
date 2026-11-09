@@ -1300,6 +1300,8 @@ static inline int nxv_l2_row(int wide, int cy1, int cy2, int yv) {
 // as the mixer reads it). In the 256 mode the halves take turns pixel by pixel, in the
 // wide ones a line is all on one (the address is x << 8 | y). The registers are taken as
 // they stand now; a fetch from a chip not fitted drives nothing and is passed over.
+// Lines with none of its rows are jumped; on the rest the walk stops after four lines'
+// dots (a clip one column wide, a bank across the end of the chips), taken as none.
 long long nxv_l2_lane(Computer* comp, int lane, long long since, long long now, int* byte) {
 	unsigned short q[NXF_CMP];
 	nxv_fields(comp, q);
@@ -1323,7 +1325,8 @@ long long nxv_l2_lane(Computer* comp, int lane, long long since, long long now, 
 	nxvLine ln;
 	memset(&ln, 0, sizeof(ln));
 	ln.ry = -1;		// set at the first dot
-	while (D >= lo) {
+	int left = 4 * L;	// dots to look at on lines with layer 2 rows
+	while ((D >= lo) && (left-- > 0)) {
 		if (ry != ln.ry) {
 			nxv_line_set(&ln, ry, F, vact);
 			// none of layer 2's rows on this line: on to the end of the one before
@@ -1331,6 +1334,7 @@ long long nxv_l2_lane(Computer* comp, int lane, long long since, long long now, 
 				D -= rx + 1;
 				rx = L - 1;
 				ry = (ry + F - 1) % F;
+				left++;		// a jump is not a dot looked at
 				continue;
 			}
 		}
