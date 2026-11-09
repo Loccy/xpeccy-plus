@@ -183,7 +183,7 @@ static int dz_cell(Computer* comp, int bank, int adr, int* area, int* page, int*
 	if (!dz_same(comp)) return 0;
 	switch (dzModel) {
 		case DZ_NEXT:
-			if (bank >= 0xe0) return 0;
+			if (bank >= comp_cell_pages(comp, CELL_RAM)) return 0;	// 0x60 on a 1 MB board
 			*area = CELL_RAM;
 			*page = bank;
 			*ofs = adr & 0x1fff;

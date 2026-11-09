@@ -209,7 +209,7 @@ int comp_cell_unit(Computer* comp, int area) {
 int comp_cell_pages(Computer* comp, int area) {
 	int next = comp_is_next(comp);
 	switch (area) {
-		case CELL_RAM: return next ? 0xe0 : ((comp->mem->ramMask + 1) >> 14);
+		case CELL_RAM: return next ? next_ram_pages(comp) : ((comp->mem->ramMask + 1) >> 14);
 		case CELL_ROM: return next ? 4 : ((comp->mem->romMask + 1) >> 14);
 		case CELL_ALTROM: return next ? 2 : 0;
 		case CELL_DIV: return next ? 16 : ((comp->div && comp->div->model) ? comp->div->pages : 0);	// as many as the board has

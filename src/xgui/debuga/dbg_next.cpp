@@ -268,7 +268,9 @@ static QString mmu_text(Computer* comp, int s) {
 	int pg = comp->next->mmu[s];
 	QString area = QString("#%0: ").arg(gethexword(s << 13));
 	if (pg == 0xff && (s < 2)) return area + QString("ROM %0").arg(next_rom(comp));
-	if (pg >= 0xe0) return area + "nothing (reads #FF)";
+	// no SRAM cycle: the byte of the last SRAM read stays (the GHDL run of the core shows it)
+	if (pg >= 0xe0) return area + "nothing (the last SRAM byte read)";
+	if (pg >= next_ram_pages(comp)) return area + page_text(pg) + ", no chip (1 MB board)";
 	return area + page_text(pg);
 }
 

@@ -322,9 +322,11 @@ static int reset_check(void) {
 }
 
 int debugger_check(void);
+int ram_check(void);
 
 int main(int argc, char** argv) {
 	if ((argc == 2) && !strcmp(argv[1], "--reset")) return reset_check();
+	if ((argc == 2) && !strcmp(argv[1], "--ram")) return ram_check();
 	if ((argc == 2) && !strcmp(argv[1], "--switch")) return switch_check();
 	if ((argc == 2) && !strcmp(argv[1], "--debugger")) return debugger_check();
 	if (argc < 3) {

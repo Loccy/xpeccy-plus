@@ -684,6 +684,20 @@ int szxGetHardware(const char* name) {
 	return szx_hardware_of(buf, n);
 }
 
+// the RAM a file holds: its highest RAMP page and the ones below, 16K each
+static int szx_ram_held(const unsigned char* buf, size_t len) {
+	int pages = 0;
+	size_t pos = 8;
+	while (pos + 8 <= len) {
+		size_t n = rd_dword(buf + pos + 4);
+		if (n > len - pos - 8) break;
+		if ((rd_dword(buf + pos) == BID('R','A','M','P')) && (n >= 3) && (buf[pos + 10] >= pages))
+			pages = buf[pos + 10] + 1;
+		pos += 8 + n;
+	}
+	return pages * MEM_16K;
+}
+
 int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
 	comp->sndSeed = 1;
 	szxLoad ld;
@@ -714,6 +728,16 @@ int loadSZX_buf(Computer* comp, const unsigned char* buf, size_t len) {
 		xlog(XLG_FILE, XLL_INFO, "szx: taken with %s timings, this machine has the other ones",
 			(buf[7] & SZF_LATE) ? "late" : "early");
 		szx_note(SZN_TIMINGS);
+	}
+
+	// a Next of the other size runs on the file's for the session (the machine file
+	// keeps its own), before the reset maps the memory
+	if ((mid == SZM_XPECCY) && (comp->hw->id == HW_ZXNEXT)) {
+		int held = szx_ram_held(buf, len);
+		if (((held == MEM_1M) || (held == MEM_2M)) && (held != comp->mem->ramSize)) {
+			xlog(XLG_FILE, XLL_INFO, "szx: taken on a %i MB Next, this one runs on that", held >> 20);
+			next_ram_size(comp, held);
+		}
 	}
 
 	// a 128K reset, not a 48K one: that locks paging on a +2A, and the

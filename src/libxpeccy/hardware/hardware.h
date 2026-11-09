@@ -228,6 +228,8 @@ void next_audio(Computer*, int* l, int* r, int* env);	// the mixer's pcm_L/R (13
 void next_snap_loaded(Computer*, int vmode);	// a snapshot put the board back; vmode: NR 11's before
 int next_mmu_get(Computer*, int);
 void next_mmu_set(Computer*, int, int);
+void next_ram_size(Computer*, int size);	// the SRAM fitted, MEM_1M or MEM_2M; the map is the caller's
+int next_ram_pages(Computer*);		// 8K RAM pages the cpu reaches: 0x60 on 1 MB, 0xE0 on 2 MB
 int next_cell(int abs, int* page, int* ofs);		// an SRAM image cell's area (CELL_*), page and offset
 int next_cell_abs(int area, int page, int ofs);		// ...and back, -1: no such cell
 int next_shadow_sram(int abs);		// the SRAM image place of a layer 2 byte behind a BRAM page, -1: none

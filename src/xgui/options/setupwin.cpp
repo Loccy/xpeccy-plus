@@ -1394,13 +1394,15 @@ void SetupWin::applyMachine() {
 	comp->resbank = resTarget;
 	int msz = getRFIData(ui.mszbox);
 	double frq = xcpu_frq_parse(ui.cbCpuFrq->currentText(), comp->cpuFrq);
-	if (msz != shown.mem) memSetSize(comp->mem, msz, -1);
-	if ((msz != shown.mem) || (frq != shown.cpu)) compSetBaseFrq(comp, frq);	// a board's init may size its memory
+	if (msz != shown.mem) xm_set_ram(msz);
+	if ((msz != shown.mem) || (frq != shown.cpu)) compSetBaseFrq(comp, frq);
 	xm_turbo_set(comp, getRFSData(cbCpuTurbo).toStdString());
 	if (ui.sldSpeed->value() != xspeed_get())
 		xspeed_set(ui.sldSpeed->value());
 	comp->flgEM1 = ui.scrpwait->isChecked();
 	if (comp->hw->id == HW_ZX48) comp->mem->ramMask = MEM_128K - 1;		// TODO: find a better way
+	// NextZXOS finds the memory at power-on, by a test of its own: off and on again
+	if ((msz != shown.mem) && (comp->hw->id == HW_ZXNEXT)) xm_power_cycle();
 	emu_unlock();
 // video
 	comp->vid->brdstep = ui.border4T->isChecked() ? 7 : 1;

@@ -36,3 +36,16 @@ F4: ok
 NR 02 b0: ok
 Machine > Reset: ok
 NR 02 b1 (hard): ok
+== ram size
+pages: 0x60 on 1 MB, 0xE0 on 2 MB: ok
+the half past 1 MB filled #FF: ok
+write lost: ok
+read at once from BRAM code: the byte written: ok
+even byte after an odd fetch: the byte written: ok
+odd byte after an odd fetch: the opcode: ok
+the debugger sees what the cpu reads: ok
+2 MB: the byte written: ok
+in layer 2's picture: its pixels: ok
+layer 2 past 1 MB: the byte written: ok
+a 1 MB snapshot on a 2 MB Next: ok
+a 2 MB snapshot on a 1 MB Next: ok

@@ -340,12 +340,13 @@ typedef struct {
 	int pg;			// MMU page for RAM
 } nxAccess;
 
-enum {NXM_NONE = 0, NXM_SRAM, NXM_BRAM, NXM_ROM, NXM_SHADOW, NXM_BUS, NXM_RO};
+// NXM_ABSENT: an SRAM cycle to a chip the board does not have (past 1 MB on a 1 MB board)
+enum {NXM_NONE = 0, NXM_SRAM, NXM_BRAM, NXM_ROM, NXM_SHADOW, NXM_BUS, NXM_RO, NXM_ABSENT};
 
 // The decode for one CPU access (zxnext.vhd 2933-3133)
 static void nx_back(Computer* comp, int* h, int* v, int n);
 
-static nxAccess nx_decode(Computer* comp, int adr, int wr) {
+static nxAccess nx_decode_core(Computer* comp, int adr, int wr) {
 	nxAccess a = {NXM_NONE, 0, 0};
 	int slot = (adr >> 13) & 7;
 	int pg = NX.mmu[slot];
@@ -407,6 +408,43 @@ static nxAccess nx_decode(Computer* comp, int adr, int wr) {
 	a.kind = wr ? NXM_RO : NXM_ROM;
 	a.adr = (rom << 14) + (adr & 0x3fff);
 	return a;
+}
+
+// The core has no RAM size: on a 1 MB board (issue 2 without its expansion) the cycle
+// goes out to chip selects CE2/CE3 with no chip behind them (zxnext_top_issue2.vhd
+// 1296-1312). The SRAM image is laid out as the board's SRAM, so that is all of it
+// past mem->ramSize.
+static inline nxAccess nx_decode(Computer* comp, int adr, int wr) {
+	nxAccess a = nx_decode_core(comp, adr, wr);
+	if ((a.kind == NXM_SRAM) && (a.adr >= comp->mem->ramSize)) a.kind = NXM_ABSENT;
+	return a;
+}
+
+// What a read of an absent chip gives. Nothing drives the data bus then and it has no
+// pull-ups (zxnext_pins_issue2.ucf): the latch takes what the lines of the byte's half
+// still hold (A0: even D7..0, odd D15..8) - the byte the last read of that half
+// carried, or the last write (the FPGA drives both halves), cpu, DMA or a layer 2 fetch,
+// whichever came last. Not measured on a board, where the charge may leak away.
+static int nx_absent_rd(Computer* comp, int adr) {
+	int l = adr & 1;
+	long long now = comp->tickTotal + comp->cpu->t;
+	long long c = nx_now(comp);
+	// the cpu's last cycle on that half, in CLK_28 edges back from now (8 a T at 3.5 MHz)
+	long long since = c - (now - NX.laneT[l]) * (8 >> NX.speed);
+	int b;
+	if (nxv_l2_lane(comp, l, since, c, &b) >= 0) return b;
+	return NX.lane[l];
+}
+
+// a cpu or DMA cycle that puts v on the bus: a read on its half, a write on both
+static inline void nx_lane_rd(Computer* comp, int adr, int v) {
+	NX.lane[adr & 1] = v;
+	NX.laneT[adr & 1] = comp->tickTotal + comp->cpu->t;
+}
+
+static inline void nx_lane_wr(Computer* comp, int v) {
+	NX.lane[0] = NX.lane[1] = v;
+	NX.laneT[0] = NX.laneT[1] = comp->tickTotal + comp->cpu->t;
 }
 
 // p3_floating_bus_dat: the byte of the last cpu memory cycle whose slot's MMU page is
@@ -522,9 +560,15 @@ static int nx_mrd_in(Computer* comp, int adr) {
 		case NXM_ROM:
 			v = ram[a.adr];
 			NX.lastSram = v;
+			nx_lane_rd(comp, adr, v);
 			break;
 		case NXM_SHADOW:
 			v = NX.shadow[a.adr];
+			NX.lastSram = v;
+			nx_lane_rd(comp, adr, v);
+			break;
+		case NXM_ABSENT:		// the lines keep what they hold: no lane moves
+			v = nx_absent_rd(comp, adr);
 			NX.lastSram = v;
 			break;
 		case NXM_BRAM:
@@ -554,6 +598,9 @@ static long long nx_wr_time(Computer* comp) {
 // a memory write landing on CLK_28 edge w
 static void nx_mem_wr(Computer* comp, int adr, int val, long long w) {
 	nxAccess a = nx_decode(comp, adr, 1);
+	// an SRAM write cycle, a chip behind it or not: the FPGA drives the whole bus
+	if ((a.kind == NXM_SRAM) || (a.kind == NXM_SHADOW) || (a.kind == NXM_ABSENT))
+		nx_lane_wr(comp, val);
 	switch (a.kind) {
 		// a byte written as it was changes nothing a read could see: not logged
 		case NXM_SRAM:
@@ -678,9 +725,10 @@ static void nx_mem_view(Computer* comp, int adr, int mode, int* value, xAdr* xad
 		case NXM_ROM: *value = comp->mem->ramData[a.adr]; break;
 		case NXM_SHADOW: *value = NX.shadow[a.adr]; break;
 		case NXM_BUS: *value = 0xff; break;
+		case NXM_ABSENT: *value = nx_absent_rd(comp, adr); break;
 		default: *value = NX.lastSram; break;
 	}
-	if ((mode & NX_VIEW_STEP) && ((a.kind == NXM_SRAM) || (a.kind == NXM_ROM) || (a.kind == NXM_SHADOW)))
+	if ((mode & NX_VIEW_STEP) && ((a.kind == NXM_SRAM) || (a.kind == NXM_ROM) || (a.kind == NXM_SHADOW) || (a.kind == NXM_ABSENT)))
 		NX.lastSram = *value;
 }
 
@@ -741,10 +789,17 @@ static int nx_rd_last(int adr, void* ptr) {
 
 static void nx_wr_none(int adr, int val, void* ptr) {}
 
+// a page with no chip behind it: what a cpu read there would take
+static int nx_rd_absent(int adr, void* ptr) {
+	return nx_absent_rd((Computer*)ptr, adr);
+}
+
 // one 8K slot of the map the debugger and the snapshots read (the cpu's own accesses decode)
 static void nx_map_slot(Computer* comp, int s, int rom) {
 	int pg = NX.mmu[s];
-	if (pg < 0xe0) {
+	if ((pg < 0xe0) && (NX_RAM + (pg << 13) >= comp->mem->ramSize)) {
+		memSetBank(comp->mem, s << 5, MEM_EXT, 0, MEM_8K, nx_rd_absent, nx_wr_none, comp);
+	} else if (pg < 0xe0) {
 		memSetBank(comp->mem, s << 5, MEM_RAM, (NX_RAM >> 13) + pg, MEM_8K, NULL, NULL, NULL);
 	} else if (s < 2) {
 		memSetBank(comp->mem, s << 5, MEM_RAM, (rom << 1) | s, MEM_8K, NULL, nx_wr_none, NULL);
@@ -1013,7 +1068,8 @@ void next_nmi_m1(Computer* comp, int adr) {
 	nx_nmi_ack(comp);
 	if (NX.speed == 3) {
 		nxAccess a = nx_decode(comp, adr, 0);
-		if ((a.kind == NXM_SRAM) || (a.kind == NXM_ROM) || (a.kind == NXM_SHADOW) || ((a.kind == NXM_BRAM) && (a.pg != 0x0e)))
+		if ((a.kind == NXM_SRAM) || (a.kind == NXM_ROM) || (a.kind == NXM_SHADOW) || (a.kind == NXM_ABSENT)
+				|| ((a.kind == NXM_BRAM) && (a.pg != 0x0e)))
 			comp->waitDebt++;
 	}
 }
@@ -2377,7 +2433,7 @@ static int nx_dma_waits_mem(Computer* comp, int adr, int rd, int len) {
 	if (NX.speed == 3) {
 		if (!rd || (len != 2)) return 0;
 		switch (a.kind) {
-			case NXM_SRAM: case NXM_ROM: case NXM_SHADOW: return 1;
+			case NXM_SRAM: case NXM_ROM: case NXM_SHADOW: case NXM_ABSENT: return 1;
 			case NXM_BRAM: return a.pg != 0x0e;
 		}
 		return 0;
@@ -2543,6 +2599,8 @@ static void nx_power(Computer* comp) {
 	NX.vcLine0 = 0;
 	NX.cvcLine0 = 0;
 	NX.lastSram = 0;
+	NX.lane[0] = NX.lane[1] = 0;
+	NX.laneT[0] = NX.laneT[1] = comp->tickTotal;
 	NX.spiMiso = NX.spiOld = 0;	// miso_dat's declaration value
 	NX.spiT = -1;
 	nx_inp_power(comp);
@@ -2805,6 +2863,23 @@ static void nx_power_on(Computer* comp) {
 	NX.powered = 0;
 	NX.firmware = 1;
 	memset(NX.shadow, 0, sizeof(NX.shadow));	// the SRAM behind the BRAM pages, cleared with the rest
+	next_ram_size(comp, comp->mem->ramSize);	// the half with no chips, as layer 2 shows it
+}
+
+// The SRAM fitted: 1 MB (an issue 2 board without its expansion) or 2 MB. The image
+// past it is never written; layer 2 over it shows it as #FF - a steady picture, not the
+// floating bus (that would depend on when the picture is drawn). The map is the
+// caller's: a reset or a snapshot's paging builds it after this
+void next_ram_size(Computer* comp, int size) {
+	memSetSize(comp->mem, size, -1);
+	size = comp->mem->ramSize;
+	if (size < MEM_2M) memset(comp->mem->ramData + size, 0xff, MEM_2M - size);
+}
+
+// 8K RAM pages the cpu can reach: 0x60 on 1 MB, 0xE0 on 2 MB
+int next_ram_pages(Computer* comp) {
+	int n = (comp->mem->ramSize - NX_RAM) >> 13;
+	return (n < 0) ? 0 : (n > 0xe0) ? 0xe0 : n;
 }
 
 static void nx_reset(Computer* comp) {
@@ -2870,7 +2945,10 @@ static void nx_init(Computer* comp) {
 	// and the 3.5 MHz tick two of those dots, exactly: comp_update_timings divides it by
 	// the speed and rounds it against the dot, which leaves it whole only from here
 	comp->nsPerTick = 2.0 * (double)dot / 65536.0;
-	memSetSize(comp->mem, MEM_2M, -1);
+	// the board's 1 MB or 2 MB, as the machine file says; anything else (a bare
+	// compSetHardware) is a 2 MB one. This runs on every clock change: it keeps the size
+	if ((comp->mem->ramSize != MEM_1M) && (comp->mem->ramSize != MEM_2M))
+		next_ram_size(comp, MEM_2M);
 }
 
 static void nx_sync(Computer* comp, int ns) {
@@ -2942,6 +3020,7 @@ static int nx_halt_look(Computer* comp, int adr) {
 		case NXM_SHADOW: v = NX.shadow[a.adr]; nxHaltV = v; w = 1; break;
 		case NXM_BRAM: v = ram[a.adr]; w = (a.pg != 0x0e); break;
 		case NXM_BUS: v = 0xff; break;
+		case NXM_ABSENT: return 0;	// what the lines hold can move under it: stepped
 		default: v = NX.lastSram; break;
 	}
 	nxHaltP3 = v;
@@ -2954,7 +3033,11 @@ static void nx_halt_done(Computer* comp, int adr, long long t0, long long n, int
 	int len = (NX.speed == 3) ? 3 : 2;
 	for (long long k = (n > 8) ? n - 8 : 0; k < n; k++)
 		nx_int_m1(comp, t0 + k * t, len);
-	if (nxHaltV >= 0) NX.lastSram = nxHaltV;
+	if (nxHaltV >= 0) {
+		NX.lastSram = nxHaltV;
+		NX.lane[adr & 1] = nxHaltV;		// the last fetch's half of the bus
+		NX.laneT[adr & 1] = t0 + (n - 1) * t;
+	}
 	nx_p3_byte(comp, adr, nxHaltP3);
 	nx_int_halt_done(comp, nxHaltP3, n);		// the byte read, whatever answered
 	nxHaltLast.tick = t0 + n * t;
@@ -2975,7 +3058,7 @@ void next_snap_loaded(Computer* comp, int vmode) {
 	comp->flgBOOT = 0;		// a reset's, not the state's: NCLK says whether one is due
 }
 
-HardWare nxt_hw_core = {HW_ZXNEXT, "ZXNext", "ZX Spectrum Next", MEM_2M, 1.0, NULL, NULL,
+HardWare nxt_hw_core = {HW_ZXNEXT, "ZXNext", "ZX Spectrum Next", MEM_1M | MEM_2M, 1.0, NULL, NULL,
 			nx_init, nx_map_mem, nx_out, nx_in, nx_mrd, nx_mwr, nx_irq, nx_ack, nx_reset, nx_sync,
 			nx_keyp, nx_keyr, nx_vol, NULL, nx_cont, &nx_quiet, 1, nx_power_on, nx_firmware, 1, 1,
 			nx_mem_view, nx_disasm, nx_snd_take, nx_mix, nx_int_vecs};

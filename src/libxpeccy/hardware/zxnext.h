@@ -61,6 +61,7 @@ void nxv_regs(Computer*, long long);
 void nxv_pal(Computer*, int, int, long long);
 void nxv_memw(Computer*, int, int, long long);
 int nxv_float(Computer*, long long);
+long long nxv_l2_lane(Computer*, int lane, long long since, long long now, int* byte);
 void nxv_retime(Computer*, long long, int);
 void nxv_line(Computer*);		// a raw line starts: the one before is drawn
 long long nxv_before_reset(Computer*, long long);	// a soft reset at clk28 w (-1: now)

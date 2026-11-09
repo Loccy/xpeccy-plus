@@ -1019,20 +1019,30 @@ static void nxv_span_set(Computer* comp, nxvSpan* sp, long long D) {
 }
 
 // layer 2's byte for the dot, -1 outside its area (one read; 4-bit pixels take a nibble a half)
-static inline int nxv_span_l2(Computer* comp, const nxvSpan* sp, int phc, int vc, int wvc, long long D) {
-	int c = sp->wide ? ((phc + 32) & 0x1ff) : phc;
-	int yv = sp->wide ? wvc : vc;
-	int hv = sp->wide ? (c < 320) : (c < 256);
-	int vv = sp->wide ? (yv < 256) : (yv < 192);
-	if (!(hv && vv && (c >= sp->l2cx1) && (c <= sp->l2cx2) && (yv >= sp->l2cy1) && (yv <= sp->l2cy2))) return -1;
-	int xpre = c + sp->l2sx;
-	int xx = sp->wide ? ((xpre >= 320) ? (((xpre & 0x1ff) + 192) & 0x1ff) : xpre) : (xpre & 0xff);
-	int ypre = (yv + sp->l2sy) & 0x1ff;
-	int yy = (!sp->wide && ((ypre & 0x100) || ((ypre & 0xc0) == 0xc0))) ? ((ypre + 0x40) & 0xff) : (ypre & 0xff);
-	int adr = sp->wide ? ((xx << 8) | yy) : ((yy << 8) | xx);
-	int bank = sp->l2bank + (adr >> 14);
+// The SRAM address layer 2 fetches for the pixel period (phc, vc, wvc), -1 for none
+// (layer2.vhd 147-185): clip x in its own units (doubled when wide), banks from 112 on
+// make no SRAM cycle
+static inline int nxv_l2_adr(int wide, int cx1, int cx2, int cy1, int cy2, int sx, int sy, int bank0,
+		int phc, int vc, int wvc) {
+	int c = wide ? ((phc + 32) & 0x1ff) : phc;
+	int yv = wide ? wvc : vc;
+	int hv = wide ? (c < 320) : (c < 256);
+	int vv = wide ? (yv < 256) : (yv < 192);
+	if (!(hv && vv && (c >= cx1) && (c <= cx2) && (yv >= cy1) && (yv <= cy2))) return -1;
+	int xpre = c + sx;
+	int xx = wide ? ((xpre >= 320) ? (((xpre & 0x1ff) + 192) & 0x1ff) : xpre) : (xpre & 0xff);
+	int ypre = (yv + sy) & 0x1ff;
+	int yy = (!wide && ((ypre & 0x100) || ((ypre & 0xc0) == 0xc0))) ? ((ypre + 0x40) & 0xff) : (ypre & 0xff);
+	int adr = wide ? ((xx << 8) | yy) : ((yy << 8) | xx);
+	int bank = bank0 + (adr >> 14);
 	if (bank >= 112) return -1;
-	int key = nxv_key_sram(NXV_RAM + bank * 0x4000 + (adr & 0x3fff));
+	return NXV_RAM + bank * 0x4000 + (adr & 0x3fff);
+}
+
+static inline int nxv_span_l2(Computer* comp, const nxvSpan* sp, int phc, int vc, int wvc, long long D) {
+	int sram = nxv_l2_adr(sp->wide, sp->l2cx1, sp->l2cx2, sp->l2cy1, sp->l2cy2, sp->l2sx, sp->l2sy, sp->l2bank, phc, vc, wvc);
+	if (sram < 0) return -1;
+	int key = nxv_key_sram(sram);
 	// no write after the run's first read: memory as it stands
 	return sp->direct ? nxv_peek(comp, key) : nxv_mem(comp, key, (D - 1) * 4 + 2);
 }
@@ -1275,6 +1285,70 @@ NXV_INL void nxv_rx_ctr(const nxTiming* t, int L, const nxvLine* ln, int rx, int
 	*phc = ((rx >= t->hact - 47) ? rx - t->hact - 1 : rx + L - t->hact - 1) & 0x1ff;
 	*vc = (rx >= t->hact - 11) ? ln->vcA : ln->vcB;
 	*wvc = (rx >= t->hact - 47) ? ln->wvcA : ln->wvcB;
+}
+
+// == the SRAM bus a chip that is not fitted leaves (zxnext.c nx_absent_rd) ==
+
+// line yv is one of layer 2's rows
+static inline int nxv_l2_row(int wide, int cy1, int cy2, int yv) {
+	return (wide ? (yv < 256) : (yv < 192)) && (yv >= cy1) && (yv <= cy2);
+}
+
+// The last layer 2 fetch of fitted SRAM on bus half `lane` (A0) at a CLK_28 edge in
+// (since, now]: that edge, and the byte it read in *byte; -1 for none, a frame back at
+// most. The fetch for the pixel of dot D is at edge (D - 1) * 4 + 2 (layer2.vhd 175-186,
+// as the mixer reads it). In the 256 mode the halves take turns pixel by pixel, in the
+// wide ones a line is all on one (the address is x << 8 | y). The registers are taken as
+// they stand now; a fetch from a chip not fitted drives nothing and is passed over.
+long long nxv_l2_lane(Computer* comp, int lane, long long since, long long now, int* byte) {
+	unsigned short q[NXF_CMP];
+	nxv_fields(comp, q);
+	if (!q[NXF_L2EN]) return -1;
+	int size = comp->mem->ramSize;
+	if (NXV_RAM + q[NXF_L2BANK] * 0x4000 >= size) return -1;	// all of it past the chips
+	int wide = (q[NXF_L2RES] != 0);
+	int cx1 = wide ? (q[NXF_L2CX1] << 1) : q[NXF_L2CX1];
+	int cx2 = wide ? ((q[NXF_L2CX2] << 1) | 1) : q[NXF_L2CX2];
+	int cy1 = q[NXF_L2CY1];
+	int cy2 = q[NXF_L2CY2];
+	const nxTiming* t = nx_tim(comp);
+	int L = t->L;
+	int F = nx_lines(comp);
+	int vact = nx_vact(comp);
+	long long D = nx_fdiv(now - 2, 4) + 1;		// the dot of the last fetch edge up to now
+	long long lo = nx_fdiv(since - 2, 4) + 2;	// the first dot whose fetch is after since
+	if (lo < D - (long long)L * F) lo = D - (long long)L * F;
+	int rx, ry;
+	nx_raw_at(comp, D * 4, &rx, &ry);
+	nxvLine ln;
+	memset(&ln, 0, sizeof(ln));
+	ln.ry = -1;		// set at the first dot
+	while (D >= lo) {
+		if (ry != ln.ry) {
+			nxv_line_set(&ln, ry, F, vact);
+			// none of layer 2's rows on this line: on to the end of the one before
+			if (!nxv_l2_row(wide, cy1, cy2, wide ? ln.wvcA : ln.vcA) && !nxv_l2_row(wide, cy1, cy2, wide ? ln.wvcB : ln.vcB)) {
+				D -= rx + 1;
+				rx = L - 1;
+				ry = (ry + F - 1) % F;
+				continue;
+			}
+		}
+		int phc, vc, wvc;
+		nxv_rx_ctr(t, L, &ln, rx, &phc, &vc, &wvc);
+		int sram = nxv_l2_adr(wide, cx1, cx2, cy1, cy2, q[NXF_L2SX], q[NXF_L2SY], q[NXF_L2BANK], phc, vc, wvc);
+		if ((sram >= 0) && ((sram & 1) == lane) && (sram < size)) {
+			long long e = (D - 1) * 4 + 2;
+			*byte = nxv_mem(comp, nxv_key_sram(sram), e);
+			return e;
+		}
+		D--;
+		if (--rx < 0) {
+			rx = L - 1;
+			ry = (ry + F - 1) % F;
+		}
+	}
+	return -1;
 }
 
 static void nxv_draw(Computer* comp, const nxTiming* t, int L, int F, int vact, const nxvLine* ln) {
