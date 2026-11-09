@@ -1065,6 +1065,10 @@ int xm_set_hardware(std::string nm) {
 // the machine's own settings: first its definition, then the user's own block.
 // Both go through here, so what a key means is written once.
 
+int xm_own_ram() {
+	return macRam ? macRam : conf.zx->mem->ramSize;
+}
+
 void xm_set_ram(int size) {
 	Computer* comp = conf.zx;
 	if (comp->hw && (comp->hw->id == HW_ZXNEXT))

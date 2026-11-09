@@ -477,6 +477,7 @@ bool xm_next_wants_card();	// once: the Next has no card to start from, the wind
 void xm_save_nvram();
 void xm_power_cycle();		// off and on again: the caller holds emu_lock
 void xm_set_ram(int size);		// the RAM the machine file gives (a snapshot's own lasts the session)
+int xm_own_ram();			// ...and what that is now
 int xm_power_count();		// power cycles so far: something to notice one by
 // The bundled esxDOS releases, newest first, each in conf.path.esxDir/<version>/
 // with the divMMC's EEPROM image and the folders a card needs. A fresh EEPROM

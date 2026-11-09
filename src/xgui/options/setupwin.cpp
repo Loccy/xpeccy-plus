@@ -1016,7 +1016,8 @@ void SetupWin::fillPages() {
 	fillRomSlots();
 	ui.machbox->setCurrentIndex(ui.machbox->findData(QString::fromLocal8Bit(conf.macId.c_str())));
 	setmszbox(ui.machbox->currentIndex());
-	ui.mszbox->setCurrentIndex(ui.mszbox->findData(comp->mem->ramSize));
+	// the machine's own size: one a snapshot runs it on lasts the session only
+	ui.mszbox->setCurrentIndex(ui.mszbox->findData(xm_own_ram()));
 	if (ui.mszbox->currentIndex() < 0) ui.mszbox->setCurrentIndex(ui.mszbox->count() - 1);
 	ui.sldSpeed->setMaximum(xspeed_max());	// a board already on turbo has less room
 	ui.sldSpeed->setValue(xspeed_get());
@@ -2902,11 +2903,9 @@ static xMemName memNameTab[] = {
 	{MEM_256K, MEM_256K, "256 KB"},
 	{MEM_512K, MEM_512K, "512 KB"},
 	{MEM_768K, MEM_512K + MEM_256K, "768 KB"},
-	{MEM_1M, MEM_1M, "1 MB"},
-	{MEM_2M, MEM_2M, "2 MB"},
-	{MEM_4M, MEM_4M, "4 MB"},
-	{MEM_8M, MEM_8M, "8 MB"},
-	{MEM_16M, MEM_16M, "16 MB"},
+	{MEM_1M, MEM_1M, "1024 KB"},
+	{MEM_2M, MEM_2M, "2048 KB"},
+	{MEM_4M, MEM_4M, "4096 KB"},
 	{-1, 0, ""}
 };
 
