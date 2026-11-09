@@ -7,7 +7,7 @@
 ```
 
 The **ZX Spectrum Next** is emulated from its FPGA core: the Z80N CPU at 3.5 to 28 MHz,
-2 MB of RAM, layer 2, sprites, the tilemap, LoRes, the copper, the DMA, hardware IM2 and
+1 or 2 MB of RAM, layer 2, sprites, the tilemap, LoRes, the copper, the DMA, hardware IM2 and
 the CTC, three AY chips with DACs, the clock and the Wi-Fi module. Like the real machine,
 it starts from an SD card: its firmware loads the ROMs and NextZXOS from the card's files.
 
@@ -43,6 +43,21 @@ The Next has three buttons on its side, RESET, DRIVE and NMI:
   with esxDOS in place of NextZXOS; NextZXOS turns it off. Xpeccy+ boots the Next
   with NextZXOS only, so the menus have no DRIVE command. F10 presses it, as on the Next's
   own PS/2 keyboard (see [Keyboard and joysticks](#keyboard-and-joysticks)).
+
+```{index} ZX Spectrum Next; memory, ZX Spectrum Next; 1 MB
+```
+
+**Memory**, on the **Machine** page of **Options**, is **2 MB** or **1024 KB**. The base
+model of the first Nexts had 1 MB and room for 1 MB more; later boards all have 2 MB. A program meant
+for every Next should run on 1 MB: NextZXOS then has 768 KB for programs, banks 0 to 47,
+and the Pentagon 1024 mode reaches 768 KB. A change of **Memory** switches the Next off
+and on, since NextZXOS counts the memory when it starts.
+
+On 1 MB, a write past the first megabyte is lost. A read there gets what the data bus
+still holds: the last byte that went over that half of the bus - an instruction, a byte
+the program wrote, a layer 2 pixel. That follows from how the board is wired; it has not
+been measured on a real 1 MB Next, where the bus may also lose its charge after a while.
+Layer 2 shown from banks past the first megabyte shows bytes #FF.
 
 The divMMC and the Multiface are built into the Next, so the **divMMC** setting of other
 machines is not shown for it. The Next has no floppy drives, and a tape does not
@@ -157,7 +172,9 @@ typed in NextZXOS**.
 palettes, sprites, layers, DMA, the clock chip and the ESP-01. **Quick Save**, the autosaves,
 **Resume Last Session** and RZX recording work on it as on other machines (see
 [Quick saves](files.md#quick-saves) and [RZX](capture.md#rzx)). Other programs cannot open
-these files: the SZX format has no ZX Spectrum Next.
+these files: the SZX format has no ZX Spectrum Next. A snapshot taken on 1 MB runs a 2 MB
+Next on 1 MB, and the other way round; the next start of Xpeccy+ brings back the size set
+in **Options**.
 
 The SD card is not in the snapshot - it is far too big - but NextZXOS keeps in memory what it
 read from the card. So the snapshot names the card, and the folder of a program opened from

@@ -87,9 +87,10 @@ the number of the page.
 On a ZX Spectrum Next there are eight 8K rows instead, one for each MMU register: 0000-1FFF,
 2000-3FFF and so on. The page is the exact value of NextReg 50-57. **RAM** is a page below
 E0; a value from E0 to FF selects **ROM** in either of the first two slots and is **OFF**
-in the other six. The tooltip also says what the CPU reads there after divMMC, Multiface,
-Layer 2 and ROMCS have been applied: a RAM page, a ROM, a divMMC page, the Multiface's
-memory, or nothing. The listing, the **CPU** dump, memory search and breakpoints follow that
+in the other six, where a read gets the last byte read from SRAM. The tooltip also says what
+the CPU reads there after divMMC, Multiface, Layer 2 and ROMCS have been applied: a RAM page,
+a ROM, a divMMC page, the Multiface's memory, or nothing. On a 1 MB Next, pages 60 to DF
+have no chip behind them, and the tooltip says so. The listing, the **CPU** dump, memory search and breakpoints follow that
 same view.
 
 On every machine the listing shows memory as it is now, with one exception: the row at PC
