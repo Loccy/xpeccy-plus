@@ -214,21 +214,44 @@ int nx_int_ack(Computer* comp) {
 	return 0xff;
 }
 
-// What the acknowledge would carry, for the Debugger (zxnext.vhd 1868-1878): in
-// hardware IM 2 with the cpu in IM 2, each enabled device's vector; else #FF, which the
-// FPGA drives unless the expansion bus is on for IO and a device there answers
+// What the acknowledge would carry, for the Debugger, as nx_int_ack() works it out
+// (zxnext.vhd 1868-1878): in hardware IM 2 with the cpu in IM 2, each enabled device's
+// vector, the one waiting first; a device holding the chain otherwise, NR C0's top bits;
+// else #FF, which the FPGA drives unless the expansion bus is on for IO
 int nx_int_vecs(Computer* comp, xIntVec* vec) {
 	static const char* name[NX_IRQ_DEVS] = {"line", "UART 0 Rx", "UART 1 Rx",
 		"CTC 0", "CTC 1", "CTC 2", "CTC 3", "CTC 4", "CTC 5", "CTC 6", "CTC 7",
 		"ULA", "UART 0 Tx", "UART 1 Tx"};
-	if (!(NX.nr[0xc0] & 1) || !nx_im2(comp)) {
+	int hw = NX.nr[0xc0] & 1;
+	int held = 0;
+	int wait = -1;		// the device acknowledged next: the one requesting, else the first pending
+	for (int i = 0; hw && (i < NX_IRQ_DEVS); i++) {
+		if (IRQ.st[i] == DEV_0) continue;
+		held = 1;
+		if (IRQ.st[i] == DEV_REQ) wait = i;
+		break;
+	}
+	for (int i = 0; hw && !held && (i < NX_IRQ_DEVS); i++) {
+		if (IRQ.pend & (1 << i)) {
+			wait = i;
+			break;
+		}
+	}
+	if (!hw || !nx_im2(comp)) {
 		vec[0].name = "INT";
-		vec[0].vec = 0xff;
-		vec[0].driven = !(NX.expbusEff && !(NX.nr[0x80] & 0x20));
+		vec[0].vec = held ? (NX.nr[0xc0] & 0xe0) : 0xff;
+		vec[0].driven = held || !(NX.expbusEff && !(NX.nr[0x80] & 0x20));
 		return 1;
 	}
 	int n = 0;
+	if (wait >= 0) {
+		vec[n].name = name[wait];
+		vec[n].vec = (NX.nr[0xc0] & 0xe0) | (wait << 1);
+		vec[n].driven = 1;
+		n++;
+	}
 	for (int i = 0; i < NX_IRQ_DEVS; i++) {
+		if (i == wait) continue;
 		int on;
 		switch (i) {
 			case 0: on = NX.nr[0xc4] & 2; break;
